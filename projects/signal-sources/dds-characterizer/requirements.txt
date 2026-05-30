@@ -1,0 +1,5 @@
+rf-bench-drivers-buspirate
+rf-bench-drivers-siglent
+rf-bench-drivers-utils
+numpy
+matplotlib

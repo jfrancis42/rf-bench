@@ -1,0 +1,6 @@
+rf-bench-drivers-siglent>=0.1.0
+numpy>=1.20
+matplotlib>=3.4
+ET54
+pyvisa
+pyvisa-py

@@ -1,0 +1,121 @@
+
+==============================================================
+  STEP 1: Connect instruments
+==============================================================
+  PSU IDN : Siglent Technologies,SPD3303X-E,SPD3XJFD7R5914,1.01.01.03.11R1,V6.2
+  PSU CH1 setpoint: 13.800 V, 3.200 A limit
+  Load    : ET5406A(model='ET5406A+', sn='09552516082', fw='24009', hw='2446.001')
+
+==============================================================
+  STEP 2: Set Yertai safety limits
+==============================================================
+  OCP set → readback: 3.100 A
+  OPP set → readback: 50.000 W
+  Beep: OK
+
+==============================================================
+  STEP 3: Enable PSU CH1 — baseline with load OFF
+==============================================================
+    Yertai : V=13.8080 V  I=0.0000 A  P=0.0000 W  R=0.0000 Ω
+    PSU CH1: 13.810 V  0.0200 A  0.2800 W  mode=CC
+    [PASS] idle PSU current < 0.05 A = 0.0200  (expected 0.000–0.050)
+  Protection: OC
+
+==============================================================
+  STEP 4: CC mode — 0.5 A
+==============================================================
+    Yertai : V=13.7560 V  I=0.4950 A  P=6.8100 W  R=27.7730 Ω
+    PSU CH1: 13.810 V  0.5200 A  7.1800 W  mode=CC
+  Protection: OC
+    [PASS] CC 0.5 A current (Yertai) = 0.4950  (expected 0.420–0.580)
+    [PASS] CC 0.5 A current (PSU) = 0.5200  (expected 0.370–0.630)
+
+==============================================================
+  STEP 4: CC mode — 1.0 A
+==============================================================
+    Yertai : V=13.7050 V  I=0.9970 A  P=13.6600 W  R=13.7470 Ω
+    PSU CH1: 13.810 V  1.0200 A  14.0900 W  mode=CC
+  Protection: OC
+    [PASS] CC 1.0 A current (Yertai) = 0.9970  (expected 0.920–1.080)
+    [PASS] CC 1.0 A current (PSU) = 1.0200  (expected 0.870–1.130)
+
+==============================================================
+  STEP 4: CC mode — 2.0 A
+==============================================================
+    Yertai : V=13.6070 V  I=1.9950 A  P=27.1400 W  R=6.8210 Ω
+    PSU CH1: 13.810 V  2.0200 A  27.9000 W  mode=CC
+  Protection: OC
+    [PASS] CC 2.0 A current (Yertai) = 1.9950  (expected 1.880–2.120)
+    [PASS] CC 2.0 A current (PSU) = 2.0200  (expected 1.830–2.170)
+
+==============================================================
+  STEP 4: CC mode — 3.0 A
+==============================================================
+    Yertai : V=13.5050 V  I=2.9990 A  P=40.5000 W  R=4.5040 Ω
+    PSU CH1: 13.810 V  3.0200 A  41.7100 W  mode=CC
+  Protection: OC
+    [PASS] CC 3.0 A current (Yertai) = 2.9990  (expected 2.820–3.180)
+    [PASS] CC 3.0 A current (PSU) = 3.0200  (expected 2.770–3.230)
+
+==============================================================
+  STEP 5: CC 1.5 A — compare individual vs read_all()
+==============================================================
+    read_all()    : V=13.6580  I=1.4980  P=20.4600  R=9.1180
+    individual    : V=13.6590  I=1.4980  P=20.4600  R=9.1200
+    [PASS] read_all V vs individual V = 0.0010  (expected 0.000–0.200)
+    [PASS] read_all I vs individual I = 0.0000  (expected 0.000–0.100)
+
+==============================================================
+  STEP 6: CR mode — 5 Ω  (~2.76 A @ 13.8 V)
+==============================================================
+    Yertai : V=13.5340 V  I=2.7050 A  P=36.6000 W  R=5.0040 Ω
+    PSU CH1: 13.810 V  2.7200 A  37.5600 W  mode=CC
+  CR_resistance readback: 5.000 Ω
+  Protection: OC
+    [PASS] CR setpoint readback = 5.0000  (expected 4.900–5.100)
+    [PASS] CR measured resistance = 5.0040  (expected 4.000–6.500)
+    [PASS] CR measured current = 2.7050  (expected 2.000–3.200)
+
+==============================================================
+  STEP 7: CP mode — 20 W
+==============================================================
+    Yertai : V=13.6630 V  I=1.4610 A  P=19.9600 W  R=9.3550 Ω
+    PSU CH1: 13.810 V  1.4800 A  20.4400 W  mode=CC
+  CP_power readback: 20.000 W
+  Protection: OC
+    [PASS] CP setpoint readback = 20.0000  (expected 19.500–20.500)
+    [PASS] CP measured power = 19.9600  (expected 16.000–24.000)
+
+==============================================================
+  STEP 8: CV mode — 14.5 V setpoint (above 13.8 V supply → load draws 0 A)
+==============================================================
+    Yertai : V=13.8090 V  I=0.0000 A  P=0.0000 W  R=155632.1250 Ω
+    PSU CH1: 13.810 V  0.0200 A  0.2800 W  mode=CC
+  CV_voltage readback: 14.500 V
+  Protection: OC
+    [PASS] CV setpoint readback = 14.5000  (expected 14.400–14.600)
+    [PASS] CV current (should be ~0) = 0.0000  (expected 0.000–0.150)
+    [PASS] CV PSU current (~0) = 0.0200  (expected 0.000–0.100)
+
+==============================================================
+  STEP 9: State and query checks (load OFF)
+==============================================================
+  mode property   : 'CC'
+  input property  : 'OFF'
+  CC_current      : 1.000 A
+  OCP             : 3.100 A
+  OPP             : 50.000 W
+  protection      : 'OC'
+  fan             : 'PASS'
+  mode setter CR  → getter: 'CR'  [PASS]
+  input setter ON → getter: 'ON'  [PASS]
+
+==============================================================
+  STEP 10: Cleanup
+==============================================================
+  Load OFF, PSU CH1 OFF, connections closed
+
+==============================================================
+  SUMMARY
+==============================================================
+  ALL TESTS PASSED

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench"
+version = "0.6.0"
+description = "Meta-package: installs rf-bench-drivers-siglent, -icom, -yaesu, -utils, -buspirate, -flipper, -rtlsdr, -yertai"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "Jeff Francis", email = "gjfrancis@protonmail.com" },
+]
+requires-python = ">=3.9"
+dependencies = [
+    "rf-bench-drivers-utils>=0.1.0",
+    "rf-bench-drivers-siglent>=0.1.0",
+    "rf-bench-drivers-icom>=0.1.0",
+    "rf-bench-drivers-yaesu>=0.1.0",
+    "rf-bench-drivers-buspirate>=0.1.0",
+    "rf-bench-drivers-flipper>=0.1.0",
+    "rf-bench-drivers-rtlsdr>=0.1.0",
+    "rf-bench-drivers-yertai>=0.1.0",
+]
+keywords = [
+    "siglent", "scpi", "test-equipment", "spectrum-analyzer",
+    "function-generator", "oscilloscope", "ic7300", "ft891",
+    "hamlib", "rf", "bench-automation", "amateur-radio",
+    "flipper-zero", "sub-ghz", "bus-pirate",
+    "rtl-sdr", "sdr", "software-defined-radio", "iq",
+    "yertai", "et5406a", "dc-load", "electronic-load",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.optional-dependencies]
+dev = ["matplotlib", "scipy", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+"Bug Tracker" = "https://github.com/jfrancis42/rf-bench/issues"
+
+[tool.setuptools]
+packages = []

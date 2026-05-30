@@ -1,0 +1,6 @@
+rf-bench-drivers-siglent>=0.1.0
+rf-bench-drivers-icom>=0.1.0
+rf-bench-drivers-yaesu>=0.1.0
+numpy>=1.20
+matplotlib>=3.4
+scipy>=1.7

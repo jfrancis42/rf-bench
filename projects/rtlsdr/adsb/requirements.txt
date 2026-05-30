@@ -1,0 +1,3 @@
+rf-bench-drivers-rtlsdr>=0.1.0
+pyModeS>=3.3.0
+numpy>=1.20

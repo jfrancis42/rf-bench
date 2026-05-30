@@ -1,0 +1,17 @@
+{
+  "name": "bench-router",
+  "sources": {
+    "antenna-hf":  {"relay": 0, "description": "HF antenna (160m-6m)"},
+    "antenna-vhf": {"relay": 1, "description": "VHF/UHF discone"},
+    "ssa-tg":      {"relay": 2, "description": "SSA tracking generator output"},
+    "sdg-ch1":     {"relay": 3, "description": "SDG1062X channel 1"}
+  },
+  "destinations": {
+    "ssa-in":    {"relay": 4, "description": "SSA RF input"},
+    "ic7300":    {"relay": 5, "description": "IC-7300 antenna port"},
+    "rtlsdr":    {"relay": 6, "description": "RTL-SDR USB dongle"},
+    "hp8712-p1": {"relay": 7, "description": "HP 8712B port 1"}
+  },
+  "exclusive_sources": true,
+  "exclusive_destinations": true
+}

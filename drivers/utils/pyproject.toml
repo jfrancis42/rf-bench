@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-utils"
+version = "0.1.0"
+description = "RF math utilities for bench instrument automation — power conversions, noise, impedance, attenuators, S-meter"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["numpy"]
+keywords = ["rf", "bench-automation", "ham-radio", "scpi", "amateur-radio", "impedance", "noise-figure"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rf_bench.*"]
+namespaces = true

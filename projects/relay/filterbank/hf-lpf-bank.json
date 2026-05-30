@@ -1,0 +1,13 @@
+{
+  "name": "HF TX LPF Bank",
+  "filters": [
+    {"relay": 0, "label": "160m LPF", "f_low_hz": 0,        "f_high_hz": 2200000},
+    {"relay": 1, "label": "80m LPF",  "f_low_hz": 2200000,  "f_high_hz": 5000000},
+    {"relay": 2, "label": "40m LPF",  "f_low_hz": 5000000,  "f_high_hz": 8000000},
+    {"relay": 3, "label": "30m LPF",  "f_low_hz": 8000000,  "f_high_hz": 11000000},
+    {"relay": 4, "label": "20m LPF",  "f_low_hz": 11000000, "f_high_hz": 16000000},
+    {"relay": 5, "label": "17m LPF",  "f_low_hz": 16000000, "f_high_hz": 20000000},
+    {"relay": 6, "label": "15m LPF",  "f_low_hz": 20000000, "f_high_hz": 26000000},
+    {"relay": 7, "label": "10m LPF",  "f_low_hz": 26000000, "f_high_hz": 60000000}
+  ]
+}

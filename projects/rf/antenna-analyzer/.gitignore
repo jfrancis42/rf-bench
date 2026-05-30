@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.json
+*.png
+*.txt
+!requirements.txt
+*.csv
+*.npz
+.DS_Store
+Thumbs.db
+\#*#

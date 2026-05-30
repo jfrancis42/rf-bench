@@ -1,0 +1,7 @@
+rf-bench-drivers-siglent>=0.1.0
+rf-bench-drivers-icom>=0.1.0
+rf-bench-drivers-utils>=0.1.0
+numpy>=1.20
+scipy>=1.6
+matplotlib>=3.4
+sounddevice>=0.4

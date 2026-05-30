@@ -1,0 +1,3 @@
+rf-bench-drivers-rtlsdr>=0.1.0
+pyorbital>=1.6.0
+numpy>=1.20

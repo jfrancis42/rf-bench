@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-siglent"
+version = "0.1.0"
+description = "Siglent instrument drivers for bench automation — SSA3000X, SDG1000X, SDS2000X, SDM3000X, SPD3303X via raw TCP/SCPI"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["numpy", "rf-bench-drivers-utils"]
+keywords = ["siglent", "scpi", "spectrum-analyzer", "oscilloscope", "function-generator", "bench-automation", "test-equipment"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rf_bench.*"]
+namespaces = true

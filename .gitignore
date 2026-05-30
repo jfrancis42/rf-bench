@@ -1,0 +1,33 @@
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Measurement output artifacts (generated at runtime)
+*.npz
+synth_*.json
+synth_*.png
+antenna_analysis_*.json
+antenna_analysis_*.png
+antenna_analysis_*.txt
+antenna_analysis_*.csv
+
+# Editor
+*~
+\#*\#
+.#*
+*.swp
+
+# Local calibration files (machine-specific)
+~/.noise_figure_ssa_cal.json
+~/.sdg_cal.json
+~/.dig_atten_cal.json
+~/.relay_router_state.json

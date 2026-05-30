@@ -1,0 +1,5 @@
+rf-bench-drivers-siglent>=0.1.0
+rf-bench-drivers-buspirate>=0.1.0
+rf-bench-drivers-utils>=0.1.0
+numpy>=1.20
+matplotlib>=3.4
