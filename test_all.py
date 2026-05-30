@@ -2,7 +2,7 @@
 """Comprehensive live test of all five Siglent drivers."""
 
 import sys, os, time, math, numpy as np
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'drivers', 'siglent'))
 
 from rf_bench.siglent import SDG1000X, SDS2000X, SDM3000X, SPD3303X, SSA3000X
 
