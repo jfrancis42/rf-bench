@@ -153,7 +153,8 @@ class RTLSDR:
         if ppm_correction is None:
             ppm_correction = self._load_calibration_ppm()
         self._ppm_correction = float(ppm_correction)
-        self._sdr.set_freq_correction(int(round(self._ppm_correction)))
+        if int(round(self._ppm_correction)) != 0:
+            self._sdr.set_freq_correction(int(round(self._ppm_correction)))
 
         # Track state locally for use in calculations (avoid extra hardware reads)
         self._center_freq: int = 100_000_000

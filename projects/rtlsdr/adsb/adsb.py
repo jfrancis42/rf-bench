@@ -34,6 +34,7 @@ from urllib.error import URLError
 
 import numpy as np
 import pyModeS as pms
+from pyModeS.position import airborne_position_with_ref
 
 from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 
@@ -107,6 +108,7 @@ def open_db(path: str) -> sqlite3.Connection:
 
 _enrich_cache: dict = {}
 _enrich_lock  = threading.Lock()
+_db_lock      = threading.Lock()  # serialize all SQLite access across threads
 
 
 def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
@@ -119,10 +121,11 @@ def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
                 return data
 
     # Check SQLite first
-    row = conn.execute(
-        "SELECT n_number, type_code, owner, enriched_at FROM aircraft WHERE icao_hex=?",
-        (icao_hex,)
-    ).fetchone()
+    with _db_lock:
+        row = conn.execute(
+            "SELECT n_number, type_code, owner, enriched_at FROM aircraft WHERE icao_hex=?",
+            (icao_hex,)
+        ).fetchone()
     if row and row[3] and (now - row[3] < ENRICH_CACHE_TTL):
         data = {"n_number": row[0], "type_code": row[1], "owner": row[2]}
         with _enrich_lock:
@@ -146,17 +149,18 @@ def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
     with _enrich_lock:
         _enrich_cache[icao_hex] = (now, data)
 
-    conn.execute(
-        """INSERT INTO aircraft(icao_hex, n_number, type_code, owner, enriched_at)
-           VALUES(?,?,?,?,?)
-           ON CONFLICT(icao_hex) DO UPDATE SET
-             n_number=excluded.n_number,
-             type_code=excluded.type_code,
-             owner=excluded.owner,
-             enriched_at=excluded.enriched_at""",
-        (icao_hex, data["n_number"], data["type_code"], data["owner"], now)
-    )
-    conn.commit()
+    with _db_lock:
+        conn.execute(
+            """INSERT INTO aircraft(icao_hex, n_number, type_code, owner, enriched_at)
+               VALUES(?,?,?,?,?)
+               ON CONFLICT(icao_hex) DO UPDATE SET
+                 n_number=excluded.n_number,
+                 type_code=excluded.type_code,
+                 owner=excluded.owner,
+                 enriched_at=excluded.enriched_at""",
+            (icao_hex, data["n_number"], data["type_code"], data["owner"], now)
+        )
+        conn.commit()
     return data
 
 
@@ -168,54 +172,61 @@ def demodulate_modes(iq: np.ndarray) -> list[str]:
     """
     Demodulate Mode S messages from raw IQ samples.
 
-    Uses simple AM envelope detection: compute magnitude, look for preamble
-    pulses at 1090 MHz (preamble = 8 µs pattern at 2 MS/s = 16 samples),
-    then extract 112-bit (long) or 56-bit (short) messages.
+    Uses AM envelope detection with purely relative preamble matching
+    (same approach as rtl_adsb): high samples at indices 0,2,7,9 must each
+    exceed every adjacent low sample.  No global normalization needed.
 
-    Returns list of hex strings (without leading zeros stripped).
+    At 2 MS/s (0.5 µs/sample), Mode S preamble pulses land at:
+      samples 0, 2 (first pair) and 7, 9 (second pair, offset 3.5/4.5 µs).
+
+    Returns list of hex strings for all candidates (CRC filtering happens
+    in process_message via pyModeS).
     """
-    # Envelope (magnitude)
     mag = np.abs(iq).astype(np.float32)
-
-    # Normalise
-    if mag.max() < 1e-10:
+    if len(mag) < 16 + 112 * 2:
         return []
-    mag /= mag.max()
 
     messages = []
     n = len(mag)
     i = 0
-    preamble_samples = 16   # 8 µs × 2 MS/s
-    bit_samples      = 2    # 1 µs × 2 MS/s
-    long_bits        = 112
-    short_bits       = 56
+    end = n - 16 - 112 * 2
 
-    while i < n - preamble_samples - long_bits * bit_samples:
-        # Look for preamble pattern: high at 0,1 µs, low at 2,3 µs,
-        # high at 4,5 µs, low at 6,7 µs
-        p = mag[i:i+16]
-        if (p[0] > 0.5 and p[2] > 0.5 and
-                p[4] < 0.3 and p[6] < 0.3 and
-                p[8] > 0.5 and p[10] > 0.5 and
-                p[12] < 0.3 and p[14] < 0.3):
-            # Extract bits using Manchester-like sampling at half-period
+    while i < end:
+        p0  = mag[i]
+        p1  = mag[i+1]
+        p2  = mag[i+2]
+        p3  = mag[i+3]
+        p4  = mag[i+4]
+        p5  = mag[i+5]
+        p6  = mag[i+6]
+        p7  = mag[i+7]
+        p8  = mag[i+8]
+        p9  = mag[i+9]
+        p10 = mag[i+10]
+        p11 = mag[i+11]
+        p12 = mag[i+12]
+        p13 = mag[i+13]
+        p14 = mag[i+14]
+        p15 = mag[i+15]
+
+        # Each "high" sample must exceed every "low" sample it borders.
+        # Mirrors the rtl_adsb preamble() sequential comparison logic.
+        if (p0  > p1  and
+            p2  > p1  and p2 > p3 and p2 > p4 and p2 > p5 and p2 > p6 and
+            p7  > p6  and p7 > p8 and
+            p9  > p8  and p9 > p10 and p9 > p11 and p9 > p12 and
+            p9  > p13 and p9 > p14 and p9 > p15):
+
             bits = []
-            start = i + preamble_samples
-            for b in range(long_bits):
-                s0 = start + b * bit_samples
+            start = i + 16
+            for b in range(112):
+                s0 = start + b * 2
                 s1 = s0 + 1
-                if s1 >= n:
-                    break
                 bits.append('1' if mag[s0] > mag[s1] else '0')
 
-            if len(bits) == long_bits:
-                hex_str = hex(int(''.join(bits), 2))[2:].upper().zfill(28)
-                messages.append(hex_str)
-            elif len(bits) >= short_bits:
-                hex_str = hex(int(''.join(bits[:short_bits]), 2))[2:].upper().zfill(14)
-                messages.append(hex_str)
-
-            i += preamble_samples
+            hex_str = hex(int(''.join(bits), 2))[2:].upper().zfill(28)
+            messages.append(hex_str)
+            i += 16
         else:
             i += 1
 
@@ -274,20 +285,24 @@ STALE_TIMEOUT = 60.0   # remove aircraft not seen for 60 s
 
 def process_message(hex_msg: str, conn: sqlite3.Connection,
                     enrich: bool, rssi_db: float, csv_fh=None) -> None:
-    """Parse a Mode S hex message and update aircraft state."""
+    """Parse a Mode S hex message and update aircraft state (pyModeS v3 API)."""
     if len(hex_msg) < 14:
         return
 
     try:
-        df = pms.df(hex_msg)
+        d = pms.decode(hex_msg)
     except Exception:
         return
 
-    # Only process DF17 (ADS-B) and DF18 (TIS-B) for position/identity
-    if df not in (17, 18, 19, 20, 21):
+    if not d.get("crc_valid"):
         return
 
-    icao = pms.icao(hex_msg)
+    df   = d.get("df")
+    icao = d.get("icao")
+
+    # Only process DF17 (ADS-B) and DF18 (TIS-B) for position/identity
+    if df not in (17, 18, 20, 21):
+        return
     if not icao:
         return
     icao = icao.upper()
@@ -302,35 +317,38 @@ def process_message(hex_msg: str, conn: sqlite3.Connection,
 
     # Decode ADS-B (DF17/18)
     if df in (17, 18):
-        try:
-            tc = pms.adsb.typecode(hex_msg)
-        except Exception:
+        tc = d.get("typecode")
+        if tc is None:
             return
 
         try:
             if 1 <= tc <= 4:
-                cs = pms.adsb.callsign(hex_msg).strip()
+                cs = (d.get("callsign") or "").strip()
                 if cs:
                     ac.callsign = cs
             elif 9 <= tc <= 18 or 20 <= tc <= 22:
-                alt = pms.adsb.altitude(hex_msg)
+                alt = d.get("altitude")
                 if alt is not None:
                     ac.alt_ft = int(alt)
-                # CPR position decode (odd/even) — attempt with last known
-                try:
-                    pos = pms.adsb.position_with_ref(hex_msg, 39.7, -104.9)
-                    if pos:
-                        ac.lat, ac.lon = pos
+                cpr_lat = d.get("cpr_lat")
+                cpr_lon = d.get("cpr_lon")
+                cpr_fmt = d.get("cpr_format")
+                if cpr_lat is not None and cpr_lon is not None and cpr_fmt is not None:
+                    try:
+                        lat, lon = airborne_position_with_ref(
+                            cpr_fmt, cpr_lat, cpr_lon, 39.7, -104.9
+                        )
+                        ac.lat, ac.lon = lat, lon
                         _log_position(conn, ac, csv_fh)
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
             elif tc == 19:
-                vel = pms.adsb.velocity(hex_msg)
-                if vel:
-                    spd, hdg, vr, _ = vel
-                    if spd is not None: ac.speed_kt  = round(spd)
-                    if hdg is not None: ac.heading   = round(hdg)
-                    if vr  is not None: ac.vert_rate = int(vr)
+                spd = d.get("groundspeed") or d.get("airspeed")
+                hdg = d.get("track") or d.get("heading")
+                vr  = d.get("vertical_rate")
+                if spd is not None: ac.speed_kt  = round(spd)
+                if hdg is not None: ac.heading   = round(hdg)
+                if vr  is not None: ac.vert_rate = int(vr)
         except Exception:
             pass
 
@@ -346,12 +364,13 @@ def process_message(hex_msg: str, conn: sqlite3.Connection,
 
 def _log_position(conn: sqlite3.Connection, ac: Aircraft, csv_fh=None) -> None:
     now = time.time()
-    conn.execute(
-        "INSERT INTO positions(timestamp,icao_hex,lat,lon,alt_ft,speed_kt,heading,vert_rate,rssi_db)"
-        " VALUES(?,?,?,?,?,?,?,?,?)",
-        (now, ac.icao, ac.lat, ac.lon, ac.alt_ft, ac.speed_kt, ac.heading, ac.vert_rate, ac.rssi_db)
-    )
-    conn.commit()
+    with _db_lock:
+        conn.execute(
+            "INSERT INTO positions(timestamp,icao_hex,lat,lon,alt_ft,speed_kt,heading,vert_rate,rssi_db)"
+            " VALUES(?,?,?,?,?,?,?,?,?)",
+            (now, ac.icao, ac.lat, ac.lon, ac.alt_ft, ac.speed_kt, ac.heading, ac.vert_rate, ac.rssi_db)
+        )
+        conn.commit()
     if csv_fh:
         ts = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
         csv_fh.write(f"{ts},{ac.icao},{ac.callsign or ''},{ac.lat:.5f},{ac.lon:.5f},"
@@ -437,6 +456,7 @@ def main():
         t.start()
         print(f"HTTP: http://localhost:{args.port}/aircraft")
 
+    total_msgs = 0
     try:
         with RTLSDR(serial=args.serial) as sdr:
             sdr.set_center_freq(DEFAULT_FREQ_HZ)
@@ -448,7 +468,6 @@ def main():
             print("Listening... Ctrl-C to stop.")
 
             last_prune = time.time()
-            total_msgs = 0
 
             for block in sdr.stream_iq(block_size=args.block_size):
                 if not _running:
