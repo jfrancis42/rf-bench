@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 """
 Flipper Zero Sub-GHz Band Scanner
 
@@ -111,9 +111,12 @@ def run_scan(fz: FlipperZero, start_hz: float, stop_hz: float,
             print("  " + "-" * (30 + BAR_WIDTH))
 
             for freq_hz, rssi in results:
-                bar = rssi_to_bar(rssi)
-                print(f"  {format_freq_mhz(freq_hz):>14}  {rssi:>+8.1f}  {bar}")
-                if csv_writer:
+                if rssi is None:
+                    print(f"  {format_freq_mhz(freq_hz):>14}  {'---':>8}")
+                else:
+                    bar = rssi_to_bar(rssi)
+                    print(f"  {format_freq_mhz(freq_hz):>14}  {rssi:>+8.1f}  {bar}")
+                if csv_writer and rssi is not None:
                     csv_writer.writerow([ts, int(freq_hz), f"{rssi:.1f}"])
 
             if csv_fh:
@@ -163,7 +166,11 @@ Examples:
     try:
         print(f"Connecting to Flipper @ {args.serial} ...")
         fz = FlipperZero(args.serial)
-        print(f"  {fz.identify()}")
+        info = fz.identify()
+        print(f"  Firmware: {fz.firmware_fork}  HW: {info.get('hardware_model','?')}  "
+              f"FW: {info.get('firmware_version', info.get('firmware_branch','?'))}")
+        if not fz.uses_carrier_commands:
+            print(f"  Note: {fz.firmware_fork} firmware — RSSI shown only for received packets")
 
         n_steps = int((args.stop - args.start) * 1e6 / (args.step * 1e3)) + 1
         est_s   = n_steps * args.dwell

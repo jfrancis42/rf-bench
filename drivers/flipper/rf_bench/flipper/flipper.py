@@ -16,6 +16,18 @@ Mode switching:
 Hardware:
   USB VID=0x0483  PID=0x5740  (CDC ACM)
   Linux: /dev/ttyACM0  Baud: 230400 (ignored by USB CDC, but required by pyserial)
+
+Firmware compatibility:
+  Official firmware uses 'subghz rx_carrier' / 'subghz tx_carrier' for
+  continuous carrier mode.  Third-party forks (Momentum, RogueMaster,
+  Xtreme, Unleashed, etc.) dropped those commands in favour of 'subghz rx'
+  / 'subghz tx'.
+
+  The driver detects the firmware fork on connect via the '!' info command
+  and routes Sub-GHz commands accordingly.  On fork firmware, rx_carrier
+  is emulated via 'subghz rx'; RSSI is available only when a packet is
+  decoded (per-packet, not continuous).  tx_carrier is not available on
+  fork firmware and raises FlipperError.
 """
 
 from __future__ import annotations
@@ -56,6 +68,10 @@ _USB_PID = 0x5740
 _BAUD = 230400
 _PROMPT = b">: "
 
+# Firmware forks that replaced rx_carrier/tx_carrier with rx/tx.
+# Matched against the 'firmware_origin_fork' field from '!' info output.
+_FORK_FIRMWARE = {"Momentum", "RogueMaster", "Xtreme", "Unleashed"}
+
 _GPIO_PINS = ("PC0", "PC1", "PC3", "PB2", "PB3", "PA4", "PA6", "PA7")
 
 _SUBGHZ_PRESETS = {
@@ -85,9 +101,14 @@ class FlipperZero:
 
     GPIO pins available: PC0, PC1, PC3, PB2, PB3, PA4, PA6, PA7.
 
+    Firmware forks (Momentum, RogueMaster, Xtreme, Unleashed, …) are
+    auto-detected on connect via ``firmware_fork``.  Sub-GHz carrier
+    commands adapt automatically; see method docstrings for per-fork notes.
+
     Usage::
 
         with FlipperZero() as fz:          # auto-detect
+            print(fz.firmware_fork)        # e.g. 'Momentum' or 'Official'
             fz.gpio_set_mode("PA4", "output")
             fz.gpio_write("PA4", 1)
             readings = fz.subghz_get_rssi(433_920_000, duration_s=0.5)
@@ -128,6 +149,9 @@ class FlipperZero:
         # Sync to CLI prompt on connect
         self._flush_cli()
 
+        # Detect firmware fork so Sub-GHz commands can be routed correctly.
+        self._firmware_fork: str = self._detect_firmware_fork()
+
     # ------------------------------------------------------------------
     # Class helpers
     # ------------------------------------------------------------------
@@ -144,6 +168,34 @@ class FlipperZero:
             if info.vid == _USB_VID and info.pid == _USB_PID:
                 return info.device
         return None
+
+    def _detect_firmware_fork(self) -> str:
+        """Read firmware_origin_fork from the '!' info output."""
+        try:
+            resp = self._cli_send("!", timeout=5.0)
+            for line in resp.splitlines():
+                if "firmware_origin_fork" in line:
+                    _, _, val = line.partition(":")
+                    return val.strip()
+        except Exception:
+            pass
+        return "Official"
+
+    @property
+    def firmware_fork(self) -> str:
+        """
+        Firmware fork name detected at connect time.
+
+        Returns 'Official' for stock Flipper firmware, or the fork name
+        (e.g. 'Momentum', 'RogueMaster', 'Xtreme', 'Unleashed') for
+        community firmware.  Used internally to route Sub-GHz commands.
+        """
+        return self._firmware_fork
+
+    @property
+    def uses_carrier_commands(self) -> bool:
+        """True if this firmware supports 'subghz rx_carrier' / 'subghz tx_carrier'."""
+        return self._firmware_fork not in _FORK_FIRMWARE
 
     # ------------------------------------------------------------------
     # Context manager
@@ -346,7 +398,16 @@ class FlipperZero:
 
         Args:
             freq_hz: Carrier frequency in Hz (e.g. 433_920_000).
+
+        Raises:
+            FlipperError: On fork firmware (Momentum, RogueMaster, etc.) that
+                          removed the tx_carrier command.
         """
+        if not self.uses_carrier_commands:
+            raise FlipperError(
+                f"subghz tx_carrier is not available on {self._firmware_fork} firmware. "
+                "Use subghz_transmit_raw() or subghz_transmit_protocol() instead."
+            )
         self._ensure_cli()
 
         def _worker() -> None:
@@ -372,6 +433,14 @@ class FlipperZero:
         Runs in the background.  RSSI values (dBm) are delivered to
         rssi_callback as they arrive.  Call subghz_stop() to stop.
 
+        On official firmware, uses 'subghz rx_carrier' which streams
+        continuous RSSI samples even with no packet activity.
+
+        On fork firmware (Momentum, RogueMaster, Xtreme, Unleashed, …),
+        uses 'subghz rx' instead. RSSI is reported only when a packet is
+        decoded, so rssi_callback fires per-packet rather than continuously.
+        Frequencies with no active transmitters return no readings.
+
         Args:
             freq_hz:       Frequency in Hz.
             rssi_callback: Called with each RSSI reading (float, dBm).
@@ -379,8 +448,13 @@ class FlipperZero:
         self._ensure_cli()
         _rssi_re = re.compile(rb"RSSI:\s*(-?\d+(?:\.\d+)?)")
 
+        if self.uses_carrier_commands:
+            cmd = f"subghz rx_carrier {freq_hz}\r".encode()
+        else:
+            cmd = f"subghz rx {freq_hz} 0\r".encode()
+
         def _worker() -> None:
-            self._serial.write(f"subghz rx_carrier {freq_hz}\r".encode())
+            self._serial.write(cmd)
             buf = b""
             while not self._bg_stop.is_set():
                 chunk = self._serial.read(self._serial.in_waiting or 1)
@@ -394,7 +468,7 @@ class FlipperZero:
                                 rssi_callback(float(m.group(1)))
                             except Exception:
                                 pass
-                        buf = buf[-128:]  # Keep only tail to avoid re-scanning
+                        buf = buf[-256:]  # Keep tail to avoid re-scanning
 
         self._start_bg(_worker)
 
@@ -475,9 +549,8 @@ class FlipperZero:
         """
         Capture raw Sub-GHz output at freq_hz for duration_s seconds.
 
-        Returns the CLI output string from the rx_carrier command.  RSSI
-        lines can be parsed with a regex; raw timing data (if any) will
-        also appear in the output.
+        On official firmware, uses 'subghz rx_carrier' (continuous RSSI
+        stream).  On fork firmware, uses 'subghz rx' (packet decodes only).
 
         Args:
             freq_hz:    Frequency in Hz.
@@ -489,8 +562,13 @@ class FlipperZero:
         self._ensure_cli()
         captured: List[bytes] = []
 
+        if self.uses_carrier_commands:
+            cmd = f"subghz rx_carrier {freq_hz}\r".encode()
+        else:
+            cmd = f"subghz rx {freq_hz} 0\r".encode()
+
         def _worker() -> None:
-            self._serial.write(f"subghz rx_carrier {freq_hz}\r".encode())
+            self._serial.write(cmd)
             while not self._bg_stop.is_set():
                 chunk = self._serial.read(self._serial.in_waiting or 1)
                 if chunk:

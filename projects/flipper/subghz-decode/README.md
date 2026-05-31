@@ -1,5 +1,3 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
 
 # rf-bench-flipper-subghz-decode
 

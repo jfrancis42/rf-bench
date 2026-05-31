@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench-drivers-flipper"
-version = "0.1.0"
+version = "0.2.0"
 description = "Flipper Zero driver for bench automation — Sub-GHz, IR, RFID, NFC, GPIO via USB"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }

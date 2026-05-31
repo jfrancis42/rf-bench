@@ -1,5 +1,3 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
 
 # rf-bench-flipper-rf-scan
 
@@ -7,6 +5,12 @@
 
 Sweeps CC1101 RSSI across ISM frequencies (300-928 MHz) using subghz_scan_rssi().
 Displays a live Unicode block bar chart in the terminal. Optional CSV logging mode.
+
+**Firmware compatibility:** Tested with official and Momentum (mntm-012) firmware.
+On official firmware, continuous RSSI samples are streamed at each step.
+On Momentum/RogueMaster/Xtreme/Unleashed, RSSI is only reported when a packet is
+decoded — frequencies with no active transmitters show `---`. This is an upstream
+firmware limitation; `subghz rx_carrier` was removed from fork firmware.
 
 ## Hardware
 

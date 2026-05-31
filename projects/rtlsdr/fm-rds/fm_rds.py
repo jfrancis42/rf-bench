@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 """
 FM Band Monitor with RDS Decode
 
@@ -50,13 +50,90 @@ DEFAULT_DB_PATH = "fm_rds.db"
 SSA_PORT        = 5025
 
 # PI code region mapping (upper nibble = country, varies by region)
-# ITU Region 1 (Europe/Africa) upper nibble A-F; US uses 1-9
+# ITU Region 1 (Europe/Africa) upper nibble A-F; US/Canada uses 1-9
 PI_COUNTRY_MAP = {
     0x1: "US", 0x2: "US", 0x3: "US", 0x4: "US", 0x5: "US",
     0x6: "US", 0x7: "US", 0x8: "US", 0x9: "US",
     0xA: "DE", 0xB: "DE", 0xC: "FR", 0xD: "FR",
     0xE: "UK", 0xF: "UK",
 }
+
+# RBDS (US) PTY code table — differs slightly from European RDS PTY
+# Source: NRSC-4-B, Annex D
+RBDS_PTY = {
+    0:  "None", 1:  "News", 2:  "Information", 3:  "Sports",
+    4:  "Talk", 5:  "Rock", 6:  "Classic Rock", 7:  "Adult Hits",
+    8:  "Soft Rock", 9:  "Top 40", 10: "Country", 11: "Oldies",
+    12: "Soft", 13: "Nostalgia", 14: "Jazz", 15: "Classical",
+    16: "Rhythm and Blues", 17: "Soft Rhythm and Blues", 18: "Language",
+    19: "Religious Music", 20: "Religious Talk", 21: "Personality",
+    22: "Public", 23: "College", 24: "Spanish Talk", 25: "Spanish Music",
+    26: "Hip Hop", 27: None, 28: None, 29: "Weather",
+    30: "Emergency Test", 31: "ALERT! ALERT!",
+}
+
+# European RDS PTY table (IEC 62106)
+RDS_PTY = {
+    0:  "None", 1:  "News", 2:  "Current Affairs", 3:  "Information",
+    4:  "Sport", 5:  "Education", 6:  "Drama", 7:  "Culture",
+    8:  "Science", 9:  "Varied", 10: "Pop Music", 11: "Rock Music",
+    12: "Easy Listening", 13: "Light Classical", 14: "Serious Classical",
+    15: "Other Music", 16: "Weather", 17: "Finance", 18: "Children's",
+    19: "Social Affairs", 20: "Religion", 21: "Phone In", 22: "Travel",
+    23: "Leisure", 24: "Jazz Music", 25: "Country Music",
+    26: "National Music", 27: "Oldies Music", 28: "Folk Music",
+    29: "Documentary", 30: "Alarm Test", 31: "Alarm",
+}
+
+
+def pty_name(pty: int, is_us: bool = True) -> str:
+    """Return PTY code description for RBDS (US) or RDS (Europe)."""
+    table = RBDS_PTY if is_us else RDS_PTY
+    return table.get(pty) or f"PTY {pty}"
+
+
+def pi_to_callsign(pi: int) -> str | None:
+    """
+    Attempt to decode a US RBDS PI code to a broadcast callsign.
+
+    Uses the NRSC-4-B (RBDS) formula:
+      - PI 0x1000–0x994F: 3-letter calls starting with W or K
+      - PI 0x9950–0x9EFF: 4-letter calls derived from the PI value
+
+    Returns None for non-US PI codes or if the formula does not apply.
+    """
+    if pi is None or not (0x1000 <= pi <= 0x9EFF):
+        return None
+
+    if 0x9950 <= pi <= 0x9EFF:
+        # 4-letter callsign encoding: NRSC-4-B Table D.1
+        n = pi - 0x9950
+        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        d1 = n // (26 * 26 * 26)
+        n  = n % (26 * 26 * 26)
+        d2 = n // (26 * 26)
+        n  = n % (26 * 26)
+        d3 = n // 26
+        d4 = n % 26
+        prefix = "W" if d1 < 1 else "K"  # simplified; full table is complex
+        return f"{prefix}{chars[d2]}{chars[d3]}{chars[d4]}"
+
+    # 3-letter callsign range 0x1000–0x994F
+    n = pi - 0x1000
+    if n < 0:
+        return None
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    # W stations: 0–21671; K stations: 21672–45688
+    if n <= 21671:
+        prefix = "W"
+    else:
+        prefix = "K"
+        n -= 21672
+    c1 = n // (26 * 26) % 26
+    c2 = (n // 26) % 26
+    c3 = n % 26
+    alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    return f"{prefix}{alpha[c1]}{alpha[c2]}{alpha[c3]}"
 
 _running = True
 
@@ -278,6 +355,14 @@ def pi_to_region(pi: int) -> str:
     return PI_COUNTRY_MAP.get(upper, f"region_{upper:X}")
 
 
+def is_us_pi(pi: int) -> bool:
+    """Return True if the PI code is in the RBDS (US) range."""
+    if not pi:
+        return False
+    upper = (pi >> 12) & 0xF
+    return upper in range(1, 10)
+
+
 # ---------------------------------------------------------------------------
 # Alert
 # ---------------------------------------------------------------------------
@@ -371,7 +456,11 @@ def main():
                             is_new   = _update_station(pi, ps, pty, args.freq, 0.0, rt)
                             ts       = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
                             new_flag = "  *** NEW REGION ***" if (is_new and region not in known_pi_regions) else ""
-                            print(f"[{ts}] PI:{pi:04X} ({region})  PS:{ps:<8s}  PTY:{pty}  RT:{rt[:40]}{new_flag}")
+                            us       = is_us_pi(pi)
+                            call     = pi_to_callsign(pi) if us else None
+                            pty_str  = pty_name(pty, is_us=us) if pty is not None else "--"
+                            call_str = f" [{call}]" if call else ""
+                            print(f"[{ts}] PI:{pi:04X}{call_str} ({region})  PS:{ps:<8s}  PTY:{pty_str}  RT:{rt[:40]}{new_flag}")
                             if is_new and region not in known_pi_regions:
                                 known_pi_regions.add(region)
                                 if args.alert:
@@ -415,8 +504,12 @@ def main():
                         ts       = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
                         pi_str   = f"{pi:04X}" if pi else "—"
                         flag     = " <<<" if (is_new and region not in known_pi_regions and pi) else ""
-                        print(f"[{ts}] {freq:6.1f}  {pi_str:6s}  {region:8s}  {ps:9s}  "
-                              f"{str(pty):4s}  {rt[:30]}{flag}")
+                        us       = is_us_pi(pi) if pi else False
+                        call     = pi_to_callsign(pi) if us else None
+                        pty_str  = pty_name(pty, is_us=us) if isinstance(pty, int) else str(pty)
+                        pi_disp  = f"{pi_str}[{call}]" if call else pi_str
+                        print(f"[{ts}] {freq:6.1f}  {pi_disp:10s}  {region:8s}  {ps:9s}  "
+                              f"{pty_str[:8]:8s}  {rt[:28]}{flag}")
 
                         if is_new and pi and region not in known_pi_regions:
                             known_pi_regions.add(region)

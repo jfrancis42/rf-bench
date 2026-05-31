@@ -369,13 +369,14 @@ def main():
 
         if not args.rotate:
             meta_path = out_stem.with_suffix(".sigmf-meta")
+            data_file = out_stem.with_suffix(".sigmf-data")
             _write_sigmf_meta(meta_path, {
                 "datatype":    "ci8_le" if args.int8 else "cf32_le",
                 "sample_rate": int(args.bw),
                 "center_freq": int(args.freq),
                 "datetime":    datetime.fromtimestamp(
-                    out_stem.stat().st_mtime, tz=timezone.utc
-                ).isoformat() if out_stem.with_suffix(".sigmf-data").exists() else
+                    data_file.stat().st_mtime, tz=timezone.utc
+                ).isoformat() if data_file.exists() else
                 datetime.now(tz=timezone.utc).isoformat(),
             })
             size_mb = out_stem.with_suffix(".sigmf-data").stat().st_size / 1e6

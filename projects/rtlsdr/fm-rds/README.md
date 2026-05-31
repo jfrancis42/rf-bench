@@ -1,14 +1,17 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
 
 # rf-bench-rtlsdr-fm-rds
 
 **GitHub:** https://github.com/jfrancis42/rf-bench-rtlsdr-fm-rds
 
-FM band monitor with RDS decode: scans 87.5–108 MHz, demodulates FM stations,
-and decodes RDS metadata (station name / PS, PI code, program type, radiotext).
+FM band monitor with RDS/RBDS decode: scans 87.5–108 MHz, demodulates FM stations,
+and decodes RDS/RBDS metadata (station name / PS, PI code, program type, radiotext).
 Identifies distant stations by their PI code region — the signature of a
 tropospheric ducting event.
+
+**US RBDS:** The US uses RBDS (Radio Broadcast Data System), which uses the same
+over-the-air protocol as European RDS. PI codes 0x1000–0x9EFF indicate US stations.
+PTY code table follows RBDS Annex D (slightly different meanings from European PTY).
+The script auto-detects US vs. European PI code space from the upper nibble.
 
 Extends the SSA FM propagation monitor (#64): the SSA tracks power levels and
 produces a waterfall; this tool adds station identity and RDS data.

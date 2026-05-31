@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 """
 APRS Direct Receive
 
@@ -303,6 +303,20 @@ def main():
 
     # Build the rtl_fm | direwolf pipeline.
     # rtl_fm outputs raw 16-bit signed PCM to stdout; direwolf reads it on stdin.
+    # We write a minimal direwolf config so the pipeline works regardless of
+    # whatever ADEVICE is set in the user's ~/direwolf.conf.
+    dw_conf = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".conf", prefix="rfbench_dw_", delete=False
+    )
+    dw_conf.write(
+        f"ADEVICE stdin null\n"
+        f"CHANNEL 0\n"
+        f"MYCALL N0CALL\n"
+        f"MODEM 1200\n"
+    )
+    dw_conf.flush()
+    dw_conf_path = dw_conf.name
+
     rtl_cmd = [
         "rtl_fm",
         "-f", str(freq_hz),
@@ -314,6 +328,7 @@ def main():
     ]
     dw_cmd = [
         "direwolf",
+        "-c", dw_conf_path,
         "-r", str(DEFAULT_SAMPLE_RATE),
         "-b", "16",
         "-n", "1",
@@ -337,6 +352,7 @@ def main():
     except FileNotFoundError as exc:
         print(f"Error: {exc}. Install rtl-sdr and direwolf (pacman -S rtl-sdr direwolf).",
               file=sys.stderr)
+        os.unlink(dw_conf_path)
         sys.exit(1)
 
     start_time = time.time()
@@ -394,6 +410,10 @@ def main():
         except subprocess.TimeoutExpired:
             rtlfm.kill()
             dw.kill()
+        try:
+            os.unlink(dw_conf_path)
+        except OSError:
+            pass
 
     print(f"\nDone. {total_pkts} packets decoded.")
 

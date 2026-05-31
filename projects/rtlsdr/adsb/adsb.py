@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 """
 ADS-B Local Receiver
 
@@ -6,6 +6,9 @@ Decodes Mode S / ADS-B transmissions at 1090 MHz from aircraft overhead using
 an RTL-SDR dongle.  Cross-references each ICAO hex address with the govt-data
 aircraft API to enrich raw position data with N-number, aircraft type, and
 registered owner.  Logs to SQLite and serves live JSON over HTTP.
+
+Optionally gates decoded aircraft positions to APRS-IS as APRS position
+packets (aircraft symbol), making locally-heard traffic visible on APRS maps.
 
 Requires an RTL-SDR dongle and a 1090 MHz antenna (or wideband antenna).
 A 1090 MHz bandpass filter before the LNA significantly improves decode rate.
@@ -15,6 +18,7 @@ Usage:
     python adsb.py --port 8080 --gain 40 --no-enrich
     python adsb.py --dump-only               # raw Mode S hex to stdout, no HTTP
     python adsb.py --csv aircraft.csv        # append position fixes to CSV
+    python adsb.py --igate N0GQ 31363        # gate to APRS-IS as N0GQ
 """
 
 import argparse
@@ -22,6 +26,7 @@ import json
 import math
 import os
 import signal
+import socket
 import sqlite3
 import sys
 import threading
@@ -53,6 +58,14 @@ ENRICH_CACHE_TTL     = 3600        # seconds before re-querying govt-data
 
 # Minimum RSSI delta from noise floor to report (rough demodulation threshold)
 SIGNAL_THRESHOLD_DB  = 10.0
+
+# APRS-IS igate defaults
+APRSIS_SERVER        = "noam.aprs2.net"
+APRSIS_PORT          = 14580
+APRSIS_APP_NAME      = "rfbench-adsb"
+APRSIS_APP_VERSION   = "1.0"
+IGATE_MIN_INTERVAL   = 30.0   # minimum seconds between position sends per aircraft
+IGATE_ALT_MIN_FT     = 0      # only gate aircraft above this altitude
 
 _running = True
 
@@ -425,6 +438,164 @@ class Handler(BaseHTTPRequestHandler):
 
 
 # ---------------------------------------------------------------------------
+# APRS-IS igate helper
+# ---------------------------------------------------------------------------
+
+def _gate_aircraft(igate: "APRSISGate") -> None:
+    """Gate all tracked aircraft with known positions to APRS-IS."""
+    with _aircraft_lock:
+        snapshot = list(_aircraft.values())
+    for ac in snapshot:
+        if ac.lat is None or ac.lon is None:
+            continue
+        if (ac.alt_ft or 0) < IGATE_ALT_MIN_FT:
+            continue
+        igate.gate(
+            icao_hex  = ac.icao,
+            lat       = ac.lat,
+            lon       = ac.lon,
+            alt_ft    = ac.alt_ft,
+            speed_kt  = ac.speed_kt,
+            heading   = ac.heading,
+            callsign  = ac.callsign or "",
+            n_number  = ac.n_number or "",
+            ac_type   = ac.type_code or "",
+        )
+
+
+# ---------------------------------------------------------------------------
+# APRS-IS igate
+# ---------------------------------------------------------------------------
+
+class APRSISGate:
+    """
+    APRS-IS connection that gates locally decoded ADS-B positions as APRS
+    position packets using the aircraft symbol (primary table '^').
+
+    Aircraft appear on APRS maps (aprs.fi, etc.) with their ICAO hex as the
+    SSID comment and callsign/N-number in the remark field.
+
+    Rate limiting: each aircraft is gated at most once per IGATE_MIN_INTERVAL
+    seconds to avoid flooding APRS-IS.
+    """
+
+    def __init__(self, callsign: str, passcode: int,
+                 server: str = APRSIS_SERVER, port: int = APRSIS_PORT) -> None:
+        self._callsign  = callsign.upper()
+        self._passcode  = int(passcode)
+        self._server    = server
+        self._port      = port
+        self._sock: Optional[socket.socket] = None
+        self._lock      = threading.Lock()
+        self._last_sent: dict[str, float] = {}
+        self._connected = False
+
+    def connect(self) -> bool:
+        """Open TCP connection and log in to APRS-IS. Returns True on success."""
+        try:
+            self._sock = socket.create_connection((self._server, self._port), timeout=10)
+            self._sock.settimeout(5)
+            banner = self._sock.recv(512).decode("utf-8", errors="replace")
+            login = (
+                f"user {self._callsign} pass {self._passcode} "
+                f"vers {APRSIS_APP_NAME} {APRSIS_APP_VERSION}\r\n"
+            )
+            self._sock.sendall(login.encode())
+            time.sleep(0.5)
+            reply = self._sock.recv(512).decode("utf-8", errors="replace")
+            if "verified" in reply.lower() or "unverified" in reply.lower():
+                self._connected = "unverified" not in reply.lower()
+                if not self._connected:
+                    print(f"APRS-IS: login unverified — check callsign/passcode", file=sys.stderr)
+                    return False
+                print(f"APRS-IS: connected to {self._server} as {self._callsign}")
+                return True
+            print(f"APRS-IS: unexpected login reply: {reply!r}", file=sys.stderr)
+            return False
+        except OSError as exc:
+            print(f"APRS-IS: connect failed: {exc}", file=sys.stderr)
+            return False
+
+    def close(self) -> None:
+        if self._sock:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            self._sock = None
+        self._connected = False
+
+    @staticmethod
+    def _aprs_latlon(lat: float, lon: float) -> tuple[str, str]:
+        """Format decimal lat/lon as APRS DDMM.mmN/DDDMM.mmW strings."""
+        lat_d = int(abs(lat))
+        lat_m = (abs(lat) - lat_d) * 60.0
+        lat_h = "N" if lat >= 0 else "S"
+        lon_d = int(abs(lon))
+        lon_m = (abs(lon) - lon_d) * 60.0
+        lon_h = "E" if lon >= 0 else "W"
+        return (f"{lat_d:02d}{lat_m:05.2f}{lat_h}",
+                f"{lon_d:03d}{lon_m:05.2f}{lon_h}")
+
+    def gate(self, icao_hex: str, lat: float, lon: float,
+             alt_ft: Optional[int], speed_kt: Optional[float],
+             heading: Optional[float], callsign: str = "",
+             n_number: str = "", ac_type: str = "") -> bool:
+        """
+        Send one APRS position packet for this aircraft to APRS-IS.
+
+        Rate-limited: returns False (not sent) if this ICAO was gated within
+        IGATE_MIN_INTERVAL seconds.  Returns True if the packet was sent.
+        """
+        if not self._connected or not self._sock:
+            return False
+
+        now = time.time()
+        with self._lock:
+            if now - self._last_sent.get(icao_hex, 0.0) < IGATE_MIN_INTERVAL:
+                return False
+            self._last_sent[icao_hex] = now
+
+        # Build the APRS object name: ICAO hex (6 chars, uppercase)
+        obj_name = icao_hex.upper().ljust(6)[:6]
+
+        ts  = datetime.fromtimestamp(now, tz=timezone.utc)
+        tss = ts.strftime("%H%M%S")
+
+        lat_str, lon_str = self._aprs_latlon(lat, lon)
+        cse = f"{int(heading or 0):03d}"
+        spd = f"{int(speed_kt or 0):03d}"
+        alt = f"/A={int(alt_ft or 0):06d}" if alt_ft is not None else ""
+
+        remark_parts = []
+        if callsign:
+            remark_parts.append(callsign)
+        if n_number:
+            remark_parts.append(n_number)
+        if ac_type:
+            remark_parts.append(ac_type)
+        remark = " ".join(remark_parts)
+
+        # APRS object format: ;OBJ_NAME*HHMMSS/LATNS/LONEW^CSE/SPD/A=ALTFTREMARK
+        packet = (
+            f"{self._callsign}>APAVT5,TCPIP*,qAC,{self._callsign}:"
+            f";{obj_name}*{tss}z"
+            f"{lat_str}/{lon_str}^"
+            f"{cse}/{spd}"
+            f"{alt}"
+            f" {remark}"
+        )
+
+        try:
+            self._sock.sendall((packet + "\r\n").encode())
+            return True
+        except OSError as exc:
+            print(f"APRS-IS: send error: {exc}", file=sys.stderr)
+            self._connected = False
+            return False
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -445,10 +616,21 @@ def main():
     ap.add_argument("--serial",     help="RTL-SDR serial number (default: first device)")
     ap.add_argument("--block-size", type=int, default=131_072,
                     help="IQ block size (default: %(default)s)")
+    ap.add_argument("--igate",      nargs=2, metavar=("CALLSIGN", "PASSCODE"),
+                    help="Gate positions to APRS-IS (e.g. --igate N0GQ 31363)")
+    ap.add_argument("--igate-server", default=APRSIS_SERVER,
+                    help=f"APRS-IS server (default: {APRSIS_SERVER})")
     args = ap.parse_args()
 
     conn = open_db(args.db)
     csv_fh = open(args.csv, "a") if args.csv else None
+
+    igate: Optional[APRSISGate] = None
+    if args.igate:
+        igate = APRSISGate(args.igate[0], args.igate[1], server=args.igate_server)
+        if not igate.connect():
+            print("Continuing without APRS-IS gating.", file=sys.stderr)
+            igate = None
 
     if not args.dump_only:
         srv = HTTPServer(("", args.port), Handler)
@@ -490,6 +672,8 @@ def main():
                 if time.time() - last_prune > 10.0:
                     prune_stale()
                     last_prune = time.time()
+                    if igate:
+                        _gate_aircraft(igate)
                     if not args.dump_only:
                         with _aircraft_lock:
                             count = len(_aircraft)
@@ -503,6 +687,8 @@ def main():
     finally:
         if csv_fh:
             csv_fh.close()
+        if igate:
+            igate.close()
         if not args.dump_only:
             print()
         print(f"Done. {total_msgs} messages decoded.")

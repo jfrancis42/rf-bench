@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -u
 """
 Flipper Zero Sub-GHz Packet Decoder and Logger
 
