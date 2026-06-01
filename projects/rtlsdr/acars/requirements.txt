@@ -1,0 +1,2 @@
+# No Python dependencies beyond stdlib — acarsdec handles all decoding
+# Install acarsdec: yay -S acarsdec-git
