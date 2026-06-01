@@ -318,7 +318,7 @@ def process_message(hex_msg: str, conn: sqlite3.Connection,
         return
     if not icao:
         return
-    icao = icao.upper()
+    icao = icao.strip("'\"").upper()
 
     with _aircraft_lock:
         if icao not in _aircraft:
