@@ -109,7 +109,9 @@ CREATE INDEX IF NOT EXISTS pos_icao ON positions(icao_hex);
 
 
 def open_db(path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(path, check_same_thread=False)
+    global _db_path
+    _db_path = path
+    conn = sqlite3.connect(path)
     conn.executescript(CREATE_SQL)
     conn.commit()
     return conn
@@ -121,11 +123,15 @@ def open_db(path: str) -> sqlite3.Connection:
 
 _enrich_cache: dict = {}
 _enrich_lock  = threading.Lock()
-_db_lock      = threading.Lock()  # serialize all SQLite access across threads
+_db_path: str = ""   # set by open_db(); enrich threads open their own connections
 
 
-def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
-    """Return registration info for an ICAO hex address from govt-data or cache."""
+def enrich_icao(icao_hex: str) -> dict:
+    """Return registration info for an ICAO hex address from govt-data or cache.
+
+    Opens its own short-lived SQLite connection so enrich threads never share
+    a connection with the main thread or each other.
+    """
     now = time.time()
     with _enrich_lock:
         if icao_hex in _enrich_cache:
@@ -133,36 +139,38 @@ def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
             if now - cached_at < ENRICH_CACHE_TTL:
                 return data
 
-    # Check SQLite first
-    with _db_lock:
+    conn = sqlite3.connect(_db_path)
+    try:
+        # Check SQLite first
         row = conn.execute(
             "SELECT n_number, type_code, owner, enriched_at FROM aircraft WHERE icao_hex=?",
             (icao_hex,)
         ).fetchone()
-    if row and row[3] and (now - row[3] < ENRICH_CACHE_TTL):
-        data = {"n_number": row[0], "type_code": row[1], "owner": row[2]}
+        if row and row[3] and (now - row[3] < ENRICH_CACHE_TTL):
+            data = {"n_number": row[0], "type_code": row[1], "owner": row[2]}
+            with _enrich_lock:
+                _enrich_cache[icao_hex] = (now, data)
+            return data
+
+        # Query govt-data
+        try:
+            url = f"http://{GOVTDATA_HOST}:{GOVTDATA_PORT}/aircraft/hex/{icao_hex}"
+            req = Request(url, headers={"Accept": "application/json"})
+            with urlopen(req, timeout=2.0) as resp:
+                payload = json.loads(resp.read())
+            data = {
+                "n_number":  payload.get("n_number"),
+                "type_code": payload.get("type_designator") or payload.get("aircraft_type"),
+                "owner":     payload.get("registrant_name"),
+            }
+        except (URLError, json.JSONDecodeError, KeyError, Exception):
+            # Don't cache or persist failures — retry next time so VPN-down
+            # outages don't block enrichment for an hour.
+            return {"n_number": None, "type_code": None, "owner": None}
+
         with _enrich_lock:
             _enrich_cache[icao_hex] = (now, data)
-        return data
 
-    # Query govt-data
-    try:
-        url = f"http://{GOVTDATA_HOST}:{GOVTDATA_PORT}/aircraft/hex/{icao_hex}"
-        req = Request(url, headers={"Accept": "application/json"})
-        with urlopen(req, timeout=2.0) as resp:
-            payload = json.loads(resp.read())
-        data = {
-            "n_number":  payload.get("n_number"),
-            "type_code": payload.get("type_designator") or payload.get("aircraft_type"),
-            "owner":     payload.get("registrant_name"),
-        }
-    except (URLError, json.JSONDecodeError, KeyError, Exception):
-        data = {"n_number": None, "type_code": None, "owner": None}
-
-    with _enrich_lock:
-        _enrich_cache[icao_hex] = (now, data)
-
-    with _db_lock:
         conn.execute(
             """INSERT INTO aircraft(icao_hex, n_number, type_code, owner, enriched_at)
                VALUES(?,?,?,?,?)
@@ -174,6 +182,8 @@ def enrich_icao(icao_hex: str, conn: sqlite3.Connection) -> dict:
             (icao_hex, data["n_number"], data["type_code"], data["owner"], now)
         )
         conn.commit()
+    finally:
+        conn.close()
     return data
 
 
@@ -366,9 +376,9 @@ def process_message(hex_msg: str, conn: sqlite3.Connection,
             pass
 
     # Enrich from govt-data (background, throttled)
-    if enrich and ac.n_number is None and ac.msg_count in (1, 5, 20):
+    if enrich and ac.n_number is None and ac.msg_count in (1, 5, 20, 50, 100):
         def _do_enrich(i=icao, a=ac):
-            info = enrich_icao(i, conn)
+            info = enrich_icao(i)
             a.n_number  = info.get("n_number")
             a.type_code = info.get("type_code")
             a.owner     = info.get("owner")
@@ -377,13 +387,12 @@ def process_message(hex_msg: str, conn: sqlite3.Connection,
 
 def _log_position(conn: sqlite3.Connection, ac: Aircraft, csv_fh=None) -> None:
     now = time.time()
-    with _db_lock:
-        conn.execute(
-            "INSERT INTO positions(timestamp,icao_hex,lat,lon,alt_ft,speed_kt,heading,vert_rate,rssi_db)"
-            " VALUES(?,?,?,?,?,?,?,?,?)",
-            (now, ac.icao, ac.lat, ac.lon, ac.alt_ft, ac.speed_kt, ac.heading, ac.vert_rate, ac.rssi_db)
-        )
-        conn.commit()
+    conn.execute(
+        "INSERT INTO positions(timestamp,icao_hex,lat,lon,alt_ft,speed_kt,heading,vert_rate,rssi_db)"
+        " VALUES(?,?,?,?,?,?,?,?,?)",
+        (now, ac.icao, ac.lat, ac.lon, ac.alt_ft, ac.speed_kt, ac.heading, ac.vert_rate, ac.rssi_db)
+    )
+    conn.commit()
     if csv_fh:
         ts = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
         csv_fh.write(f"{ts},{ac.icao},{ac.callsign or ''},{ac.lat:.5f},{ac.lon:.5f},"
