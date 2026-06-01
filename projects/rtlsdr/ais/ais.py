@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
 
-from pyais.stream import UDPReceiver
+from pyais.decode import decode as ais_decode
 from pyais.messages import (
     MessageType1, MessageType2, MessageType3,  # Class A position
     MessageType5,                              # Class A static/voyage
@@ -410,8 +410,15 @@ def main():
         "-P", str(args.udp_port),
         "-n",          # also log NMEA to stderr so we can see it's working
     ]
-    # Bind the UDP receiver BEFORE starting rtl_ais so no early packets are dropped
-    udp_rx = UDPReceiver("127.0.0.1", args.udp_port)
+    # Bind UDP socket BEFORE starting rtl_ais so no early packets are lost.
+    # Use a plain socket with a 1-second timeout so Ctrl-C is responsive —
+    # pyais UDPReceiver blocks forever in recvfrom and ignores _running.
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("127.0.0.1", args.udp_port))
+    sock.settimeout(1.0)
+
+    # Multi-part message buffer: key = (channel, seq_id), value = list of parts
+    _multipart: dict = {}
 
     try:
         rtl_proc = subprocess.Popen(rtl_cmd, stderr=subprocess.DEVNULL)
@@ -436,28 +443,62 @@ def main():
 
     last_prune = time.time()
     total_msgs = 0
-    total_vessels = 0
 
     try:
-        for msg in udp_rx:
-            if not _running:
+        while _running:
+            if rtl_proc.poll() is not None:
+                print(f"\nrtl_ais exited (code {rtl_proc.returncode}).", file=sys.stderr)
                 break
 
             try:
-                decoded = msg.decode()
+                raw, _ = sock.recvfrom(256)
+            except socket.timeout:
+                continue
+
+            line = raw.decode("ascii", errors="ignore").strip()
+            if not line.startswith("!AIVDM") and not line.startswith("!AIVDO"):
+                continue
+
+            # Parse fill bits and sentence counts from NMEA field 1 and 2
+            fields = line.split(",")
+            if len(fields) < 7:
+                continue
+            try:
+                n_parts = int(fields[1])
+                part_no = int(fields[2])
+                seq_id  = fields[3]          # empty string for single-part
+                channel = fields[4]
+            except (ValueError, IndexError):
+                continue
+
+            if n_parts == 1:
+                # Single-part: decode immediately
+                parts_bytes = (raw,)
+            else:
+                # Buffer until all parts arrive; key on (channel, seq_id)
+                key = (channel, seq_id)
+                bucket = _multipart.setdefault(key, [])
+                bucket.append((part_no, raw))
+                if len(bucket) < n_parts:
+                    continue
+                # All parts received — sort by part number and decode
+                parts_bytes = tuple(b for _, b in sorted(bucket))
+                del _multipart[key]
+
+            try:
+                decoded = ais_decode(*parts_bytes)
             except Exception:
                 continue
 
             if args.dump_only:
-                # Print the raw NMEA and a brief decode summary
                 mmsi = getattr(decoded, 'mmsi', None)
                 name = getattr(decoded, 'shipname', None) or getattr(decoded, 'name', None)
                 lat  = getattr(decoded, 'lat', None)
                 lon  = getattr(decoded, 'lon', None)
-                parts = [f"T{decoded.msg_type}", f"MMSI:{mmsi}"]
-                if name:  parts.append(name.strip())
-                if lat is not None: parts.append(f"{lat:.4f},{lon:.4f}")
-                print("  ".join(parts))
+                parts_disp = [f"T{decoded.msg_type}", f"MMSI:{mmsi}"]
+                if name:            parts_disp.append(name.strip())
+                if lat is not None: parts_disp.append(f"{lat:.4f},{lon:.4f}")
+                print("  ".join(parts_disp))
                 total_msgs += 1
                 continue
 
@@ -467,10 +508,6 @@ def main():
 
             total_msgs += 1
 
-            with _vessels_lock:
-                n_vessels = len(_vessels)
-
-            # Console summary line
             mmsi = result["mmsi"]
             with _vessels_lock:
                 v = _vessels.get(mmsi)
@@ -486,13 +523,16 @@ def main():
                 prune_stale()
                 last_prune = time.time()
                 with _vessels_lock:
-                    n_vessels = len(_vessels)
-                print(f"\r  {n_vessels} vessels  {total_msgs} messages", end="", flush=True)
+                    n_v = len(_vessels)
+                print(f"  {n_v} vessels  {total_msgs} messages", flush=True)
 
+    except KeyboardInterrupt:
+        pass
     except OSError as exc:
         if _running:
-            print(f"\nUDP receive error: {exc}", file=sys.stderr)
+            print(f"\nUDP error: {exc}", file=sys.stderr)
     finally:
+        sock.close()
         rtl_proc.terminate()
         try:
             rtl_proc.wait(timeout=3)
