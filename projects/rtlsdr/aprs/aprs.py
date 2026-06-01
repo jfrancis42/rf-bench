@@ -313,6 +313,8 @@ def main():
         f"CHANNEL 0\n"
         f"MYCALL N0CALL\n"
         f"MODEM 1200\n"
+        f"AGWPORT 0\n"    # disable AGWPE TCP server
+        f"KISSPORT 0\n"   # disable KISS TCP server
     )
     dw_conf.flush()
     dw_conf_path = dw_conf.name
@@ -333,7 +335,7 @@ def main():
         "-b", "16",
         "-n", "1",
         "-t", "0",    # no color codes
-        "-",
+        # no "-" here — ADEVICE stdin null in the config already claims stdin
     ]
 
     try:
@@ -363,12 +365,18 @@ def main():
             if args.duration > 0 and (time.time() - start_time) > args.duration:
                 break
             if dw.poll() is not None:
-                print("direwolf exited unexpectedly.", file=sys.stderr)
+                # Drain any remaining output before reporting the exit
+                remaining = dw.stdout.read()
+                if remaining:
+                    print("direwolf output:", file=sys.stderr)
+                    for l in remaining.splitlines()[-10:]:
+                        print(f"  {l}", file=sys.stderr)
+                print(f"direwolf exited (code {dw.returncode}).", file=sys.stderr)
                 break
 
             line = dw.stdout.readline()
             if not line:
-                time.sleep(0.1)
+                time.sleep(0.05)
                 continue
 
             pkt = parse_direwolf_line(line)
