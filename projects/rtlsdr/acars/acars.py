@@ -312,6 +312,11 @@ def main():
         "--output", f"json:udp:host=127.0.0.1,port={args.udp_port}",
     ] + args.freqs
 
+    # Bind the UDP socket BEFORE starting acarsdec so no early packets are dropped
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("127.0.0.1", args.udp_port))
+    sock.settimeout(1.0)
+
     try:
         acd_proc = subprocess.Popen(acd_cmd,
                                     stdout=subprocess.DEVNULL,
@@ -334,10 +339,6 @@ def main():
     freq_str = "  ".join(f"{f} MHz" for f in args.freqs)
     print(f"ACARS listening on: {freq_str}")
     print(f"Gain: {args.gain} dB  Ctrl-C to stop.\n")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("127.0.0.1", args.udp_port))
-    sock.settimeout(1.0)
 
     total = 0
 

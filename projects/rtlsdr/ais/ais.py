@@ -410,6 +410,9 @@ def main():
         "-P", str(args.udp_port),
         "-n",          # also log NMEA to stderr so we can see it's working
     ]
+    # Bind the UDP receiver BEFORE starting rtl_ais so no early packets are dropped
+    udp_rx = UDPReceiver("127.0.0.1", args.udp_port)
+
     try:
         rtl_proc = subprocess.Popen(rtl_cmd, stderr=subprocess.DEVNULL)
     except FileNotFoundError:
@@ -436,7 +439,7 @@ def main():
     total_vessels = 0
 
     try:
-        for msg in UDPReceiver("127.0.0.1", args.udp_port):
+        for msg in udp_rx:
             if not _running:
                 break
 
