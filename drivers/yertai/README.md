@@ -2,7 +2,7 @@
 
 Yertai ET5406A+ programmable DC load driver for the `rf_bench` bench automation framework.
 
-200 W / 120 V / 20 A. USB connection via CH340 serial adapter. Uses pyserial directly — no pyvisa required.
+200 W / 120 V / 20 A. USB connection via CH340 serial adapter. Wrapper around the upstream `philpagel/ET54.py` library with a simplified API and automatic CH340 detection.
 
 ## Install
 
@@ -48,6 +48,10 @@ python et5406a_panel.py --interval 3000    # UI refresh rate in ms
 - Controls disabled in demo mode to prevent confusion
 
 **Note:** Connected to greybox (10.1.0.16) at `/dev/ttyUSB0`. To view the panel remotely: `ssh -X 10.1.0.16 python /home/jfrancis/Dropbox/build/rf-bench/rf-bench-drivers-yertai/et5406a_panel.py`
+
+## Acknowledgments
+
+This driver wraps the [ET54 library](https://github.com/philpagel/ET54.py) by Philipp Pagel, providing a simplified API with CH340 auto-detection.
 
 ## License
 

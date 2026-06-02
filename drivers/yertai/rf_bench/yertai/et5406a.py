@@ -2,7 +2,8 @@
 et5406a.py — Yertai ET5406A+ programmable DC load
 
 200 W / 120 V / 20 A.  Single channel.  USB connection via CH340 serial adapter.
-Uses pyserial directly — no pyvisa required.
+Wrapper around the ET54 library (https://github.com/philpagel/ET54.py) with
+maintained API compatibility and CH340 auto-detection.
 
 Usage::
 
@@ -17,76 +18,54 @@ Usage::
     load = ET5406A("/dev/ttyUSB0")   # explicit port
 """
 
-import time
-import serial
 import serial.tools.list_ports
-
-
-BAUD_RATE   = 9600
-TIMEOUT     = 2.0   # serial read timeout, seconds
-QUERY_DELAY = 0.2   # seconds between write and read
+from ET54 import ET54
 
 
 class ET5406AError(Exception):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Response parsing helpers
-# ---------------------------------------------------------------------------
-
-def _strip(response):
-    """Strip leading 'R' prefix from all query responses."""
-    s = response.strip()
-    return s[1:] if s.startswith("R") else s
-
-
-def _toint(response):
-    return int(_strip(response))
-
-
-def _tofloat(response):
-    return float(_strip(response))
-
-
-def _tofloats(response):
-    return [float(x) for x in _strip(response).split()]
-
-
-def _value_extend(x, n):
-    """Extend scalar or short list/tuple to exactly length n by repeating last element."""
-    if isinstance(x, (int, float)):
-        x = [x]
-    else:
-        x = list(x)
-    if not 0 < len(x) <= n:
-        raise ValueError(f"Expected 1–{n} values, got {len(x)}")
-    x += [x[-1]] * (n - len(x))
-    return x
-
-
-# ---------------------------------------------------------------------------
-# Driver
-# ---------------------------------------------------------------------------
-
 class ET5406A:
-    """Yertai ET5406A+ programmable DC load driver."""
+    """Yertai ET5406A+ programmable DC load driver.
 
-    _CH = "1"  # single-channel device — SCPI channel designator
+    Wrapper around upstream philpagel/ET54.py library (commit 82be1da, 2026-06-02)
+    that maintains the original pyserial-based API surface for backward compatibility.
+    """
 
-    def __init__(self, port=None, baudrate=BAUD_RATE, timeout=TIMEOUT):
+    def __init__(self, port=None, baudrate=9600, timeout=2.0):
+        """Initialize ET5406A+ electronic load.
+
+        Args:
+            port: Serial port path. If None, auto-detects CH340.
+            baudrate: Serial baud rate (default 9600)
+            timeout: Serial timeout in seconds (default 2.0)
+        """
         if port is None:
             port = self._find_port()
-        self._ser = serial.Serial(port, baudrate=baudrate, timeout=timeout)
-        time.sleep(0.1)
-        idn = self._query("*IDN?")
-        parts = idn.split()
-        if len(parts) != 4:
-            raise ET5406AError(f"Unexpected IDN response: {idn!r}")
-        self.model    = parts[0]
-        self.serial_n = parts[1]
-        self.firmware = parts[2]
-        self.hardware = parts[3]
+
+        # Convert port to VISA resource string
+        visa_resource = f"ASRL{port}::INSTR"
+
+        # Initialize upstream ET54 library
+        # timeout is in milliseconds for ET54
+        try:
+            self._inst = ET54(
+                visa_resource,
+                baudrate=baudrate,
+                timeout=int(timeout * 1000)
+            )
+        except Exception as e:
+            raise ET5406AError(f"Failed to connect to ET5406A+ at {port}: {e}")
+
+        # Single-channel device — expose ch1 directly
+        self._ch = self._inst.ch1
+
+        # Extract identification from upstream
+        self.model = self._inst.idn.get("model", "ET5406A+")
+        self.serial_n = self._inst.idn.get("SN", "")
+        self.firmware = self._inst.idn.get("firmware", "")
+        self.hardware = self._inst.idn.get("hardware", "")
 
     @staticmethod
     def _find_port():
@@ -116,71 +95,44 @@ class ET5406A:
         self.close()
 
     def close(self):
-        """Unlock front panel and close serial port."""
+        """Unlock front panel and close connection."""
         try:
-            self._write("SYST:LOCA")
+            self._inst.unlock()
         except Exception:
             pass
-        self._ser.close()
+        self._inst.close()
 
     def __repr__(self):
         return (f"ET5406A(model={self.model!r}, sn={self.serial_n!r}, "
                 f"fw={self.firmware!r}, hw={self.hardware!r})")
 
     # ------------------------------------------------------------------
-    # Low-level I/O
-    # ------------------------------------------------------------------
-
-    def _query(self, cmd):
-        self._ser.write((cmd + "\n").encode())
-        time.sleep(QUERY_DELAY)
-        return self._ser.read_until(b"\r\n").decode().strip()
-
-    def _query_n(self, cmd, n, extra_timeout=0.5):
-        """Send command and read n response lines."""
-        self._ser.write((cmd + "\n").encode())
-        time.sleep(QUERY_DELAY + extra_timeout)
-        return [self._ser.read_until(b"\r\n").decode().strip() for _ in range(n)]
-
-    def _write(self, cmd):
-        self._ser.write((cmd + "\n").encode())
-        time.sleep(QUERY_DELAY)
-        resp = self._ser.read_until(b"\r\n").decode().strip()
-        if resp == "Rexecu success":
-            return
-        elif resp == "Rcmd err":
-            raise ET5406AError(f"Unknown command: {cmd!r}")
-        elif resp == "Rexecu err":
-            raise ET5406AError(f"Command execution failed: {cmd!r}")
-        else:
-            raise ET5406AError(f"Unexpected response to {cmd!r}: {resp!r}")
-
-    # ------------------------------------------------------------------
-    # Instrument commands
+    # Utility commands
     # ------------------------------------------------------------------
 
     def beep(self):
-        self._write("SYST:BEEP")
+        """Trigger beeper."""
+        self._inst.beep()
 
     def reset(self):
         """Reset device to factory defaults."""
-        self._ser.write(b"RST\n")
+        self._inst.reset()
 
     def unlock(self):
         """Release front-panel key lock."""
-        self._write("SYST:LOCA")
+        self._inst.unlock()
 
     def fan(self):
         """Return fan state string."""
-        return self._query("SELF:FAN?")
+        return self._inst.fan()
 
     def on(self):
         """Enable load input."""
-        self._write(f"Ch{self._CH}:SW ON")
+        self._ch.on()
 
     def off(self):
         """Disable load input."""
-        self._write(f"Ch{self._CH}:SW OFF")
+        self._ch.off()
 
     # ------------------------------------------------------------------
     # Input / mode / range
@@ -189,49 +141,38 @@ class ET5406A:
     @property
     def input(self):
         """Input state: 'ON' or 'OFF'."""
-        return self._query(f"Ch{self._CH}:SW?")
+        return self._ch.input
 
     @input.setter
     def input(self, value):
-        v = value.upper()
-        if v not in ("ON", "OFF"):
-            raise ValueError(f"input must be 'ON' or 'OFF'")
-        self._write(f"Ch{self._CH}:SW {v}")
+        self._ch.input = value
 
     @property
     def mode(self):
         """Operating mode: CC|CV|CP|CR|CCCV|CRCV|TRAN|LIST|SCAN|SHOR|BATT|LED."""
-        return self._query(f"Ch{self._CH}:MODE?")
+        return self._ch.mode
 
     @mode.setter
     def mode(self, value):
-        v = value.upper()
-        valid = {"CC","CV","CP","CR","CCCV","CRCV","TRAN","LIST","SCAN","SHOR","BATT","LED"}
-        if v not in valid:
-            raise ValueError(f"mode must be one of {sorted(valid)}")
-        self._write(f"Ch{self._CH}:MODE {v}")
+        self._ch.mode = value
 
     @property
     def Vrange(self):
         """Voltage range: 'HIGH' or 'LOW'."""
-        return self._query(f"LOAD{self._CH}:VRANGE?")
+        return self._ch.Vrange
 
     @Vrange.setter
     def Vrange(self, value):
-        if value.lower() not in ("high", "low"):
-            raise ValueError("Vrange must be 'high' or 'low'")
-        self._write(f"LOAD{self._CH}:VRANge {value}")
+        self._ch.Vrange = value
 
     @property
     def Crange(self):
         """Current range: 'HIGH' or 'LOW'."""
-        return self._query(f"LOAD{self._CH}:CRANGE?")
+        return self._ch.Crange
 
     @Crange.setter
     def Crange(self, value):
-        if value.lower() not in ("high", "low"):
-            raise ValueError("Crange must be 'high' or 'low'")
-        self._write(f"LOAD{self._CH}:CRANge {value}")
+        self._ch.Crange = value
 
     # ------------------------------------------------------------------
     # Protection limits
@@ -240,34 +181,34 @@ class ET5406A:
     @property
     def OVP(self):
         """Over-voltage protection limit [V]."""
-        return _tofloat(self._query(f"VOLT{self._CH}:VMAX?"))
+        return self._ch.OVP
 
     @OVP.setter
     def OVP(self, value):
-        self._write(f"VOLT{self._CH}:VMAX {value}")
+        self._ch.OVP = value
 
     @property
     def OCP(self):
         """Over-current protection limit [A]."""
-        return _tofloat(self._query(f"CURR{self._CH}:IMAX?"))
+        return self._ch.OCP
 
     @OCP.setter
     def OCP(self, value):
-        self._write(f"CURR{self._CH}:IMAX {value}")
+        self._ch.OCP = value
 
     @property
     def OPP(self):
         """Over-power protection limit [W]."""
-        return _tofloat(self._query(f"POWE{self._CH}:PMAX?"))
+        return self._ch.OPP
 
     @OPP.setter
     def OPP(self, value):
-        self._write(f"POWE{self._CH}:PMAX {value}")
+        self._ch.OPP = value
 
     @property
     def protection(self):
         """Active protection state: NONE|OV|OC|OP|OT|LRV|FAN."""
-        return self._query(f"LOAD{self._CH}:ABNO?")
+        return self._ch.protection
 
     # ------------------------------------------------------------------
     # CC mode
@@ -275,17 +216,16 @@ class ET5406A:
 
     def CC_mode(self, current):
         """Set constant-current mode and target [A]."""
-        self.CC_current = current
-        self.mode = "CC"
+        self._ch.CC_mode(current)
 
     @property
     def CC_current(self):
         """CC target current [A]."""
-        return _tofloat(self._query(f"CURR{self._CH}:CC?"))
+        return self._ch.CC_current
 
     @CC_current.setter
     def CC_current(self, value):
-        self._write(f"CURR{self._CH}:CC {value}")
+        self._ch.CC_current = value
 
     # ------------------------------------------------------------------
     # CV mode
@@ -293,17 +233,16 @@ class ET5406A:
 
     def CV_mode(self, voltage):
         """Set constant-voltage mode and target [V]."""
-        self.CV_voltage = voltage
-        self.mode = "CV"
+        self._ch.CV_mode(voltage)
 
     @property
     def CV_voltage(self):
         """CV target voltage [V]."""
-        return _tofloat(self._query(f"VOLT{self._CH}:CV?"))
+        return self._ch.CV_voltage
 
     @CV_voltage.setter
     def CV_voltage(self, value):
-        self._write(f"VOLT{self._CH}:CV {value}")
+        self._ch.CV_voltage = value
 
     # ------------------------------------------------------------------
     # CP mode
@@ -311,17 +250,16 @@ class ET5406A:
 
     def CP_mode(self, power):
         """Set constant-power mode and target [W]."""
-        self.CP_power = power
-        self.mode = "CP"
+        self._ch.CP_mode(power)
 
     @property
     def CP_power(self):
         """CP target power [W]."""
-        return _tofloat(self._query(f"POWE{self._CH}:CP?"))
+        return self._ch.CP_power
 
     @CP_power.setter
     def CP_power(self, value):
-        self._write(f"POWE{self._CH}:CP {value}")
+        self._ch.CP_power = value
 
     # ------------------------------------------------------------------
     # CR mode
@@ -329,17 +267,16 @@ class ET5406A:
 
     def CR_mode(self, resistance):
         """Set constant-resistance mode and target [Ω]."""
-        self.CR_resistance = resistance
-        self.mode = "CR"
+        self._ch.CR_mode(resistance)
 
     @property
     def CR_resistance(self):
         """CR target resistance [Ω]."""
-        return _tofloat(self._query(f"RESI{self._CH}:CR?"))
+        return self._ch.CR_resistance
 
     @CR_resistance.setter
     def CR_resistance(self, value):
-        self._write(f"RESI{self._CH}:CR {value}")
+        self._ch.CR_resistance = value
 
     # ------------------------------------------------------------------
     # CC+CV mode
@@ -347,25 +284,23 @@ class ET5406A:
 
     def CCCV_mode(self, current, voltage):
         """Set CC+CV mode."""
-        self.CCCV_current = current
-        self.CCCV_voltage = voltage
-        self.mode = "CCCV"
+        self._ch.CCCV_mode(current, voltage)
 
     @property
     def CCCV_current(self):
-        return _tofloat(self._query(f"CURR{self._CH}:CCCV?"))
+        return self._ch.CCCV_current
 
     @CCCV_current.setter
     def CCCV_current(self, value):
-        self._write(f"CURR{self._CH}:CCCV {value}")
+        self._ch.CCCV_current = value
 
     @property
     def CCCV_voltage(self):
-        return _tofloat(self._query(f"VOLT{self._CH}:CCCV?"))
+        return self._ch.CCCV_voltage
 
     @CCCV_voltage.setter
     def CCCV_voltage(self, value):
-        self._write(f"VOLT{self._CH}:CCCV {value}")
+        self._ch.CCCV_voltage = value
 
     # ------------------------------------------------------------------
     # CR+CV mode
@@ -373,25 +308,23 @@ class ET5406A:
 
     def CRCV_mode(self, resistance, voltage):
         """Set CR+CV mode."""
-        self.CRCV_resistance = resistance
-        self.CRCV_voltage = voltage
-        self.mode = "CRCV"
+        self._ch.CRCV_mode(resistance, voltage)
 
     @property
     def CRCV_resistance(self):
-        return _tofloat(self._query(f"RESI{self._CH}:CRCV?"))
+        return self._ch.CRCV_resistance
 
     @CRCV_resistance.setter
     def CRCV_resistance(self, value):
-        self._write(f"RESI{self._CH}:CRCV {value}")
+        self._ch.CRCV_resistance = value
 
     @property
     def CRCV_voltage(self):
-        return _tofloat(self._query(f"VOLT{self._CH}:CRCV?"))
+        return self._ch.CRCV_voltage
 
     @CRCV_voltage.setter
     def CRCV_voltage(self, value):
-        self._write(f"VOLT{self._CH}:CRCV {value}")
+        self._ch.CRCV_voltage = value
 
     # ------------------------------------------------------------------
     # Short mode
@@ -399,7 +332,7 @@ class ET5406A:
 
     def SHORT_mode(self):
         """Set short-circuit mode. Use with caution."""
-        self.mode = "SHOR"
+        self._ch.SHORT_mode()
 
     # ------------------------------------------------------------------
     # LED mode
@@ -412,34 +345,31 @@ class ET5406A:
         current:     I0 reference forward current [A]
         coefficient: Rd = (V0/I0) * coefficient
         """
-        self.LED_voltage    = voltage
-        self.LED_current    = current
-        self.LED_coefficient = coefficient
-        self.mode = "LED"
+        self._ch.LED_mode(voltage, current, coefficient)
 
     @property
     def LED_voltage(self):
-        return _tofloat(self._query(f"VOLT{self._CH}:LED?"))
+        return self._ch.LED_voltage
 
     @LED_voltage.setter
     def LED_voltage(self, value):
-        self._write(f"VOLT{self._CH}:LED {value}")
+        self._ch.LED_voltage = value
 
     @property
     def LED_current(self):
-        return _tofloat(self._query(f"CURR{self._CH}:LED?"))
+        return self._ch.LED_current
 
     @LED_current.setter
     def LED_current(self, value):
-        self._write(f"CURR{self._CH}:LED {value}")
+        self._ch.LED_current = value
 
     @property
     def LED_coefficient(self):
-        return _tofloat(self._query(f"LED{self._CH}:COEF?"))
+        return self._ch.LED_coefficient
 
     @LED_coefficient.setter
-    def LED_coefficient(self, value):  # upstream was missing 'value' parameter
-        self._write(f"LED{self._CH}:COEF {value}")
+    def LED_coefficient(self, value):
+        self._ch.LED_coefficient = value
 
     # ------------------------------------------------------------------
     # Battery discharge mode
@@ -454,104 +384,67 @@ class ET5406A:
         cutoff:       'V' (voltage), 'T' (time), 'E' (energy), 'C' (capacity)
         cutoff_value: cutoff threshold. For CC + voltage cutoff: list of up to 3 voltages.
         """
-        self.BATT_submode = mode
-        self.BATT_cutoff = cutoff
-        if mode.upper() == "CC":
-            self.BATT_current = value
-        elif mode.upper() == "CR":
-            self.BATT_resistance = value
-        else:
-            raise ValueError(f"BATT submode must be 'CC' or 'CR'")
-        self.BATT_cutoff_value = cutoff_value
-        self.mode = "BATT"
+        self._ch.BATT_mode(mode, value, cutoff, cutoff_value)
 
     @property
     def BATT_submode(self):
-        return self._query(f"BATT{self._CH}:MODE?")
+        return self._ch.BATT_submode
 
     @BATT_submode.setter
     def BATT_submode(self, value):
-        v = value.upper()
-        if v not in ("CC", "CR"):
-            raise ValueError("BATT submode must be 'CC' or 'CR'")
-        self._write(f"BATT{self._CH}:MODE {v}")
+        self._ch.BATT_submode = value
 
     @property
     def BATT_current(self):
-        if self.BATT_cutoff == "Voltage":
-            return tuple(_tofloat(self._query(f"CURR{self._CH}:BCC{i}?")) for i in (1, 2, 3))
-        return _tofloat(self._query(f"CURR{self._CH}:BCC?"))
+        return self._ch.BATT_current
 
     @BATT_current.setter
     def BATT_current(self, value):
-        if self.BATT_cutoff == "Voltage":
-            for i, v in enumerate(_value_extend(value, 3), 1):
-                self._write(f"CURR{self._CH}:BCC{i} {v}")
-        else:
-            self._write(f"CURR{self._CH}:BCC {value}")
+        self._ch.BATT_current = value
 
     @property
     def BATT_resistance(self):
-        return _tofloat(self._query(f"RESI{self._CH}:BCR?"))
+        return self._ch.BATT_resistance
 
     @BATT_resistance.setter
     def BATT_resistance(self, value):
-        self._write(f"RESI{self._CH}:BCR {value}")
+        self._ch.BATT_resistance = value
 
     @property
     def BATT_cutoff(self):
         """Cutoff condition type (returned as word: Voltage/Time/Energy/Capacity)."""
-        return self._query(f"BATT{self._CH}:BCUT?")
+        return self._ch.BATT_cutoff
 
     @BATT_cutoff.setter
     def BATT_cutoff(self, value):
-        self._write(f"BATT{self._CH}:BCUT {value}")
+        self._ch.BATT_cutoff = value
 
     @property
     def BATT_cutoff_value(self):
-        match self.BATT_cutoff:
-            case "Voltage":
-                if self.BATT_submode == "CC":
-                    return tuple(_tofloat(self._query(f"VOLT{self._CH}:BCC{i}?")) for i in (1, 2, 3))
-                return _tofloat(self._query(f"CURR{self._CH}:BCC?"))
-            case "Time":
-                return _tofloat(self._query(f"TIME{self._CH}:BTT?"))
-            case "Capacity":
-                return _tofloat(self._query(f"BATT{self._CH}:BTC?"))
-            case "Energy":
-                return _tofloat(self._query(f"BATT{self._CH}:BTE?"))
+        return self._ch.BATT_cutoff_value
 
     @BATT_cutoff_value.setter
     def BATT_cutoff_value(self, value):
-        match self.BATT_cutoff:
-            case "Voltage":
-                for i, v in enumerate(_value_extend(value, 3), 1):
-                    self._write(f"VOLT{self._CH}:BCC{i} {v}")
-            case "Time":
-                self._write(f"TIME{self._CH}:BTT {value}")
-            case "Capacity":
-                self._write(f"BATT{self._CH}:BTC {value}")
-            case "Energy":
-                self._write(f"BATT{self._CH}:BTE {value}")
+        self._ch.BATT_cutoff_value = value
 
     @property
     def BATT_capacity(self):
         """Accumulated discharge capacity [Ah]."""
-        return _tofloat(self._query(f"BATT{self._CH}:CAPA?"))
+        return self._ch.BATT_capacity
 
     @property
     def BATT_energy(self):
         """Accumulated discharge energy [Wh]."""
-        return _tofloat(self._query(f"BATT{self._CH}:ENER?"))
+        return self._ch.BATT_energy
 
     @property
     def BATT_cutoff_level(self):
         """Active CC+voltage step level (1|2|3); 3 is the initial state."""
-        return _toint(self._query(f"BATT{self._CH}:BAEN?"))
+        return self._ch.BATT_cutoff_level
 
     @BATT_cutoff_level.setter
     def BATT_cutoff_level(self, value):
-        self._write(f"BATT{self._CH}:BAEN {value}")
+        self._ch.BATT_cutoff_level = value
 
     # ------------------------------------------------------------------
     # Transient (dynamic) mode
@@ -565,85 +458,50 @@ class ET5406A:
         value:    (low, high) in A (CC) or V (CV)
         width:    (width_A_s, width_B_s) pulse widths in seconds
         """
-        self.TRANSIENT_submode  = mode.upper()
-        self.TRANSIENT_trigmode = trigmode
-        if mode.upper() == "CC":
-            self.TRANSIENT_current = value
-        elif mode.upper() == "CV":
-            self.TRANSIENT_voltage = value
-        else:
-            raise ValueError("TRANSIENT mode must be 'CC' or 'CV'")
-        self.TRANSIENT_width = width
-        self.mode = "TRAN"
+        self._ch.TRANSIENT_mode(mode, trigmode, value, width)
 
     @property
-    def TRANSIENT_submode(self):  # upstream had typo 'seld' here
-        return self._query(f"TRAN{self._CH}:STATE?")
+    def TRANSIENT_submode(self):
+        return self._ch.TRANSIENT_submode
 
     @TRANSIENT_submode.setter
     def TRANSIENT_submode(self, value):
-        v = value.upper()
-        if v not in ("CC", "CV"):
-            raise ValueError("TRANSIENT submode must be 'CC' or 'CV'")
-        self._write(f"TRAN{self._CH}:STATE {v}")
+        self._ch.TRANSIENT_submode = value
 
     @property
     def TRANSIENT_trigmode(self):
-        return self._query(f"TRAN{self._CH}:MODE?")
+        return self._ch.TRANSIENT_trigmode
 
     @TRANSIENT_trigmode.setter
     def TRANSIENT_trigmode(self, value):
-        v = value.upper()
-        if v == "CONT":
-            v = "COUT"
-        if v not in ("COUT", "PULS", "TRIG"):
-            raise ValueError("trigmode must be CONT/PULS/TRIG")
-        self._write(f"TRAN{self._CH}:MODE {v}")
+        self._ch.TRANSIENT_trigmode = value
 
     @property
     def TRANSIENT_current(self):
         """(I_A, I_B) [A]."""
-        return (
-            _tofloat(self._query(f"CURR{self._CH}:TA?")),
-            _tofloat(self._query(f"CURR{self._CH}:TB?")),
-        )
+        return self._ch.TRANSIENT_current
 
     @TRANSIENT_current.setter
     def TRANSIENT_current(self, value):
-        if len(value) != 2:
-            raise ValueError("TRANSIENT_current requires (I_A, I_B)")
-        self._write(f"CURR{self._CH}:TA {value[0]}")
-        self._write(f"CURR{self._CH}:TB {value[1]}")
+        self._ch.TRANSIENT_current = value
 
     @property
     def TRANSIENT_voltage(self):
         """(V_A, V_B) [V]."""
-        return (
-            _tofloat(self._query(f"VOLT{self._CH}:TA?")),
-            _tofloat(self._query(f"VOLT{self._CH}:TB?")),
-        )
+        return self._ch.TRANSIENT_voltage
 
     @TRANSIENT_voltage.setter
     def TRANSIENT_voltage(self, value):
-        if len(value) != 2:
-            raise ValueError("TRANSIENT_voltage requires (V_A, V_B)")
-        self._write(f"VOLT{self._CH}:TA {value[0]}")
-        self._write(f"VOLT{self._CH}:TB {value[1]}")
+        self._ch.TRANSIENT_voltage = value
 
     @property
     def TRANSIENT_width(self):
         """(width_A, width_B) [s]."""
-        return (
-            _tofloat(self._query(f"TIME{self._CH}:WA?")),
-            _tofloat(self._query(f"TIME{self._CH}:WB?")),
-        )
+        return self._ch.TRANSIENT_width
 
     @TRANSIENT_width.setter
     def TRANSIENT_width(self, value):
-        if len(value) != 2:
-            raise ValueError("TRANSIENT_width requires (width_A, width_B)")
-        self._write(f"TIME{self._CH}:WA {value[0]}")
-        self._write(f"TIME{self._CH}:WB {value[1]}")
+        self._ch.TRANSIENT_width = value
 
     # ------------------------------------------------------------------
     # List mode
@@ -658,68 +516,44 @@ class ET5406A:
                   mode: CC|CV|CP|CR|OPEN|SHORT
                   comp: OFF|CURRENT|VOLTAGE|POWER|RESISTANCE
         """
-        self.LIST_stepmode = stepmode
-        self.LIST_rows = params
-        self.mode = "LIST"
+        self._ch.LIST_mode(stepmode, params)
 
     @property
     def LIST_stepmode(self):
-        return self._query(f"LIST{self._CH}:MODE?")
+        return self._ch.LIST_stepmode
 
     @LIST_stepmode.setter
     def LIST_stepmode(self, value):
-        self._write(f"LIST{self._CH}:MODE {value.upper()}")
+        self._ch.LIST_stepmode = value
 
     @property
     def LIST_loop(self):
-        return self._query(f"LIST{self._CH}:LOOP?")
+        return self._ch.LIST_loop
 
     @LIST_loop.setter
     def LIST_loop(self, value):
-        self._write(f"LIST{self._CH}:LOOP {value.upper()}")
+        self._ch.LIST_loop = value
 
     @property
     def LIST_steps(self):
-        return _toint(self._query(f"LIST{self._CH}:NUM?"))
+        return self._ch.LIST_steps
 
     @LIST_steps.setter
     def LIST_steps(self, value):
-        self._write(f"LIST{self._CH}:NUM {value}")
+        self._ch.LIST_steps = value
 
     @property
     def LIST_rows(self):
         """All 10 list rows as a list of dicts."""
-        lines = self._query_n(f"LIST{self._CH}:PARA? 1,10", 10, extra_timeout=0.5)
-        rows = []
-        for line in lines:
-            s = _strip(line)
-            fields = s.split(",")
-            d = dict(zip(("num","mode","value","delay","comp","maxval","minval"), fields))
-            d["mode"] = ["CC","CV","CP","CR","OPEN","SHORT"][int(d["mode"])]
-            d["comp"] = ["OFF","CURRENT","VOLTAGE","POWER","RESISTANCE"][int(d["comp"])]
-            d["num"]   = int(d["num"])
-            d["delay"] = int(d["delay"])
-            for k in ("value","maxval","minval"):
-                try:
-                    d[k] = float(d[k])
-                except (ValueError, TypeError):
-                    d[k] = None
-            rows.append(d)
-        return rows
+        return self._ch.LIST_rows
 
     @LIST_rows.setter
     def LIST_rows(self, params):
-        for row in params:
-            if isinstance(row, dict):
-                self._list_row(**row)
-            else:
-                self._list_row(*row)
+        self._ch.LIST_rows = params
 
-    def _list_row(self, num, mode, value, delay, comp, maxval, minval):
-        mode_i = {"CC":0,"CV":1,"CP":2,"CR":3,"OPEN":4,"SHORT":5}[mode.upper()]
-        comp_i = {"OFF":0,"CURRENT":1,"VOLTAGE":2,"POWER":3,"RESISTANCE":4}[comp.upper()]
-        params = ",".join(str(x) for x in [num, mode_i, value, delay, comp_i, maxval, minval])
-        self._write(f"LIST{self._CH}:PARA {params}")
+    def LIST_result(self):
+        """Return LIST mode execution results."""
+        return self._ch.LIST_result()
 
     # ------------------------------------------------------------------
     # Scan mode
@@ -738,142 +572,75 @@ class ET5406A:
         step:            step size
         step_time:       time per step [s]
         """
-        self.SCAN_submode         = mode
-        self.SCAN_threshold       = threshold
-        self.SCAN_threshold_value = threshold_value
-        self.SCAN_compare         = compare
-        self.SCAN_limits          = limits
-        self.SCAN_start_end       = start_end
-        self.SCAN_step            = step
-        self.SCAN_stepdelay       = step_time
-        self.mode = "SCAN"
+        self._ch.SCAN_mode(mode, threshold, threshold_value, compare,
+                          limits, start_end, step, step_time)
 
     @property
     def SCAN_submode(self):
-        return self._query(f"SCAN{self._CH}:TYPE?")
+        return self._ch.SCAN_submode
 
     @SCAN_submode.setter
     def SCAN_submode(self, value):
-        self._write(f"SCAN{self._CH}:TYPE {value}")
+        self._ch.SCAN_submode = value
 
     @property
     def SCAN_threshold(self):
-        return self._query(f"SCAN{self._CH}:THTYPE?")
+        return self._ch.SCAN_threshold
 
     @SCAN_threshold.setter
     def SCAN_threshold(self, value):
-        self._write(f"SCAN{self._CH}:THTYPE {value.upper()}")
+        self._ch.SCAN_threshold = value
 
     @property
     def SCAN_threshold_value(self):
-        match self.SCAN_threshold:
-            case "VTH":
-                return _tofloat(self._query(f"VOLT{self._CH}:VTH?"))
-            case "VMIN":
-                return _tofloat(self._query(f"VOLT{self._CH}:VMIN?"))
-            case _:
-                return None
+        return self._ch.SCAN_threshold_value
 
     @SCAN_threshold_value.setter
     def SCAN_threshold_value(self, value):
-        match self.SCAN_threshold:
-            case "VTH":
-                self._write(f"VOLT{self._CH}:VTH {value}")
-            case "VMIN":
-                self._write(f"VOLT{self._CH}:VMIN {value}")
+        self._ch.SCAN_threshold_value = value
 
     @property
     def SCAN_compare(self):
-        return self._query(f"SCAN{self._CH}:COMPARE?")
+        return self._ch.SCAN_compare
 
     @SCAN_compare.setter
     def SCAN_compare(self, value):
-        self._write(f"SCAN{self._CH}:COMPARE {value.upper()}")
+        self._ch.SCAN_compare = value
 
     @property
     def SCAN_limits(self):
         """(low, high) comparison limits."""
-        match self.SCAN_submode:
-            case "CC":
-                return (_tofloat(self._query(f"CURR{self._CH}:LOW?")),
-                        _tofloat(self._query(f"CURR{self._CH}:HIGH?")))
-            case "CV":
-                return (_tofloat(self._query(f"VOLT{self._CH}:LOW?")),
-                        _tofloat(self._query(f"VOLT{self._CH}:HIGH?")))
-            case "CP":
-                return (_tofloat(self._query(f"POWE{self._CH}:LOW?")),
-                        _tofloat(self._query(f"POWE{self._CH}:HIGH?")))
+        return self._ch.SCAN_limits
 
     @SCAN_limits.setter
     def SCAN_limits(self, value):
-        low, high = value
-        match self.SCAN_submode:
-            case "CC":
-                self._write(f"CURR{self._CH}:LOW {low}")
-                self._write(f"CURR{self._CH}:HIGH {high}")
-            case "CV":
-                self._write(f"VOLT{self._CH}:LOW {low}")
-                self._write(f"VOLT{self._CH}:HIGH {high}")
-            case "CP":
-                self._write(f"POWE{self._CH}:LOW {low}")
-                self._write(f"POWE{self._CH}:HIGH {high}")
+        self._ch.SCAN_limits = value
 
     @property
     def SCAN_start_end(self):
         """(start, end) sweep range."""
-        match self.SCAN_submode:
-            case "CC":
-                return (_tofloat(self._query(f"CURR{self._CH}:START?")),
-                        _tofloat(self._query(f"CURR{self._CH}:END?")))
-            case "CV":
-                return (_tofloat(self._query(f"VOLT{self._CH}:START?")),
-                        _tofloat(self._query(f"VOLT{self._CH}:END?")))
-            case "CP":
-                return (_tofloat(self._query(f"POWE{self._CH}:START?")),
-                        _tofloat(self._query(f"POWE{self._CH}:END?")))
+        return self._ch.SCAN_start_end
 
     @SCAN_start_end.setter
     def SCAN_start_end(self, value):
-        start, end = value
-        match self.SCAN_submode:
-            case "CC":
-                self._write(f"CURR{self._CH}:START {start}")
-                self._write(f"CURR{self._CH}:END {end}")
-            case "CV":
-                self._write(f"VOLT{self._CH}:START {start}")
-                self._write(f"VOLT{self._CH}:END {end}")
-            case "CP":
-                self._write(f"POWE{self._CH}:START {start}")
-                self._write(f"POWE{self._CH}:END {end}")
+        self._ch.SCAN_start_end = value
 
     @property
     def SCAN_step(self):
-        match self.SCAN_submode:
-            case "CC":
-                return _tofloat(self._query(f"CURR{self._CH}:STEP?"))
-            case "CV":
-                return _tofloat(self._query(f"VOLT{self._CH}:STEP?"))
-            case "CP":
-                return _tofloat(self._query(f"POWE{self._CH}:STEP?"))
+        return self._ch.SCAN_step
 
     @SCAN_step.setter
     def SCAN_step(self, value):
-        match self.SCAN_submode:
-            case "CC":
-                self._write(f"CURR{self._CH}:STEP {value}")
-            case "CV":
-                self._write(f"VOLT{self._CH}:STEP {value}")
-            case "CP":
-                self._write(f"POWE{self._CH}:STEP {value}")
+        self._ch.SCAN_step = value
 
     @property
     def SCAN_stepdelay(self):
         """Time per scan step [s]."""
-        return _toint(self._query(f"TIME{self._CH}:STEP?"))
+        return self._ch.SCAN_stepdelay
 
     @SCAN_stepdelay.setter
     def SCAN_stepdelay(self, value):
-        self._write(f"TIME{self._CH}:STEP {value}")
+        self._ch.SCAN_stepdelay = value
 
     # ------------------------------------------------------------------
     # Qualification test
@@ -884,53 +651,44 @@ class ET5406A:
 
         Vrange, Crange, Prange: (low, high) limit tuples
         """
-        self.QUALI_Vrange = Vrange
-        self.QUALI_Crange = Crange
-        self.QUALI_Prange = Prange
-        self.QUALI_state  = "ON"
+        self._ch.QUALI_mode(Vrange, Crange, Prange)
 
     @property
     def QUALI_state(self):
-        return self._query(f"QUAL{self._CH}:TEST?")
+        return self._ch.QUALI_state
 
     @QUALI_state.setter
     def QUALI_state(self, value):
-        self._write(f"QUAL{self._CH}:TEST {value}")  # upstream used query() here — bug
+        self._ch.QUALI_state = value
 
     @property
     def QUALI_result(self):
         """Qualification result: NONE|PASS|FAIL."""
-        return self._query(f"QUAL{self._CH}:OUT?")
+        return self._ch.QUALI_result
 
     @property
     def QUALI_Vrange(self):
-        return (_tofloat(self._query(f"QUAL{self._CH}:VLOW?")),
-                _tofloat(self._query(f"QUAL{self._CH}:VHIGH?")))
+        return self._ch.QUALI_Vrange
 
     @QUALI_Vrange.setter
     def QUALI_Vrange(self, value):
-        self._write(f"QUAL{self._CH}:VLOW {value[0]}")
-        self._write(f"QUAL{self._CH}:VHIGH {value[1]}")
+        self._ch.QUALI_Vrange = value
 
     @property
     def QUALI_Crange(self):
-        return (_tofloat(self._query(f"QUAL{self._CH}:CLOW?")),
-                _tofloat(self._query(f"QUAL{self._CH}:CHIGH?")))
+        return self._ch.QUALI_Crange
 
     @QUALI_Crange.setter
     def QUALI_Crange(self, value):
-        self._write(f"QUAL{self._CH}:CLOW {value[0]}")
-        self._write(f"QUAL{self._CH}:CHIGH {value[1]}")
+        self._ch.QUALI_Crange = value
 
     @property
     def QUALI_Prange(self):
-        return (_tofloat(self._query(f"QUAL{self._CH}:PLOW?")),
-                _tofloat(self._query(f"QUAL{self._CH}:PHIGH?")))
+        return self._ch.QUALI_Prange
 
     @QUALI_Prange.setter
     def QUALI_Prange(self, value):
-        self._write(f"QUAL{self._CH}:PLOW {value[0]}")
-        self._write(f"QUAL{self._CH}:PHIGH {value[1]}")
+        self._ch.QUALI_Prange = value
 
     # ------------------------------------------------------------------
     # Trigger
@@ -939,18 +697,15 @@ class ET5406A:
     @property
     def trigger_mode(self):
         """Trigger source: MAN|EXT|TRG."""
-        return self._query(f"LOAD{self._CH}:TRIG?")
+        return self._ch.trigger_mode
 
     @trigger_mode.setter
     def trigger_mode(self, value):
-        v = value.upper()
-        if v not in ("MAN", "EXT", "TRG"):
-            raise ValueError("trigger_mode must be MAN/EXT/TRG")
-        self._write(f"LOAD{self._CH}:TRIG {v}")
+        self._ch.trigger_mode = value
 
     def trigger(self):
         """Send a remote trigger event."""
-        self._write("*TRG")
+        self._ch.trigger()
 
     # ------------------------------------------------------------------
     # Measurement
@@ -958,23 +713,25 @@ class ET5406A:
 
     def read_voltage(self):
         """Measure input voltage [V]."""
-        return _tofloat(self._query(f"MEAS{self._CH}:VOLTAGE?"))
+        return self._ch.read_voltage()
 
     def read_current(self):
         """Measure input current [A]."""
-        return _tofloat(self._query(f"MEAS{self._CH}:CURRENT?"))
+        return self._ch.read_current()
 
     def read_power(self):
         """Measure input power [W]."""
-        return _tofloat(self._query(f"MEAS{self._CH}:POWER?"))
+        return self._ch.read_power()
 
     def read_resistance(self):
         """Measure input resistance [Ω]."""
-        return _tofloat(self._query(f"MEAS{self._CH}:RESISTANCE?"))
+        return self._ch.read_resistance()
 
     def read_all(self):
-        """Measure all channels: returns (voltage_V, current_A, power_W, resistance_Ω)."""
-        vals = _tofloats(self._query(f"MEAS{self._CH}:ALL?"))
-        # Device transmits fields in order: current, voltage, power, resistance
-        current_a, voltage_v, power_w, resistance_ohm = vals
+        """Measure all channels: returns (voltage_V, current_A, power_W, resistance_Ω).
+
+        Note: Upstream read_all() returns raw order (current, voltage, power, resistance).
+        This wrapper reorders to maintain backward compatibility with the original API.
+        """
+        current_a, voltage_v, power_w, resistance_ohm = self._ch.read_all()
         return (voltage_v, current_a, power_w, resistance_ohm)
