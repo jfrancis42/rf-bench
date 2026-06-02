@@ -297,11 +297,16 @@ class FlipperZero:
         self._command_id += 1
         msg.command_id = self._command_id
         msg.command_status = flipper_pb2.CommandStatus.Value("OK")
-        msg.stop_session = True
+        msg.stop_session.SetInParent()   # stop_session is an empty message in a oneof
         payload = bytearray(_VarintBytes(msg.ByteSize()) + msg.SerializeToString())
         self._serial.write(payload)
         self._serial.timeout = 3.0
         self._serial.read_until(_PROMPT)
+        # Drain any extra prompts the device may have sent after the session end
+        self._serial.timeout = 0.05
+        while self._serial.in_waiting:
+            self._serial.read(self._serial.in_waiting)
+            import time as _time; _time.sleep(0.01)
         self._serial.timeout = self._default_timeout
         self._mode = "cli"
 

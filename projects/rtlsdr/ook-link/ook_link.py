@@ -34,7 +34,9 @@ import numpy as np
 BAUD        = 1200
 BIT_US      = int(1_000_000 / BAUD)   # 833 µs
 FREQ_HZ     = 433_920_000             # default ISM frequency
-SAMPLE_RATE = 240_000                 # RTL-SDR sample rate
+SAMPLE_RATE = 1_200_000               # RTL-SDR sample rate (240 kHz too low for R820T)
+IF_OFFSET   = 200_000                 # Hz; tune SDR this far above carrier, mix down in SW
+DECIMATE    = 100                     # 1.2 MS/s → 12 kS/s (20 dB noise bandwidth reduction)
 
 SYNC_BYTES  = bytes([0xAA, 0x55])
 EOT         = 0x04                    # end-of-transmission marker
@@ -123,7 +125,7 @@ def transmit(text: str, serial: str, freq_hz: int, repeat: int) -> None:
                 fz.subghz_transmit_raw(freq_hz, timings, preset="ook650", repeat=1)
                 print("  Sent.")
                 if i < repeat - 1:
-                    time.sleep(0.5)
+                    time.sleep(1.0)
 
 
 def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int) -> None:
@@ -148,17 +150,27 @@ def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int) -> None:
     )
 
     path = "/ext/bench/ook_link.sub"
-    # Ensure directory exists
-    fz._cli_send("storage mkdir /ext/bench", timeout=3.0)
+    # Write the .sub file via RPC, then switch back to CLI to run tx_from_file.
+    # _rpc_write_file leaves the driver in RPC mode; _ensure_cli sends the
+    # stop_session message to return to the CLI prompt.  _flush_cli re-syncs
+    # the CLI state (sends \r, waits for ">: ") to clear any residual data.
     fz._rpc_write_file(path, content.encode())
+    fz._ensure_cli()
+    fz._flush_cli()
 
     for i in range(repeat):
         if repeat > 1:
             print(f"\nTransmission {i+1}/{repeat} ...")
         resp = fz._cli_send(f"subghz tx_from_file {path} 1 0", timeout=15.0)
-        print(f"  Sent.  ({resp.strip() or 'ok'})")
+        import re as _re
+        clean = _re.sub(r'\x1b\[[0-9;]*m', '', resp).strip()
+        if "restricted" in clean.lower():
+            print(f"  ERROR: Flipper blocked TX — sub-GHz transmission is region-locked.")
+            print(f"  Fix: on the Flipper go to Settings → Sub-GHz → Bypass Region Lock")
+            break
+        print(f"  Sent.")
         if i < repeat - 1:
-            time.sleep(0.5)
+            time.sleep(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -170,21 +182,29 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
     """
     Listen on the RTL-SDR, demodulate OOK, decode UART bytes.
 
-    threshold_frac: fraction between noise floor (0.0) and signal peak (1.0)
-                    used to threshold the AM envelope.  Default 0.5 works well
-                    with clean signals; raise to 0.7 if noisy.
+    Tunes IF_OFFSET Hz above the carrier, mixes down in software, and
+    decimates by DECIMATE to a ~12 kHz channel.  This rejects out-of-band
+    ISM interference before envelope detection, giving ~20 dB better SNR in
+    congested 433 MHz bands.
+
+    threshold_frac: fraction between noise floor (0.0) and signal peak (1.0).
+                    Default 0.5 works well; raise to 0.7 in noisy environments.
     """
     from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 
-    spb     = SAMPLE_RATE / BAUD          # samples per bit ≈ 200
-    block   = int(SAMPLE_RATE * 0.5)      # 500 ms per block
+    fs_dec  = SAMPLE_RATE / DECIMATE      # decimated sample rate (12 kHz)
+    spb     = fs_dec / BAUD               # samples per bit after decimation (10.0)
+    block   = int(SAMPLE_RATE * 0.5)      # requested raw block (~500 ms)
 
     print(f"RTL-SDR listening on {freq_hz/1e6:.3f} MHz  gain={gain} dB")
+    print(f"  IF offset: +{IF_OFFSET/1e3:.0f} kHz  decimation: {DECIMATE}x  "
+          f"channel BW: {fs_dec/1e3:.0f} kHz")
     print(f"  {BAUD} baud  {spb:.0f} samples/bit  Ctrl-C to stop\n")
 
-    # Sliding buffer for multi-block sync detection
-    ring    = np.zeros(block * 2, dtype=np.complex64)
-    running = True
+    ring         = None
+    block_dec    = None                   # decimated block size (set on first block)
+    sample_off   = 0                      # running sample offset for phase-continuous mixing
+    running      = True
 
     import signal as _sig
     def _stop(_s, _f):
@@ -192,21 +212,50 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
         running = False
     _sig.signal(_sig.SIGINT, _stop)
 
+    # Phase step per raw sample for the IF mix-down.
+    # RTL-SDR tunes to freq_hz + IF_OFFSET, so the carrier appears at -IF_OFFSET
+    # in baseband.  Multiplying by exp(+j*2*pi*IF_OFFSET*t) upshifts it to 0 Hz.
+    phase_step = +2.0 * np.pi * IF_OFFSET / SAMPLE_RATE
+
     with RTLSDR() as sdr:
-        sdr.set_center_freq(freq_hz)
+        sdr.set_center_freq(freq_hz + IF_OFFSET)   # tune above carrier
         sdr.set_sample_rate(SAMPLE_RATE)
         sdr.set_gain(gain)
 
         start_t = time.time()
-        for block_iq in sdr.stream_iq(block_size=block):
+        for raw_iq in sdr.stream_iq(block_size=block):
             if not running:
                 break
             if duration_s and (time.time() - start_t) > duration_s:
                 break
 
-            # Shift ring buffer and add new block
-            ring[:block] = ring[block:]
-            ring[block:] = block_iq
+            n = len(raw_iq)
+
+            # Mix: shift the carrier from +IF_OFFSET down to 0 Hz
+            mix = np.exp(1j * phase_step *
+                         np.arange(sample_off, sample_off + n,
+                                   dtype=np.float32)).astype(np.complex64)
+            mixed = raw_iq * mix
+            sample_off += n
+
+            # Decimate: mean of every DECIMATE samples (boxcar LPF + downsample)
+            n_out = n // DECIMATE
+            if n_out == 0:
+                continue
+            dec = (mixed[:n_out * DECIMATE]
+                   .reshape(n_out, DECIMATE)
+                   .mean(axis=1)
+                   .astype(np.complex64))
+
+            # Initialise ring buffer from first actual decimated block size
+            actual = len(dec)
+            if ring is None:
+                ring       = np.zeros(actual * 2, dtype=np.complex64)
+                block_dec  = actual
+
+            # Shift ring buffer and insert new decimated block
+            ring[:block_dec] = ring[block_dec:]
+            ring[block_dec:] = dec
 
             # OOK demodulation: AM envelope
             env = np.abs(ring).astype(np.float32)
@@ -215,28 +264,31 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
             lo = float(np.percentile(env, 10))
             hi = float(np.percentile(env, 90))
             if hi - lo < lo * 0.1:
-                # No significant modulation in this window
                 continue
             thresh = lo + (hi - lo) * threshold_frac
             bits = (env > thresh).astype(np.int8)
 
-            _decode_uart_stream(bits, spb)
+            _decode_uart_stream(bits, spb, new_start=block_dec)
 
     print("\nDone.")
 
 
-def _decode_uart_stream(bits: np.ndarray, spb: float) -> None:
+def _decode_uart_stream(bits: np.ndarray, spb: float, new_start: int = 0) -> None:
     """
     Find UART frames in a binary signal and print decoded bytes.
 
     Looks for start bits (1→0 falling edges) then samples 8 data bits and
     one stop bit at the centre of each bit period.
+
+    new_start: only report messages whose sync word's start bit falls at or
+               after this index.  When decoding a 2-block ring buffer, pass
+               new_start=block so messages in the old half (already reported
+               in the previous iteration) are not printed again.
     """
-    # Detect falling edges (1→0 transitions = start bit candidates)
     edges = np.where(np.diff(bits.astype(np.int16)) == -1)[0]
 
-    buf    = bytearray()
-    synced = False
+    # List of (byte_value, start_bit_position) for each decoded byte
+    decoded: list[tuple[int, int]] = []
     skip_before = 0
 
     for edge in edges:
@@ -244,12 +296,10 @@ def _decode_uart_stream(bits: np.ndarray, spb: float) -> None:
             continue
 
         start = edge
-        # Verify the start bit is actually low at its midpoint
         mid0 = int(start + 0.5 * spb)
         if mid0 >= len(bits) or bits[mid0] != 0:
             continue
 
-        # Sample 8 data bits (LSB first)
         byte_val = 0
         for bit_no in range(8):
             pos = int(start + (1.5 + bit_no) * spb)
@@ -262,38 +312,44 @@ def _decode_uart_stream(bits: np.ndarray, spb: float) -> None:
         if byte_val is None:
             continue
 
-        # Check stop bit is high
         stop_pos = int(start + 9.5 * spb)
         if stop_pos >= len(bits) or bits[stop_pos] == 0:
-            skip_before = int(start + spb)   # skip ahead past noise
+            skip_before = int(start + spb)
             continue
 
-        buf.append(byte_val)
-        # Don't re-enter this character's bit window
+        decoded.append((byte_val, start))
         skip_before = int(start + 10 * spb)
 
-    if not buf:
+    if not decoded:
         return
 
-    # Hunt for sync pattern and extract payload
+    raw = bytes(v for v, _ in decoded)
     sync = bytes([0xAA, 0x55])
-    raw = bytes(buf)
-    idx = raw.find(sync)
-    if idx == -1:
-        # No sync found — print any printable bytes anyway (useful for debug)
-        printable = ''.join(chr(b) if 32 <= b < 127 else '.' for b in raw)
-        if printable.strip('.'):
-            print(f"  (no sync) {printable!r}")
-        return
 
-    payload = raw[idx + len(sync):]
-    eot = payload.find(EOT)
-    if eot != -1:
-        payload = payload[:eot]
+    search_from = 0
+    while True:
+        idx = raw.find(sync, search_from)
+        if idx == -1:
+            break
 
-    if payload:
-        text = payload.decode("ascii", errors="replace")
-        print(f"RX: {text!r}")
+        # Only report this message if its sync word starts in the new half
+        # of the ring buffer (avoids printing the same message twice when
+        # it shifts from the new half into the old half next iteration).
+        sync_ring_pos = decoded[idx][1]
+        if sync_ring_pos < new_start:
+            search_from = idx + 1
+            continue
+
+        payload = raw[idx + len(sync):]
+        eot = payload.find(EOT)
+        if eot != -1:
+            payload = payload[:eot]
+
+        if payload:
+            text = payload.decode("ascii", errors="replace")
+            print(f"RX: {text!r}")
+
+        search_from = idx + 1
 
 
 # ---------------------------------------------------------------------------
@@ -323,8 +379,8 @@ Examples:
                     help=f"Baud rate (default: {BAUD})")
     ap.add_argument("--repeat",    type=int,   default=1,
                     help="Number of times to repeat transmission (default: 1)")
-    ap.add_argument("--gain",      type=float, default=30,
-                    help="RTL-SDR gain in dB (default: 30)")
+    ap.add_argument("--gain",      type=float, default=40,
+                    help="RTL-SDR gain in dB (default: 40)")
     ap.add_argument("--duration",  type=float, default=None, metavar="SECS",
                     help="RX duration in seconds (default: until Ctrl-C)")
     ap.add_argument("--threshold", type=float, default=0.5, metavar="FRAC",
