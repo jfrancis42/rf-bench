@@ -44,19 +44,21 @@ python ook_link.py tx "Hello" --freq 315  # different frequency (MHz)
 5. Play via `subghz tx_from_file` (Momentum) or `subghz_transmit_raw` (official)
 
 **RX path:**
-1. RTL-SDR captures IQ at 240 kS/s centered on 433.92 MHz
-2. `abs(IQ)` → AM envelope (OOK demodulation)
-3. Adaptive threshold → binary signal
-4. Falling edge detection → UART start bit candidates
-5. Sample 8 data bits + stop bit, LSB first
-6. Find 0xAA 0x55 sync word in byte stream
-7. Extract payload up to 0x04 (EOT)
+1. RTL-SDR tunes to 434.12 MHz (+200 kHz IF offset), captures IQ at 1.2 MS/s
+2. Software mix: multiply by exp(+j·2π·200kHz·t) to shift carrier to 0 Hz
+3. Decimate 100× → 12 kS/s channel (~20 dB noise bandwidth reduction)
+4. `abs(IQ)` → AM envelope (OOK demodulation)
+5. Adaptive threshold → binary signal
+6. Falling edge detection → UART start bit candidates
+7. Sample 8 data bits + stop bit, LSB first
+8. Find 0xAA 0x55 sync word in byte stream
+9. Extract payload up to 0x04 (EOT)
 
 ## Encoding detail
 
 ```
 bit period = 833 µs  (1200 baud)
-samples/bit = 200  (at 240 kS/s RTL-SDR rate)
+samples/bit = 10  (at 12 kS/s decimated rate)
 
 carrier ON  = logic 1  (idle, stop bit)
 carrier OFF = logic 0  (start bit, data 0)

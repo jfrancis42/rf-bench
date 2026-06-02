@@ -247,15 +247,20 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
                    .mean(axis=1)
                    .astype(np.complex64))
 
-            # Initialise ring buffer from first actual decimated block size
+            # Initialise ring buffer from first actual decimated block size.
+            # Three blocks: [old-old | old | new].  We decode the full ring but
+            # report only messages whose sync falls in the "old" middle block —
+            # that block always has at least block_dec samples of tail data
+            # available (the "new" block), preventing message truncation at the
+            # ring boundary.
             actual = len(dec)
             if ring is None:
-                ring       = np.zeros(actual * 2, dtype=np.complex64)
+                ring       = np.zeros(actual * 3, dtype=np.complex64)
                 block_dec  = actual
 
-            # Shift ring buffer and insert new decimated block
-            ring[:block_dec] = ring[block_dec:]
-            ring[block_dec:] = dec
+            # Shift ring buffer left by one block and insert new decimated block
+            ring[:2 * block_dec] = ring[block_dec:]
+            ring[2 * block_dec:] = dec
 
             # OOK demodulation: AM envelope
             env = np.abs(ring).astype(np.float32)
@@ -268,23 +273,33 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
             thresh = lo + (hi - lo) * threshold_frac
             bits = (env > thresh).astype(np.int8)
 
-            _decode_uart_stream(bits, spb, new_start=block_dec)
+            # Report messages in the middle block only (new_start=block_dec,
+            # new_end=2*block_dec).  The newest block provides tail context.
+            _decode_uart_stream(bits, spb,
+                                new_start=block_dec,
+                                new_end=2 * block_dec)
 
     print("\nDone.")
 
 
-def _decode_uart_stream(bits: np.ndarray, spb: float, new_start: int = 0) -> None:
+def _decode_uart_stream(bits: np.ndarray, spb: float,
+                        new_start: int = 0,
+                        new_end: Optional[int] = None) -> None:
     """
     Find UART frames in a binary signal and print decoded bytes.
 
     Looks for start bits (1→0 falling edges) then samples 8 data bits and
     one stop bit at the centre of each bit period.
 
-    new_start: only report messages whose sync word's start bit falls at or
-               after this index.  When decoding a 2-block ring buffer, pass
-               new_start=block so messages in the old half (already reported
-               in the previous iteration) are not printed again.
+    new_start / new_end: only report messages whose sync word's first byte
+        falls within [new_start, new_end).  With a 3-block ring buffer pass
+        new_start=block_dec, new_end=2*block_dec so each message is reported
+        exactly once (when it's in the middle block) and the newest block
+        provides tail data to prevent boundary truncation.
     """
+    if new_end is None:
+        new_end = len(bits)
+
     edges = np.where(np.diff(bits.astype(np.int16)) == -1)[0]
 
     # List of (byte_value, start_bit_position) for each decoded byte
@@ -332,11 +347,11 @@ def _decode_uart_stream(bits: np.ndarray, spb: float, new_start: int = 0) -> Non
         if idx == -1:
             break
 
-        # Only report this message if its sync word starts in the new half
-        # of the ring buffer (avoids printing the same message twice when
-        # it shifts from the new half into the old half next iteration).
+        # Only report messages whose sync word falls within the designated
+        # "report window" [new_start, new_end).  This ensures each message
+        # is printed exactly once across successive ring buffer iterations.
         sync_ring_pos = decoded[idx][1]
-        if sync_ring_pos < new_start:
+        if not (new_start <= sync_ring_pos < new_end):
             search_from = idx + 1
             continue
 
