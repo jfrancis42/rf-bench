@@ -38,7 +38,7 @@ import numpy as np
 
 BAUD        = 1200
 BIT_US      = int(1_000_000 / BAUD)   # 833 µs
-FREQ_HZ     = 432_400_000             # 432.4 MHz — 70 cm amateur band (cleaner than 433.92 ISM)
+FREQ_HZ     = 433_920_000             # 433.92 MHz — ISM/70 cm (CC1101 factory-calibrated here)
 SAMPLE_RATE = 1_200_000               # RTL-SDR sample rate (240 kHz too low for R820T)
 IF_OFFSET   = 200_000                 # Hz; tune SDR this far above carrier, mix down in SW
 DECIMATE    = 100                     # 1.2 MS/s → 12 kS/s (20 dB noise bandwidth reduction)
@@ -337,8 +337,9 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
     bits_buf:  np.ndarray    = np.zeros(0, dtype=np.int8)
     byte_fifo: list[int]     = []
     decode_pos: int          = 0
+    carrier_active: bool     = False   # True while hi indicates a carrier is present
     KEEP_CTX  = int(spb * 12)         # one full byte-period of context before decode_pos
-    MAX_BITS  = int(fs_dec * 30)      # 30 s safety cap on bits_buf
+    MAX_BITS  = int(fs_dec * 30)      # safety cap on bits_buf
 
     with RTLSDR() as sdr:
         sdr.set_center_freq(freq_hz + IF_OFFSET)
@@ -361,27 +362,51 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
             mixed = raw_iq * mix
             sample_off += n
 
-            # Decimate: boxcar LPF + downsample
+            # Incoherent envelope: abs each sample first, then average groups.
+            # Unlike complex mean (boxcar), this is frequency-independent — the
+            # carrier amplitude is preserved regardless of how far the CC1101's
+            # VCO drifts from DC after mixing.  Off-frequency ISM signals are still
+            # suppressed because they rotate in phase and partially cancel when added
+            # to a strong DC carrier during carrier-on periods.
             n_out = n // DECIMATE
             if n_out == 0:
                 continue
-            dec = (mixed[:n_out * DECIMATE]
+            env = (np.abs(mixed[:n_out * DECIMATE])
+                   .astype(np.float32)
                    .reshape(n_out, DECIMATE)
-                   .mean(axis=1)
-                   .astype(np.complex64))
+                   .mean(axis=1))
 
-            env = np.abs(dec).astype(np.float32)
             lo  = float(np.percentile(env, 10))
             hi  = float(np.percentile(env, 99))
 
-            if hi - lo < lo * 0.1:
-                # No signal — reset state so spurious edges don't accumulate
+            if hi - lo < lo * 0.4:
+                # Envelope variation is small → noise only, no OOK modulation.
+                # (Incoherent decimation makes noise nearly flat: hi/lo ≈ 1.2,
+                # so hi-lo ≈ 0.2×lo.  Carrier gives hi/lo >> 5 → hi-lo >> 0.4×lo.)
+                bits_buf       = np.zeros(0, dtype=np.int8)
+                decode_pos     = 0
+                byte_fifo      = []
+                carrier_active = False
+                if debug:
+                    print(f"  [flat  lo={lo:.4f} hi={hi:.4f}]", flush=True)
+                continue
+
+            # Carrier detection: hi must be substantially above the noise floor.
+            # Incoherent noise gives hi/lo ≈ 1.2; carrier gives hi/lo >> 5.
+            is_carrier = hi > lo * 5.0
+
+            if is_carrier and not carrier_active:
+                # Noise → carrier transition: stale noise bits in bits_buf would
+                # delay finding the new message by many seconds (decode_pos only
+                # advances ~1400 bits/block but bits_buf grows ~1000 bits/block
+                # during silence). Flush the stale accumulation and start fresh.
                 bits_buf   = np.zeros(0, dtype=np.int8)
                 decode_pos = 0
                 byte_fifo  = []
                 if debug:
-                    print(f"  [flat  lo={lo:.4f} hi={hi:.4f}]", flush=True)
-                continue
+                    print(f"  [carrier start]", flush=True)
+
+            carrier_active = is_carrier
 
             thresh   = lo + (hi - lo) * threshold_frac
             bits_new = (env > thresh).astype(np.int8)
