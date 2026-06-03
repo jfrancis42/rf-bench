@@ -36,6 +36,12 @@ try:
 except ImportError:
     HAS_SIGMF = False
 
+try:
+    from rf_bench.gpsd import GPSD, GPSDNoFixError
+    _HAS_GPSD = True
+except ImportError:
+    _HAS_GPSD = False
+
 from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 
 # ---------------------------------------------------------------------------
@@ -62,14 +68,25 @@ signal.signal(signal.SIGINT, _sigint)
 
 def _write_sigmf_meta(meta_path: Path, info: dict) -> None:
     """Write a minimal SigMF metadata file."""
+    global_block = {
+        "core:datatype":    info["datatype"],
+        "core:sample_rate": info["sample_rate"],
+        "core:hw":          info.get("hw", "RTL-SDR"),
+        "core:version":     "1.0.0",
+        "core:author":      "rf-bench-rtlsdr-recorder",
+    }
+    # Embed GPS location if available (SigMF core:geolocation is GeoJSON Point)
+    if info.get("latitude") is not None and info.get("longitude") is not None:
+        geo = {
+            "type": "Point",
+            "coordinates": [info["longitude"], info["latitude"]],
+        }
+        if info.get("altitude_m") is not None:
+            geo["coordinates"].append(info["altitude_m"])
+        global_block["core:geolocation"] = geo
+
     meta = {
-        "global": {
-            "core:datatype":    info["datatype"],
-            "core:sample_rate": info["sample_rate"],
-            "core:hw":          info.get("hw", "RTL-SDR"),
-            "core:version":     "1.0.0",
-            "core:author":      "rf-bench-rtlsdr-recorder",
-        },
+        "global": global_block,
         "captures": [
             {
                 "core:sample_start": 0,
@@ -321,6 +338,12 @@ def main():
     ap.add_argument("--serial",   help="RTL-SDR serial number")
     ap.add_argument("--info",     metavar="FILE",
                     help="Print metadata from a .sigmf-meta file and exit")
+    ap.add_argument("--gps",      action="store_true",
+                    help="Embed GPS coordinates in SigMF geolocation field")
+    ap.add_argument("--gps-host", default="localhost",
+                    help="gpsd hostname (default: localhost)")
+    ap.add_argument("--gps-port", type=int, default=2947,
+                    help="gpsd port (default: 2947)")
     args = ap.parse_args()
 
     # Info mode — no hardware needed
@@ -336,6 +359,21 @@ def main():
     dtype    = np.dtype("int8") if args.int8 else np.dtype("complex64")
 
     gain = args.gain if args.gain == "auto" else float(args.gain)
+
+    # GPS setup (optional)
+    gps = None
+    if args.gps:
+        if not _HAS_GPSD:
+            print("Warning: rf-bench-drivers-gpsd not installed; --gps ignored.",
+                  file=sys.stderr)
+        else:
+            gps = GPSD(host=args.gps_host, port=args.gps_port)
+            print("Waiting for GPS fix …", end="", flush=True)
+            try:
+                gps.wait_for_fix(timeout=30)
+                print(" OK")
+            except GPSDNoFixError:
+                print(" (no fix — location will be omitted from SigMF metadata)")
 
     try:
         with RTLSDR(serial=args.serial) as sdr:
@@ -370,6 +408,15 @@ def main():
         if not args.rotate:
             meta_path = out_stem.with_suffix(".sigmf-meta")
             data_file = out_stem.with_suffix(".sigmf-data")
+            geo_info = {}
+            if gps:
+                fix = gps.get_fix()
+                if fix.has_fix:
+                    geo_info = {
+                        "latitude":  fix.latitude,
+                        "longitude": fix.longitude,
+                        "altitude_m": fix.altitude_m,
+                    }
             _write_sigmf_meta(meta_path, {
                 "datatype":    "ci8_le" if args.int8 else "cf32_le",
                 "sample_rate": int(args.bw),
@@ -378,14 +425,20 @@ def main():
                     data_file.stat().st_mtime, tz=timezone.utc
                 ).isoformat() if data_file.exists() else
                 datetime.now(tz=timezone.utc).isoformat(),
+                **geo_info,
             })
             size_mb = out_stem.with_suffix(".sigmf-data").stat().st_size / 1e6
+            geo_str = (f"  loc={geo_info['latitude']:.5f},{geo_info['longitude']:.5f}"
+                       if geo_info else "")
             print(f"SigMF: {out_stem.with_suffix('.sigmf-data').name}  "
-                  f"({size_mb:.1f} MB)")
+                  f"({size_mb:.1f} MB){geo_str}")
 
     except RTLSDRError as exc:
         print(f"RTL-SDR error: {exc}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        if gps:
+            gps.close()
 
 
 if __name__ == "__main__":

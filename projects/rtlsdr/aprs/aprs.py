@@ -2,9 +2,9 @@
 """
 APRS Direct Receive
 
-Receives APRS 1200-baud AFSK packets directly from 144.390 MHz via RTL-SDR,
-decodes them with direwolf, and cross-references each callsign with the
-govt-data /callsigns API and the aprs-server PostgreSQL database.
+Receives APRS 1200-baud AFSK packets directly from 144.390 MHz, decodes
+them with direwolf, and cross-references each callsign with the govt-data
+/callsigns API and the aprs-server PostgreSQL database.
 
 Produces three outputs:
   1. Live console: decoded packets with FCC callsign enrichment
@@ -13,20 +13,25 @@ Produces three outputs:
 
 Requirements:
   - direwolf installed (pacman -S direwolf)
-  - RTL-SDR dongle + 144 MHz antenna (vertical dipole or co-linear)
+  - RTL-SDR mode: rtl-sdr package + 144 MHz antenna
+  - IC-9700 USB mode: IC-9700 via USB, hamlib/rigctld (pacman -S hamlib)
+  - IC-9700 LAN mode: IC-9700 on LAN, hamlib/rigctld, wfview
 
 Usage:
     python aprs.py
+    python aprs.py --radio ic9700-usb
+    python aprs.py --radio ic9700-lan --ic9700-host 192.168.1.10
+    python aprs.py --radio ic9700-lan --ic9700-host 192.168.1.10 --wfview-existing
     python aprs.py --gain 40 --freq 144390
-    python aprs.py --compare                # compare local vs APRS-IS coverage
-    python aprs.py --no-enrich --no-compare # raw packet log only
+    python aprs.py --compare
+    python aprs.py --no-enrich
 """
 
 import argparse
 import json
 import os
 import re
-import select
+import shlex
 import signal
 import sqlite3
 import subprocess
@@ -44,14 +49,19 @@ from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_FREQ_KHZ     = 144_390
-DEFAULT_SAMPLE_RATE  = 24_000    # rtl_fm audio output rate for direwolf
-DEFAULT_GAIN         = 40
-DEFAULT_DB_PATH      = "aprs_local.db"
-GOVTDATA_HOST        = "10.1.0.20"
-GOVTDATA_PORT        = 8091
-APRSDB_HOST          = "10.1.0.20"
-APRSDB_NAME          = "aprs"
+DEFAULT_FREQ_KHZ      = 144_390
+DEFAULT_SAMPLE_RATE   = 24_000    # rtl_fm audio output rate for direwolf stdin
+DEFAULT_GAIN          = 40
+DEFAULT_DB_PATH       = "aprs_local.db"
+GOVTDATA_HOST         = "10.1.0.20"
+GOVTDATA_PORT         = 8091
+APRSDB_HOST           = "10.1.0.20"
+APRSDB_NAME           = "aprs"
+IC9700_SAMPLE_RATE    = 48_000
+IC9700_USB_DEVICE     = "/dev/ttyUSB0"
+DEFAULT_RIGCTLD_PORT  = 4532
+PA_SINK_NAME          = "rfbench_aprs"
+WFVIEW_STREAM_TIMEOUT = 15.0
 
 _running = True
 
@@ -109,7 +119,6 @@ ENRICH_TTL    = 3600
 
 def enrich_callsign(callsign: str, conn: sqlite3.Connection) -> dict:
     """Look up an amateur callsign via govt-data /callsigns API."""
-    # Strip SSID if present
     base = callsign.split("-")[0].upper()
     now  = time.time()
 
@@ -169,10 +178,6 @@ def enrich_callsign(callsign: str, conn: sqlite3.Connection) -> dict:
 # Packet parser (direwolf output format)
 # ---------------------------------------------------------------------------
 
-# Direwolf output line examples:
-# Decoded[1] 0:00:02 W0ABC-9>APX203,WIDE1-1,WIDE2-1:!3957.00N/10502.00W>
-# [0.3] W0ABC-9>APX203,WIDE1-1,WIDE2-1:!3957.00N/10502.00W>...
-
 _DECODED_RE = re.compile(
     r'(?:Decoded\[\d+\]\s+[\d:]+\s+|^\[\S+\]\s*)'
     r'(?P<from>[A-Z0-9-]+)>(?P<to>[A-Z0-9-]+)(?:,(?P<path>[^:]+))?:(?P<data>.*)',
@@ -221,10 +226,6 @@ def parse_direwolf_line(line: str) -> dict | None:
 def compare_aprs_is(conn: sqlite3.Connection, lookback_s: float = 3600.0) -> None:
     """
     Compare locally heard callsigns against the APRS-IS-sourced aprs-server DB.
-    Prints a report showing:
-      - Heard locally AND on APRS-IS (gated)
-      - Heard locally, NOT on APRS-IS (un-gated)
-      - On APRS-IS but not heard locally (out of range or internet-only)
     """
     try:
         import psycopg2
@@ -275,15 +276,97 @@ def compare_aprs_is(conn: sqlite3.Connection, lookback_s: float = 3600.0) -> Non
 
 
 # ---------------------------------------------------------------------------
+# IC-9700 helpers
+# ---------------------------------------------------------------------------
+
+def find_ic9700_usb_audio() -> str | None:
+    """Scan arecord -L for an IC-9700 capture device name."""
+    try:
+        out = subprocess.run(["arecord", "-L"], capture_output=True, text=True).stdout
+        lines = out.splitlines()
+        for i, line in enumerate(lines):
+            if not line.startswith(' ') and i + 1 < len(lines):
+                if re.search(r'ic.?9700', lines[i + 1], re.IGNORECASE):
+                    return line.strip()
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def start_rigctld(device_or_ip: str, port: int) -> subprocess.Popen:
+    """Start rigctld for the IC-9700 and return the process."""
+    from rf_bench.icom import IC9700
+    cmd = shlex.split(IC9700.rigctld_cmd(device_or_ip, rigctld_port=port))
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def configure_ic9700(freq_hz: int, rigctld_port: int) -> None:
+    """Connect to rigctld and set IC-9700 to FM on the given frequency."""
+    from rf_bench.icom import IC9700
+    with IC9700(port=rigctld_port) as rig:
+        rig.set_frequency(freq_hz)
+        rig.set_mode("fm")
+
+
+def setup_pa_null_sink(name: str) -> int:
+    """Load a PulseAudio null sink. Returns the module ID for later cleanup."""
+    out = subprocess.run(
+        ["pactl", "load-module", "module-null-sink",
+         f"sink_name={name}",
+         f"sink_properties=device.description={name}"],
+        capture_output=True, text=True, check=True
+    ).stdout.strip()
+    return int(out)
+
+
+def teardown_pa_null_sink(module_id: int) -> None:
+    subprocess.run(["pactl", "unload-module", str(module_id)], capture_output=True)
+
+
+def start_wfview(extra_args: list) -> subprocess.Popen:
+    cmd = ["wfview"] + extra_args
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def wait_for_wfview_sink_input(timeout_s: float = WFVIEW_STREAM_TIMEOUT) -> int | None:
+    """
+    Poll pactl until a wfview sink-input appears in PulseAudio.
+    Returns the sink-input index or None if timed out.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        out = subprocess.run(
+            ["pactl", "list", "sink-inputs"],
+            capture_output=True, text=True
+        ).stdout
+        current_id = None
+        for line in out.splitlines():
+            m = re.match(r'Sink Input #(\d+)', line)
+            if m:
+                current_id = int(m.group(1))
+            if current_id is not None and 'wfview' in line.lower():
+                return current_id
+        time.sleep(1.0)
+    return None
+
+
+def move_sink_input(sink_input_id: int, sink_name: str) -> None:
+    subprocess.run(
+        ["pactl", "move-sink-input", str(sink_input_id), sink_name],
+        capture_output=True
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main receive loop
 # ---------------------------------------------------------------------------
 
 def main():
-    ap = argparse.ArgumentParser(description="APRS direct-RF receive via RTL-SDR")
+    ap = argparse.ArgumentParser(description="APRS direct-RF receive")
     ap.add_argument("--freq",      type=float, default=DEFAULT_FREQ_KHZ,
                     help="Receive frequency in kHz (default: %(default)s)")
     ap.add_argument("--gain",      type=float, default=DEFAULT_GAIN,
-                    help="Receiver gain in dB (default: %(default)s)")
+                    help="RTL-SDR gain in dB (default: %(default)s)")
     ap.add_argument("--db",        default=DEFAULT_DB_PATH,
                     help="SQLite log path (default: %(default)s)")
     ap.add_argument("--no-enrich", action="store_true",
@@ -293,79 +376,186 @@ def main():
     ap.add_argument("--duration",  type=float, default=0,
                     help="Stop after N seconds (0 = run forever)")
     ap.add_argument("--serial",    help="RTL-SDR serial number")
+
+    ap.add_argument("--radio", choices=["rtlsdr", "ic9700-usb", "ic9700-lan"],
+                    default="rtlsdr",
+                    help="Audio source: rtlsdr (default), ic9700-usb, ic9700-lan")
+    ap.add_argument("--ic9700-device", default=IC9700_USB_DEVICE,
+                    metavar="DEV",
+                    help="IC-9700 serial port for USB CAT (default: %(default)s)")
+    ap.add_argument("--ic9700-host", default=None,
+                    metavar="IP",
+                    help="IC-9700 IP address for LAN mode (required for ic9700-lan)")
+    ap.add_argument("--ic9700-audio", default=None,
+                    metavar="DEVICE",
+                    help="Override ALSA/PA audio device name (default: auto-detect)")
+    ap.add_argument("--rigctld-port", type=int, default=DEFAULT_RIGCTLD_PORT,
+                    help="rigctld listen port (default: %(default)s)")
+    ap.add_argument("--wfview-existing", action="store_true",
+                    help="Connect to already-running wfview instead of starting one")
+    ap.add_argument("--wfview-args", default="",
+                    metavar="ARGS",
+                    help="Extra arguments passed to wfview subprocess (quoted string)")
     args = ap.parse_args()
+
+    if args.radio == "ic9700-lan" and not args.ic9700_host and not args.wfview_existing:
+        ap.error("--ic9700-host is required for --radio ic9700-lan")
 
     conn = open_db(args.db)
 
     freq_hz = int(args.freq * 1000)
-    print(f"APRS receive on {args.freq:.3f} kHz  gain={args.gain} dB")
-    print("Decoding via rtl_fm | direwolf.  Ctrl-C to stop.")
 
-    # Build the rtl_fm | direwolf pipeline.
-    # rtl_fm outputs raw 16-bit signed PCM to stdout; direwolf reads it on stdin.
-    # We write a minimal direwolf config so the pipeline works regardless of
-    # whatever ADEVICE is set in the user's ~/direwolf.conf.
-    dw_conf = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".conf", prefix="rfbench_dw_", delete=False
-    )
-    dw_conf.write(
-        f"ADEVICE stdin null\n"
-        f"CHANNEL 0\n"
-        f"MYCALL N0CALL\n"
-        f"MODEM 1200\n"
-        f"AGWPORT 0\n"    # disable AGWPE TCP server
-        f"KISSPORT 0\n"   # disable KISS TCP server
-    )
-    dw_conf.flush()
-    dw_conf_path = dw_conf.name
-
-    rtl_cmd = [
-        "rtl_fm",
-        "-f", str(freq_hz),
-        "-M", "fm",
-        "-s", str(DEFAULT_SAMPLE_RATE),
-        "-r", str(DEFAULT_SAMPLE_RATE),
-        "-g", str(args.gain),
-        "-",
-    ]
-    dw_cmd = [
-        "direwolf",
-        "-c", dw_conf_path,
-        "-r", str(DEFAULT_SAMPLE_RATE),
-        "-b", "16",
-        "-n", "1",
-        "-t", "0",    # no color codes
-        # no "-" here — ADEVICE stdin null in the config already claims stdin
-    ]
+    rigctld_proc = None
+    wfview_proc  = None
+    pa_module_id = None
+    rtlfm        = None
+    dw           = None
+    dw_conf_path = None
 
     try:
-        rtlfm = subprocess.Popen(
-            rtl_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+        dw_conf = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".conf", prefix="rfbench_dw_", delete=False
         )
-        dw = subprocess.Popen(
-            dw_cmd,
-            stdin=rtlfm.stdout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        print(f"Error: {exc}. Install rtl-sdr and direwolf (pacman -S rtl-sdr direwolf).",
-              file=sys.stderr)
-        os.unlink(dw_conf_path)
-        sys.exit(1)
+        dw_conf_path = dw_conf.name
 
-    start_time = time.time()
-    total_pkts = 0
+        if args.radio == "rtlsdr":
+            print(f"APRS receive on {args.freq:.3f} kHz via RTL-SDR  gain={args.gain} dB")
+            print("Decoding via rtl_fm | direwolf.  Ctrl-C to stop.")
 
-    try:
+            dw_conf.write(
+                f"ADEVICE stdin null\n"
+                f"CHANNEL 0\n"
+                f"MYCALL N0CALL\n"
+                f"MODEM 1200\n"
+                f"AGWPORT 0\n"
+                f"KISSPORT 0\n"
+            )
+            dw_conf.flush()
+
+            serial_args = ["-d", args.serial] if args.serial else []
+            rtl_cmd = [
+                "rtl_fm",
+                "-f", str(freq_hz),
+                "-M", "fm",
+                "-s", str(DEFAULT_SAMPLE_RATE),
+                "-r", str(DEFAULT_SAMPLE_RATE),
+                "-g", str(args.gain),
+                *serial_args,
+                "-",
+            ]
+            dw_cmd = [
+                "direwolf",
+                "-c", dw_conf_path,
+                "-r", str(DEFAULT_SAMPLE_RATE),
+                "-b", "16",
+                "-n", "1",
+                "-t", "0",
+            ]
+
+            try:
+                rtlfm = subprocess.Popen(
+                    rtl_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                dw = subprocess.Popen(
+                    dw_cmd,
+                    stdin=rtlfm.stdout,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+            except FileNotFoundError as exc:
+                print(f"Error: {exc}. Install rtl-sdr and direwolf (pacman -S rtl-sdr direwolf).",
+                      file=sys.stderr)
+                sys.exit(1)
+
+        else:
+            # IC-9700 path (USB or LAN)
+            device_or_ip = args.ic9700_host if args.radio == "ic9700-lan" else args.ic9700_device
+            print(f"APRS receive on {args.freq:.3f} kHz via IC-9700 ({args.radio})")
+
+            print(f"Starting rigctld ({device_or_ip})...")
+            rigctld_proc = start_rigctld(device_or_ip, args.rigctld_port)
+            time.sleep(1.5)
+
+            print(f"Setting IC-9700 to FM {args.freq:.3f} kHz...")
+            try:
+                configure_ic9700(freq_hz, args.rigctld_port)
+            except Exception as exc:
+                print(f"Warning: CAT control failed ({exc}); ensure radio is on {args.freq:.3f} kHz FM",
+                      file=sys.stderr)
+
+            if args.radio == "ic9700-usb":
+                audio_dev = args.ic9700_audio
+                if not audio_dev:
+                    audio_dev = find_ic9700_usb_audio()
+                    if audio_dev:
+                        print(f"Detected IC-9700 USB audio: {audio_dev}")
+                    else:
+                        audio_dev = "plughw:IC-9700,0"
+                        print(f"IC-9700 USB audio not detected; using default: {audio_dev}")
+
+            else:  # ic9700-lan
+                print(f"Creating PulseAudio null sink '{PA_SINK_NAME}'...")
+                pa_module_id = setup_pa_null_sink(PA_SINK_NAME)
+
+                if args.wfview_existing:
+                    print("Connecting to existing wfview instance...")
+                else:
+                    extra = shlex.split(args.wfview_args or "")
+                    print(f"Starting wfview {' '.join(extra)}...")
+                    wfview_proc = start_wfview(extra)
+
+                print(f"Waiting for wfview audio stream (up to {WFVIEW_STREAM_TIMEOUT:.0f}s)...")
+                sid = wait_for_wfview_sink_input()
+                if sid is not None:
+                    print(f"Moving wfview sink-input #{sid} to {PA_SINK_NAME}...")
+                    move_sink_input(sid, PA_SINK_NAME)
+                else:
+                    print("Warning: wfview audio stream not detected; check wfview is connected to the radio",
+                          file=sys.stderr)
+
+                audio_dev = args.ic9700_audio or f"{PA_SINK_NAME}.monitor"
+
+            print(f"Direwolf audio device: {audio_dev}")
+            print("Decoding via direwolf.  Ctrl-C to stop.")
+
+            dw_conf.write(
+                f"ADEVICE {audio_dev} null\n"
+                f"ARATE {IC9700_SAMPLE_RATE}\n"
+                f"CHANNEL 0\n"
+                f"MYCALL N0CALL\n"
+                f"MODEM 1200\n"
+                f"AGWPORT 0\n"
+                f"KISSPORT 0\n"
+            )
+            dw_conf.flush()
+
+            dw_cmd = ["direwolf", "-c", dw_conf_path, "-t", "0"]
+            try:
+                dw = subprocess.Popen(
+                    dw_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+            except FileNotFoundError as exc:
+                print(f"Error: {exc}. Install direwolf (pacman -S direwolf).", file=sys.stderr)
+                sys.exit(1)
+
+        # -------------------------------------------------------------------
+        # Decode loop
+        # -------------------------------------------------------------------
+
+        start_time = time.time()
+        total_pkts = 0
+
         while _running:
             if args.duration > 0 and (time.time() - start_time) > args.duration:
                 break
             if dw.poll() is not None:
-                # Drain any remaining output before reporting the exit
                 remaining = dw.stdout.read()
                 if remaining:
                     print("direwolf output:", file=sys.stderr)
@@ -393,7 +583,6 @@ def main():
             )
             conn.commit()
 
-            # Console output
             ts  = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%H:%M:%S")
             msg = f"[{ts}] {pkt['callsign']:10s} {pkt['type']:10s} {pkt['data'][:60]}"
 
@@ -410,18 +599,24 @@ def main():
                 print(msg)
 
     finally:
-        rtlfm.terminate()
-        dw.terminate()
+        for proc in (rtlfm, dw, wfview_proc, rigctld_proc):
+            if proc:
+                proc.terminate()
+        if pa_module_id is not None:
+            teardown_pa_null_sink(pa_module_id)
         try:
-            rtlfm.wait(timeout=2)
-            dw.wait(timeout=2)
+            for proc in (rtlfm, dw, wfview_proc, rigctld_proc):
+                if proc:
+                    proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            rtlfm.kill()
-            dw.kill()
-        try:
-            os.unlink(dw_conf_path)
-        except OSError:
-            pass
+            for proc in (rtlfm, dw, wfview_proc, rigctld_proc):
+                if proc:
+                    proc.kill()
+        if dw_conf_path:
+            try:
+                os.unlink(dw_conf_path)
+            except OSError:
+                pass
 
     print(f"\nDone. {total_pkts} packets decoded.")
 

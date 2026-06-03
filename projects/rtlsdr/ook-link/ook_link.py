@@ -28,7 +28,7 @@ Frame format:
 Usage:
   python ook_link.py tx "Hello World"               # send via Flipper on /dev/ttyACM0
   python ook_link.py rx                             # receive on RTL-SDR
-  python ook_link.py tx "CQ" --callsign N0GQ       # prepend callsign for ham ID
+  python ook_link.py tx "CQ" --callsign N0CLU       # prepend callsign for ham ID
   python ook_link.py tx "Hi" --baud 300 --repeat 3 # slower baud, more range
   python ook_link.py rx --baud 300                  # receive at matching baud rate
 """
@@ -571,15 +571,15 @@ FSK baud rates (guidance — TX and RX must match):
   msk:         99975 bd only (preset tuned for this rate; lower rates work but are wide)
 
 Examples:
-  python ook_link.py tx "Hello" --callsign N0GQ
+  python ook_link.py tx "Hello" --callsign N0CLU
   python ook_link.py rx
-  python ook_link.py tx "Hi" --preset 2fsk_dev476 --baud 2400 --callsign N0GQ
+  python ook_link.py tx "Hi" --preset 2fsk_dev476 --baud 2400 --callsign N0CLU
   python ook_link.py rx --preset 2fsk_dev476 --baud 2400
-  python ook_link.py tx "CQ" --preset gfsk --baud 9600 --callsign N0GQ
+  python ook_link.py tx "CQ" --preset gfsk --baud 9600 --callsign N0CLU
   python ook_link.py rx --preset gfsk --baud 9600
-  python ook_link.py tx "Max" --preset msk  --callsign N0GQ
+  python ook_link.py tx "Max" --preset msk  --callsign N0CLU
   python ook_link.py rx --preset msk
-  python ook_link.py tx "Hi"  --preset ook270 --baud 300 --repeat 3 --callsign N0GQ
+  python ook_link.py tx "Hi"  --preset ook270 --baud 300 --repeat 3 --callsign N0CLU
 """)
     ap.add_argument("mode", choices=["tx", "rx"],
                     help="tx = transmit via Flipper, rx = receive via RTL-SDR")

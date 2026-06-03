@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench-drivers-rtlsdr"
-version = "0.1.1"
+version = "0.1.2"
 description = "RTL-SDR receiver driver for bench automation — IQ capture, spectrum, streaming, calibration"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }

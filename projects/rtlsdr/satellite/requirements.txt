@@ -1,0 +1,13 @@
+numpy>=1.20.0
+matplotlib>=3.5.0
+rf-bench-drivers-rtlsdr>=0.1.0
+
+# Optional: for Doppler tracking
+skyfield>=1.45
+requests>=2.28.0
+
+# Optional: for SigMF metadata
+sigmf>=1.2.0
+
+# Optional: for GPS location
+rf-bench-drivers-gpsd>=0.1.0

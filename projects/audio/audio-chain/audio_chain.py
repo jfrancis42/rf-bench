@@ -34,7 +34,7 @@ except ImportError:
     HAS_SD = False
 
 from rf_bench.siglent import SDG1000X
-from rf_bench.icom import IC7300
+from rf_bench.icom import IC7300, IC9700
 
 DEFAULT_SDG    = "10.1.1.55"
 DEFAULT_RIG    = "localhost"
@@ -152,6 +152,8 @@ def main():
     ap.add_argument("--sdg",     default=DEFAULT_SDG)
     ap.add_argument("--rig",     default=DEFAULT_RIG)
     ap.add_argument("--rig-port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--radio",   choices=["ic7300", "ic9700"], default="ic7300",
+                    help="Radio model (default: ic7300)")
     ap.add_argument("--test",   choices=["response", "alc", "thd", "all"], default="response")
     ap.add_argument("--device", type=int, default=None, help="Audio device index")
     ap.add_argument("--plot",   metavar="FILE")
@@ -169,7 +171,8 @@ def main():
             sys.exit(1)
         print(f"Using audio device {device}: {sd.query_devices(device)['name']}")
 
-    with SDG1000X(args.sdg) as sdg, IC7300(args.rig, args.rig_port) as rig:
+    rig_cls = IC9700 if args.radio == "ic9700" else IC7300
+    with SDG1000X(args.sdg) as sdg, rig_cls(args.rig, args.rig_port) as rig:
         results = {}
         if args.test in ("response", "all"):
             results["response"] = test_frequency_response(sdg, rig, device)

@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench-drivers-icom"
-version = "0.1.0"
-description = "Icom IC-7300 radio driver for bench automation — Hamlib rigctld TCP client"
+version = "0.2.0"
+description = "Icom IC-7300 and IC-9700 radio drivers for bench automation — Hamlib rigctld TCP client"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
 requires-python = ">=3.9"
 dependencies = []
-keywords = ["icom", "ic7300", "hamlib", "rigctld", "amateur-radio", "bench-automation", "scpi"]
+keywords = ["icom", "ic7300", "ic9700", "hamlib", "rigctld", "amateur-radio",
+            "bench-automation", "satellite", "vhf", "uhf", "dstar"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

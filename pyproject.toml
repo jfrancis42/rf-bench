@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench"
-version = "0.6.0"
-description = "Meta-package: installs rf-bench-drivers-siglent, -icom, -yaesu, -utils, -buspirate, -flipper, -rtlsdr, -yertai"
+version = "0.7.0"
+description = "Meta-package: installs rf-bench-drivers-siglent, -icom, -yaesu, -utils, -buspirate, -flipper, -rtlsdr, -yertai, -gpsd"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [
@@ -21,6 +21,7 @@ dependencies = [
     "rf-bench-drivers-flipper>=0.1.0",
     "rf-bench-drivers-rtlsdr>=0.1.0",
     "rf-bench-drivers-yertai>=0.1.0",
+    "rf-bench-drivers-gpsd>=0.1.0",
 ]
 keywords = [
     "siglent", "scpi", "test-equipment", "spectrum-analyzer",
@@ -29,6 +30,7 @@ keywords = [
     "flipper-zero", "sub-ghz", "bus-pirate",
     "rtl-sdr", "sdr", "software-defined-radio", "iq",
     "yertai", "et5406a", "dc-load", "electronic-load",
+    "gpsd", "gps", "gnss", "nmea", "latitude", "longitude",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

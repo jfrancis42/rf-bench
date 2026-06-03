@@ -2,23 +2,46 @@
 
 > **v0.6.0** — meta-package; installs all driver sub-packages.
 >
-> ⚠️ **Some projects in this suite are UNTESTED** — code is complete but has
-> not been verified against physical hardware. See individual project READMEs.
+> ⚠️ **This repository is under active development.** Quality varies by subsystem:
+>
+> | Status | What it means |
+> |--------|--------------|
+> | ✅ **Works well** | Tested against real hardware, bugs shaken out, used regularly |
+> | 🔶 **Works, known limits** | Tested but with caveats — see project README |
+> | 🧪 **Experimental** | Code complete, some hardware testing done, may still have rough edges |
+> | ❌ **Untested / incomplete** | Code written but not yet run against physical hardware |
+>
+> See the table below and individual project READMEs for per-project status.
 >
 > All import paths (`rf_bench.siglent`, `rf_bench.icom`, `rf_bench.yaesu`,
 > `rf_bench.utils`, `rf_bench.buspirate`, `rf_bench.flipper`, `rf_bench.rtlsdr`,
-> `rf_bench.yertai`) are stable across releases.
+> `rf_bench.yertai`, `rf_bench.gpsd`) are stable across releases.
 >
-> | Package | PyPI | Provides |
-> |---------|------|---------|
-> | `rf-bench-drivers-siglent` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-siglent)](https://pypi.org/project/rf-bench-drivers-siglent/) | SSA3000X, SDG1000X, SDS2000X, SDM3000X, SPD3303X |
-> | `rf-bench-drivers-icom` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-icom)](https://pypi.org/project/rf-bench-drivers-icom/) | IC7300 |
-> | `rf-bench-drivers-yaesu` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yaesu)](https://pypi.org/project/rf-bench-drivers-yaesu/) | FT891 |
-> | `rf-bench-drivers-utils` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-utils)](https://pypi.org/project/rf-bench-drivers-utils/) | RF math utilities |
-> | `rf-bench-drivers-buspirate` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-buspirate)](https://pypi.org/project/rf-bench-drivers-buspirate/) | Bus Pirate SPI/I2C/UART master |
-> | `rf-bench-drivers-yertai` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yertai)](https://pypi.org/project/rf-bench-drivers-yertai/) | Yertai ET5406A+ programmable DC load |
-> | `rf-bench-drivers-flipper` | (GitHub) | Flipper Zero Sub-GHz/IR/RFID/NFC — ⚠️ UNTESTED |
-> | `rf-bench-drivers-rtlsdr` | (GitHub) | RTL-SDR IQ capture, streaming, calibration — ⚠️ UNTESTED |
+> | Package | PyPI | Status | Provides |
+> |---------|------|--------|---------|
+> | `rf-bench-drivers-siglent` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-siglent)](https://pypi.org/project/rf-bench-drivers-siglent/) | ✅ | SSA3000X, SDG1000X, SDS2000X, SDM3000X, SPD3303X |
+> | `rf-bench-drivers-icom` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-icom)](https://pypi.org/project/rf-bench-drivers-icom/) | ✅ | IC7300, IC9700 |
+> | `rf-bench-drivers-yaesu` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yaesu)](https://pypi.org/project/rf-bench-drivers-yaesu/) | ✅ | FT891 |
+> | `rf-bench-drivers-utils` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-utils)](https://pypi.org/project/rf-bench-drivers-utils/) | ✅ | RF math utilities |
+> | `rf-bench-drivers-buspirate` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-buspirate)](https://pypi.org/project/rf-bench-drivers-buspirate/) | 🔶 | Bus Pirate SPI/I2C/UART master |
+> | `rf-bench-drivers-yertai` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yertai)](https://pypi.org/project/rf-bench-drivers-yertai/) | ✅ | Yertai ET5406A+ programmable DC load |
+> | `rf-bench-drivers-flipper` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-flipper)](https://pypi.org/project/rf-bench-drivers-flipper/) | 🔶 | Flipper Zero Sub-GHz/IR/RFID/NFC — OOK+FSK TX/RX tested; IR/RFID untested |
+> | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
+> | `rf-bench-drivers-gpsd` | (GitHub) | 🧪 | gpsd GPS client — lat/lon/alt/speed/heading/DOP; metric + imperial |
+>
+> **Projects** (in `projects/`) follow the same grading. Highlights:
+>
+> | Project | Status | Notes |
+> |---------|--------|-------|
+> | `rtlsdr/ook-link` | 🔶 | OOK + 2-FSK TX/RX working; GFSK/MSK RX-only (Flipper TX crashes on those presets) |
+> | `rtlsdr/adsb` | ✅ | ADS-B decode, SQLite log, HTTP API — tested with Nooelec SMArt v5 |
+> | `rtlsdr/aprs` | 🧪 | Receives APRS via rtl_fm+direwolf; compare-to-APRS-IS mode working |
+> | `rtlsdr/recorder` | 🧪 | SigMF IQ recorder — basic operation tested |
+> | `rtlsdr/wxsat` | ❌ | Weather satellite pass prediction + decode — untested end-to-end |
+> | `flipper/*` | ❌ | Sub-GHz library, IR, RFID, sensor-hub etc. — minimally tested |
+> | `relay/*` | ❌ | XL9535 relay board projects — hardware not yet connected |
+> | `radio/*` | ❌ | MDS, NF, IP3 measurements — code complete, no hardware run |
+> | `vna/*` | ❌ | HP 8712B VNA — hardware adapter not yet installed |
 
 ---
 
@@ -96,6 +119,25 @@ with ET5406A() as load:        # auto-detect CH340
 IQ capture, Welch power spectrum, streaming generator, PPM calibration.
 Use the SSA for absolute power measurements; RTL-SDR for demodulation and protocol decode.
 
+### gpsd (`rf_bench.gpsd`)
+
+| Class | Provides | Protocol |
+|-------|---------|---------|
+| `GPSD` | GPS position, speed, altitude, heading, DOP, satellite counts | TCP / gpsd JSON (localhost:2947) |
+
+Background thread with auto-reconnect and stale-data detection. Metric and imperial
+unit accessors. `wait_for_fix()` blocking helper. No external Python dependencies.
+
+```python
+from rf_bench.gpsd import GPSD
+
+with GPSD() as gps:
+    fix = gps.wait_for_fix(timeout=30)
+    print(fix.latitude, fix.longitude, fix.altitude_m, fix.speed_kmh)
+    print(fix.altitude_ft, fix.speed_mph, fix.speed_knots)
+    print(fix.hdop, fix.satellites_used)
+```
+
 ### Utilities (`rf_bench.utils`)
 
 `rf_utils` — pure-Python RF math library. Power conversions, impedance and
@@ -118,6 +160,7 @@ pip install rf-bench-drivers-icom      # Icom IC-7300
 pip install rf-bench-drivers-yaesu     # Yaesu FT-891
 pip install rf-bench-drivers-utils     # RF math utilities (no instruments)
 pip install rf-bench-drivers-yertai    # Yertai ET5406A+ DC load
+pip install rf-bench-drivers-gpsd      # gpsd GPS client
 ```
 
 **Dependency:** [NumPy](https://numpy.org/) (for `rf_bench.utils` and the
@@ -651,6 +694,7 @@ and to radios via Hamlib rigctld.
 | Bench multimeter | Siglent SDM3045X | 10.1.1.63 | DC voltage/current measurement |
 | DC power supply | Siglent SPD3303X-E | 10.1.1.56 | Programmable CC-CV supply, two channels |
 | DC load | Yertai ET5406A+ | USB serial | Programmable CC discharge load, 200 W |
+| GPS | gpsd daemon | TCP localhost:2947 | Position, speed, altitude, heading, DOP |
 | Reflection bridge | Siglent RB3X25 | — | Passive bridge for VSWR/impedance measurements |
 | Radio (HF) | Icom IC-7300 | USB-B → rigctld | HF transceiver for receiver testing |
 | Radio (HF) | Yaesu FT-891 | USB-B → rigctld | HF transceiver for receiver testing |
@@ -668,10 +712,39 @@ Instrument drivers are distributed as four PyPI packages:
 | `rf-bench-drivers-buspirate` | BusPirate SPI/I2C/UART master (v3/v4/v5) |
 | `rf-bench-drivers-yertai` | Yertai ET5406A+ DC load — CC/CV/CP/CR/BATT/TRAN modes |
 | `rf-bench-drivers-rtlsdr` | RTLSDR receiver — IQ capture, streaming, PPM calibration |
+| `rf-bench-drivers-gpsd` | gpsd GPS client — position, speed, altitude, heading, DOP; metric + imperial |
 
 ---
 
 ## Projects
+
+---
+
+### GPS projects (`projects/gps/`)
+
+Requires `rf-bench-drivers-gpsd` and a running `gpsd` daemon.
+
+| Script | Purpose |
+|--------|---------|
+| `gps/survey/survey.py` | Static position precision survey — mean lat/lon, N/E/2D scatter in metres |
+| `gps/gridsquare/gridsquare.py` | Live Maidenhead locator (4/6/8 chars) with optional waypoint distance/bearing |
+| `gps/monitor/monitor.py` | Fullscreen GPS quality display — DOP bars, scatter plot, speed, heading |
+| `gps/freq-cal/freq_cal.py` | GPS-timestamped frequency drift measurement using SSA3032X |
+
+### GPS-integrated RTL-SDR projects (`projects/rtlsdr/`)
+
+| Script | GPS required | Purpose |
+|--------|-------------|---------|
+| `rtlsdr/survey/survey.py` | Optional (`--gps`) | Power spectrum capture at regular intervals, geo-tagged CSV |
+| `rtlsdr/drivetest/drivetest.py` | Optional (`--gps`) | Single-frequency power logging with GPX track output |
+| `rtlsdr/recorder/recorder.py` | Optional (`--gps`) | SigMF IQ recorder — adds `core:geolocation` to metadata |
+
+### GPS-integrated radio projects (`projects/radio/`)
+
+| Script | Radios | GPS required | Purpose |
+|--------|--------|-------------|---------|
+| `radio/coverage/coverage.py` | IC-7300, IC-9700, FT-891 | Optional (`--gps`) | S-meter vs GPS position; CSV + GPX coverage map |
+| `radio/doppler/doppler.py` | IC-7300, IC-9700, FT-891 | Required | Real-time Doppler VFO correction from GPS velocity |
 
 ---
 

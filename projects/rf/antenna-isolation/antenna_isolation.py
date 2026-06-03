@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from rf_bench.icom import IC7300
+from rf_bench.icom import IC7300, IC9700
 from rf_bench.utils import watts_to_dbm, format_freq
 
 BANDS = {
@@ -58,6 +58,8 @@ Without attenuation, the radio on the RX antenna could be damaged.
     ap.add_argument("--rig1-port",  type=int, default=4532, help="TX rigctld port")
     ap.add_argument("--rig2-port",  type=int, default=4533, help="RX rigctld port")
     ap.add_argument("--rig-host",   default="localhost")
+    ap.add_argument("--radio",      choices=["ic7300", "ic9700"], default="ic7300",
+                    help="Radio model for both TX and RX rigs (default: ic7300)")
     ap.add_argument("--power",      type=float, default=1.0, help="TX power in watts")
     ap.add_argument("--bands",      default=",".join(DEFAULT_BANDS),
                     help=f"Bands to test (default: {','.join(DEFAULT_BANDS)})")
@@ -86,8 +88,9 @@ Without attenuation, the radio on the RX antenna could be damaged.
     freq_hz_list = [BANDS[b] for b in bands if b in BANDS]
     iso_db_list  = []
 
-    with IC7300(args.rig_host, args.rig1_port) as tx_rig, \
-         IC7300(args.rig_host, args.rig2_port) as rx_rig:
+    rig_cls = IC9700 if args.radio == "ic9700" else IC7300
+    with rig_cls(args.rig_host, args.rig1_port) as tx_rig, \
+         rig_cls(args.rig_host, args.rig2_port) as rx_rig:
 
         # Disable AGC on both radios for calibrated S-meter
         rx_rig.set_agc("off")

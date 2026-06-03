@@ -745,7 +745,7 @@ Examples:
 """,
     )
 
-    parser.add_argument("--radio",    choices=["ic7300", "ft891"], default="ic7300",
+    parser.add_argument("--radio",    choices=["ic7300", "ic9700", "ft891"], default="ic7300",
                         help="Radio type (default ic7300)")
     parser.add_argument("--rig-host", default=DEFAULT_RIG_HOST, metavar="HOST",
                         help=f"rigctld host (default {DEFAULT_RIG_HOST})")

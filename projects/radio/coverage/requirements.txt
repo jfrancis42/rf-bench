@@ -1,0 +1,3 @@
+rf-bench-drivers-icom>=0.1.0
+rf-bench-drivers-yaesu>=0.1.0
+rf-bench-drivers-gpsd>=0.1.0   # optional: install for GPS geo-tagging + GPX output

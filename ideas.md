@@ -15,6 +15,7 @@
 | Bus Pirate | USB protocol bridge | SPI/I2C/UART/1-Wire/raw-wire master; 3.3V/5V selectable I/O; USB CDC serial → `/dev/ttyUSBx`; scriptable via pyserial. Version v3/v4 assumed; v5 uses different protocol — verify at connect time. |
 | Flipper Zero | Multi-tool sub-GHz radio | 300–928 MHz Sub-GHz (CC1101) OOK/2-FSK/4-FSK/GFSK; 125 kHz LF RFID; 13.56 MHz NFC; IR; GPIO; USB protobuf RPC → `/dev/ttyACM0` |
 | RTL-SDR Blog v4 | Software-defined radio receiver | 500 kHz–1766 MHz; 2.4 MHz instantaneous IQ bandwidth; R828D tuner; 1 PPM TCXO; bias tee (5V/180 mA); USB → librtlsdr/pyrtlsdr |
+| gpsd | GPS daemon client | lat/lon/alt/speed/heading/DOP; TCP → localhost:2947; auto-reconnect; metric + imperial; `rf_bench.gpsd` |
 | HP 8712B | Vector network analyzer | 300 kHz–1.3 GHz; HPIB/GPIB; full 2-port SOLT calibration; S11/S21/S12/S22 + phase; *pending Ethernet-GPIB adapter* |
 
 **Software options:** All factory software upgrades installed on all Siglent instruments. Notable:
@@ -3307,3 +3308,196 @@ All virtual panels share this structure:
 4. SDS2354X — high complexity but high value; complements the scope-based measurement projects
 5. RTL-SDR — useful for ISM/APRS/ADS-B monitoring projects
 6. Si5351, Flipper — lower priority; niche applications
+
+---
+
+## GPS / gpsd-enabled projects
+
+These become possible with the `rf_bench.gpsd` driver (`drivers/gpsd/`).
+
+---
+
+### Standalone GPS projects
+
+**✓ GPS position precision surveyor** (`projects/gps/survey/survey.py`)
+Log a static fix for an extended period, compute mean lat/lon and N/E/2D scatter in metres.
+Reports HDOP/VDOP and saves samples to CSV. Built.
+
+**✓ Grid square calculator / locator display** (`projects/gps/gridsquare/gridsquare.py`)
+Live Maidenhead locator display (4/6/8 characters), optional waypoints with distance and bearing.
+Uses pure-Python Maidenhead implementation. Built.
+
+**✓ GPS fix quality monitor** (`projects/gps/monitor/monitor.py`)
+Fullscreen terminal: fix mode, HDOP/VDOP/PDOP bars, position, speed, heading, error estimates,
+ASCII scatter plot of recent fix scatter. Built.
+
+---
+
+### RTL-SDR + GPS integrations
+
+**✓ Mobile spectrum survey** (`projects/rtlsdr/survey/survey.py`)
+Captures power spectra with RTL-SDR at regular intervals; geo-tags with GPS when `--gps` is set.
+Single frequency or swept; CSV output with lat/lon/power. GPS optional. Built.
+
+**✓ GPS-tagged SigMF IQ recorder** (extended `projects/rtlsdr/recorder/recorder.py`)
+Added `--gps` flag: embeds `core:geolocation` GeoJSON Point in SigMF global metadata.
+Zero overhead when `--gps` is not passed. Built.
+
+**✓ RF coverage drive test** (`projects/rtlsdr/drivetest/drivetest.py`)
+Continuous single-frequency power logging with RTL-SDR; CSV + GPX output with signal-strength
+extension when `--gps` is set. GPS optional. Built.
+
+---
+
+### Radio (IC-7300 / IC-9700 / FT-891) + GPS integrations
+
+**✓ Signal strength coverage mapper** (`projects/radio/coverage/coverage.py`)
+S-meter (dBm) vs GPS position; IC-7300, IC-9700, or FT-891; CSV + GPX output.
+GPS optional via `--gps`. Built.
+
+**APRS position transmitter** (`projects/radio/aprs-tx/`) — *not yet built*
+Use GPS + IC-7300 + software TNC to transmit APRS position packets.
+Requires a TNC driver (not yet implemented). Deferred.
+
+**✓ Doppler VFO corrector** (`projects/radio/doppler/doppler.py`)
+Computes radial velocity toward a fixed target from GPS speed + heading, applies VFO offset
+in real-time via Hamlib. Works with IC-7300, IC-9700, or FT-891. `--dry-run` for display only.
+IC-9700 is the primary intended radio for this project (satellite cross-band Doppler). Built.
+
+---
+
+### Siglent SSA3000X + GPS integrations
+
+**✓ GPS-disciplined frequency drift monitor** (`projects/gps/freq-cal/freq_cal.py`)
+Measures SDG or external carrier with SSA; uses GPS `time_utc` as absolute timestamp.
+Logs frequency + offset + ppm to CSV; `--report` mode computes drift rate from saved data. Built.
+
+**Calibrated mobile spectrum survey** — *not yet built*
+Same concept as the RTL-SDR mobile survey but with SSA3000X for calibrated dBm readings.
+Deferred: SSA is not easily portable.
+
+---
+
+### Multi-instrument integrations
+
+**Antenna range characterization** (`projects/rf/antenna-range/`) — *not yet built*
+Place SDG1062X (transmitter) at a GPS-surveyed point; walk receive antenna to GPS-waypointed
+positions; log signal strength vs distance/azimuth.
+
+**GPS + IQ: coherent multi-site recording** — *future / aspirational*
+Two RTL-SDRs at known GPS positions recording simultaneously for TDOA transmitter location.
+Requires sub-millisecond time accuracy; research-grade.
+
+---
+
+### Vestigare / ADS-B integration
+
+**Own-ship overlay for ADS-B** (extend `vestigare/`) — *not yet built*
+Feed GPS position into Vestigare as an own-aircraft marker on the map.
+
+---
+
+### APRS server integration
+
+**GPS-to-APRS bridge** (extend `aprs-server/`) — *not yet built*
+Let `aprs-server` read from a local gpsd instance instead of (or in addition to) a phone GPS.
+Useful for fixed-station position reporting and portable ops.
+
+---
+
+## IC-9700 projects
+
+The IC-9700 covers 144 MHz (2m), 430/440 MHz (70cm), and 1296 MHz (23cm).
+It supports USB/LSB/CW/FM/DV (D-STAR) and cross-band split for satellite operation.
+Hamlib model 3081. USB or LAN connection.
+
+---
+
+### Standalone IC-9700 projects
+
+**✓ Satellite pass planner + Doppler tracker** (`projects/radio/satellite/satellite.py`)
+TLE from AMSAT (group) / SatNOGS (per-NORAD). SGP4 via skyfield. Pass prediction + live
+Doppler correction via IC-9700 `set_satellite_mode()` / `update_doppler()`. GPS optional
+via `--gps`. `--dry-run` for display without radio. Built-in transponder database: AO-91,
+AO-92, SO-50, ISS, FO-29, AO-7. Note: Celestrak /pub/TLE/ returns 403; AMSAT + SatNOGS
+are the working sources. Built.
+
+**D-STAR digital voice monitor** (`projects/radio/dstar-monitor/`)
+Set the IC-9700 to DV mode, decode incoming frames via the IC-9700's USB audio output,
+log callsigns, message text, and signal strength. No dedicated D-STAR decoder library needed
+if the IC-9700 handles the digital decode internally and outputs the decoded audio/data via
+its USB sound card. Monitor repeater activity and log to SQLite.
+
+**VHF/UHF receiver sensitivity measurement** (`projects/radio/vhf-receiver-test/`)
+VHF/UHF equivalent of the HF `receiver-test` project. The SSA3032X's tracking generator
+covers up to 3.2 GHz, so it can drive the IC-9700's 2m and 70cm inputs directly
+(vs. the SDG1062X which only reaches 60 MHz). Tests: MDS (minimum discernible signal),
+noise figure from MDS, S-meter calibration, FM quieting sensitivity.
+Much more useful than HF receiver testing for VHF weak-signal and satellite work.
+
+**VHF/UHF beacon logger** (`projects/radio/beacon-logger/`)
+Tune the IC-9700 to a known beacon frequency (2m propagation beacons, APRS, ISS),
+log S-meter reading and GPS timestamp continuously to SQLite. Useful for tracking
+tropospheric ducting events, Es openings, or satellite visibility windows.
+GPS gives absolute time for cross-correlating with ionospheric data.
+
+---
+
+### IC-9700 + GPS integrations
+
+**Full satellite cross-band pass** (`projects/radio/satellite/`) — see above.
+The IC-9700 is the only radio in this inventory that supports simultaneous TX and RX
+on different bands, which is required for satellite duplex. The `set_satellite_mode()`,
+`update_doppler()`, and `set_ptt()` methods in the driver are built specifically for this.
+
+**VHF/UHF antenna pattern mapper** (`projects/radio/coverage/` — extend existing)
+Use the existing `coverage.py` with `--radio ic9700` and `--gps` to map 2m or 70cm antenna
+radiation patterns. Drive a circle around the transmitter; post-process the GPX + S-meter
+CSV into a polar plot. The IC-9700's S-meter calibration via SSA TG makes this quantitative.
+
+**APRS igate via IC-9700** (`projects/radio/aprs-igate/`)
+Use the IC-9700 on 144.390 MHz FM, feed audio to direwolf running on the same machine,
+pipe decoded packets to the existing `aprs-server` on 10.1.0.20. The IC-9700's USB audio
+output (it presents as a USB sound card) eliminates the need for an external TNC or audio
+interface. Add GPS position reporting from `rf_bench.gpsd` for own-station beaconing.
+
+---
+
+### IC-9700 + SSA integrations
+
+**VHF/UHF transmitter test** (`projects/radio/transmitter-test/` — `--radio ic9700`)
+Already added: `transmitter_test.py --radio ic9700`. The SSA3032X (9 kHz–3.2 GHz) can
+measure IC-9700 output power, harmonics, and ALC on all three bands. Note: 23cm
+(1296 MHz) is within the SSA's range. Use appropriate attenuator (50 dB min) on the
+TX output before the SSA input.
+
+**FM deviation measurement** (`projects/radio/fm-deviation/`)
+Connect IC-9700 TX output → attenuator → SSA3032X. Measure FM deviation by reading
+the SSA's FM demodulation output while keying the IC-9700 with a known audio tone.
+Verify the IC-9700's deviation is within spec (±5 kHz for narrow FM on 2m/70cm).
+Uses SSA SCPI `CALC:DMOD:FM` commands.
+
+**Intermodulation distortion — VHF** (`projects/radio/imd-vhf/`)
+Two-tone IMD test at 2m or 70cm. Requires a VHF combiner and two signal sources at
+2m/70cm — potentially using the RTL-SDR's bias tee to power an upconverter, or
+a second IC-9700. The SSA TG at VHF can serve as one tone; a second source needed
+for the second tone. More complex than HF IMD but more relevant for satellite LNA work.
+
+---
+
+### IC-9700 + RTL-SDR integrations
+
+**IC-9700 + RTL-SDR cross-check** (`projects/radio/rx-crosscheck/`)
+Tune both IC-9700 and RTL-SDR to the same VHF/UHF frequency, measure the same signal
+simultaneously, and compare S-meter readings. Builds a calibration table mapping
+RTL-SDR relative power (dB) to IC-9700 calibrated S-meter (dBm). Enables using the
+RTL-SDR as a fast spectrum scanner calibrated against the IC-9700's known S-meter.
+
+**✓ Satellite signal monitor** (`projects/rtlsdr/satellite/`)
+While the IC-9700 handles the satellite duplex uplink, use the RTL-SDR as a wideband
+receiver to monitor the 70cm downlink passband. Capture the full transponder bandwidth
+as IQ (the RTL-SDR can do this at 2.4 MHz wide), letting you see your own signal plus
+other stations in the passband simultaneously — useful for linear transponders.
+**Status:** Implemented in `satellite_monitor.py`. Real-time waterfall display with
+optional Doppler tracking and SigMF recording. Built-in database for AO-91, AO-92,
+SO-50, ISS, FO-29, AO-7. Complementary to `projects/radio/satellite/satellite.py`.
