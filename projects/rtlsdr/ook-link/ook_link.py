@@ -15,13 +15,18 @@ Frame format (before each message):
   32-bit preamble of alternating 1/0 for receiver AGC and clock sync
   0xAA 0x55 sync word (reliable falling-edge pattern)
   ASCII payload bytes
+  CRC-16/CCITT (2 bytes, big-endian) — garbled frames are silently discarded
   0x04 (EOT) terminator
 
+Default frequency: 432.4 MHz (70 cm amateur band — much less congested than 433.92 ISM).
+Requires FCC Part 97 (amateur) license or equivalent.  Include callsign via --callsign.
+
 Usage:
-  python ook_link.py tx "Hello World"        # send via Flipper on /dev/ttyACM0
-  python ook_link.py rx                      # receive on RTL-SDR
-  python ook_link.py tx "Hi" --repeat 3     # repeat for reliability
-  python ook_link.py rx --freq 433.92        # explicit frequency in MHz
+  python ook_link.py tx "Hello World"               # send via Flipper on /dev/ttyACM0
+  python ook_link.py rx                             # receive on RTL-SDR
+  python ook_link.py tx "CQ" --callsign N0GQ       # prepend callsign for ham ID
+  python ook_link.py tx "Hi" --repeat 3             # repeat for reliability
+  python ook_link.py rx --freq 432.4                # explicit frequency in MHz
 """
 
 import argparse
@@ -33,13 +38,26 @@ import numpy as np
 
 BAUD        = 1200
 BIT_US      = int(1_000_000 / BAUD)   # 833 µs
-FREQ_HZ     = 433_920_000             # default ISM frequency
+FREQ_HZ     = 432_400_000             # 432.4 MHz — 70 cm amateur band (cleaner than 433.92 ISM)
 SAMPLE_RATE = 1_200_000               # RTL-SDR sample rate (240 kHz too low for R820T)
 IF_OFFSET   = 200_000                 # Hz; tune SDR this far above carrier, mix down in SW
 DECIMATE    = 100                     # 1.2 MS/s → 12 kS/s (20 dB noise bandwidth reduction)
 
 SYNC_BYTES  = bytes([0xAA, 0x55])
 EOT         = 0x04                    # end-of-transmission marker
+
+# CRC-16/CCITT-FALSE (poly=0x1021, init=0xFFFF) — appended before EOT for FEC
+_CRC_POLY   = 0x1021
+_CRC_INIT   = 0xFFFF
+
+def _crc16(data: bytes) -> int:
+    crc = _CRC_INIT
+    for b in data:
+        crc ^= b << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ _CRC_POLY) if (crc & 0x8000) else (crc << 1)
+        crc &= 0xFFFF
+    return crc
 
 # ---------------------------------------------------------------------------
 # Encoding — convert text to OOK pulse timings for Flipper .sub RAW_Data
@@ -75,8 +93,11 @@ def encode_message(text: str) -> list[int]:
     # Idle
     pairs.append((True, BIT_US * 4))
 
-    # Sync word + payload + EOT
-    for byte in list(SYNC_BYTES) + [ord(c) for c in text] + [EOT]:
+    # Sync word + payload + CRC-16 (big-endian) + EOT
+    payload = text.encode('ascii')
+    crc = _crc16(payload)
+    packet = list(SYNC_BYTES) + list(payload) + [crc >> 8, crc & 0xFF] + [EOT]
+    for byte in packet:
         pairs.extend(_encode_byte(byte))
         pairs.append((True, BIT_US))      # brief inter-byte idle
 
@@ -101,14 +122,19 @@ def encode_message(text: str) -> list[int]:
 # TX — Flipper Zero
 # ---------------------------------------------------------------------------
 
-def transmit(text: str, serial: str, freq_hz: int, repeat: int) -> None:
+def transmit(text: str, serial: str, freq_hz: int, repeat: int,
+             callsign: str = "") -> None:
     from rf_bench.flipper import FlipperZero, FlipperError
+
+    # Prepend callsign ID so the frame is self-identifying (required for ham operation)
+    if callsign:
+        text = f"DE {callsign}: {text}"
 
     timings = encode_message(text)
     total_us = sum(abs(t) for t in timings)
-    n_bytes = len(text) + len(SYNC_BYTES) + 1  # +1 for EOT
+    n_bytes = len(text) + len(SYNC_BYTES) + 2 + 1  # +2 CRC +1 EOT
 
-    print(f"Encoding {len(text)} chars ({n_bytes} bytes including sync/EOT)")
+    print(f"Encoding {len(text)} chars ({n_bytes} bytes including sync/CRC/EOT)")
     print(f"  {len(timings)} timing edges  {total_us/1e6:.3f} s per transmission")
     print(f"  Baud: {BAUD}  Bit period: {BIT_US} µs  Freq: {freq_hz/1e6:.3f} MHz")
 
@@ -177,48 +203,145 @@ def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int) -> None:
 # RX — RTL-SDR demodulator
 # ---------------------------------------------------------------------------
 
+def _decode_uart_chunk(bits: np.ndarray, spb: float,
+                       start_from: int) -> tuple[list[int], int]:
+    """
+    Decode UART bytes from bits[start_from:].
+
+    Returns (byte_list, next_start_from).  next_start_from advances past each
+    complete byte so the caller can trim bits_buf and avoid re-decoding.
+    Stops at the first byte whose data or stop bit is beyond the buffer end,
+    so the caller can append more data and retry.
+    """
+    edges       = np.where(np.diff(bits.astype(np.int16)) == -1)[0]
+    decoded:    list[int] = []
+    skip_before = start_from
+    next_pos    = start_from
+
+    for edge in edges:
+        if edge < skip_before:
+            continue
+
+        start = edge
+        mid0  = int(start + 0.5 * spb)
+        if mid0 >= len(bits):
+            continue                             # not enough data yet; wait
+        if bits[mid0] != 0:
+            skip_before = start + 1             # definitively not a start bit; advance past it
+            next_pos    = skip_before
+            continue
+
+        byte_val = 0
+        for bit_no in range(8):
+            pos = int(start + (1.5 + bit_no) * spb)
+            if pos >= len(bits):
+                return decoded, next_pos    # data bit beyond buffer; wait
+            if bits[pos]:
+                byte_val |= (1 << bit_no)
+
+        stop_pos = int(start + 9.5 * spb)
+        if stop_pos >= len(bits):
+            return decoded, next_pos        # stop bit not yet received; wait
+
+        if bits[stop_pos] == 0:
+            skip_before = int(start + spb)
+            next_pos    = skip_before
+            continue
+
+        decoded.append(byte_val)
+        skip_before = int(start + 10 * spb)
+        next_pos    = skip_before
+
+    return decoded, next_pos
+
+
+_MAX_PAYLOAD = 512   # bytes between sync and EOT before we give up on a sync word
+
+def _drain_byte_fifo(byte_fifo: list[int]) -> list[int]:
+    """
+    Print all complete sync+payload+CRC+EOT messages in byte_fifo.
+    Returns the unconsumed tail (incomplete message or possible partial sync).
+    CRC-16 is validated; mismatches are silently discarded.
+    """
+    raw  = bytes(byte_fifo)
+    sync = SYNC_BYTES
+    pos  = 0
+
+    while True:
+        idx = raw.find(sync, pos)
+        if idx == -1:
+            trim_to = max(pos, len(raw) - (len(sync) - 1))
+            return list(raw[trim_to:])
+
+        data_start = idx + len(sync)
+        eot_idx = raw.find(EOT, data_start)
+
+        if eot_idx == -1:
+            # No EOT yet.  If too many bytes have accumulated after this sync
+            # without an EOT, the sync was likely a false match or the message
+            # was corrupted — skip it and look for a fresher sync word.
+            if len(raw) - data_start > _MAX_PAYLOAD:
+                pos = idx + 1
+                continue
+            return list(raw[idx:])
+
+        frame = raw[data_start:eot_idx]   # payload + 2-byte CRC
+
+        if len(frame) >= 2:
+            crc_rx   = (frame[-2] << 8) | frame[-1]
+            text_raw = frame[:-2]
+            if _crc16(text_raw) == crc_rx:
+                if text_raw:
+                    print(f"RX: {text_raw.decode('ascii', errors='replace')!r}")
+            # CRC mismatch → silently drop (garbled or noise false-match)
+        # frame < 2 bytes → can't contain valid CRC → drop
+
+        pos = eot_idx + 1
+
+
 def receive(freq_hz: int, gain: float, duration_s: Optional[float],
-            threshold_frac: float) -> None:
+            threshold_frac: float, debug: bool = False) -> None:
     """
     Listen on the RTL-SDR, demodulate OOK, decode UART bytes.
 
-    Tunes IF_OFFSET Hz above the carrier, mixes down in software, and
-    decimates by DECIMATE to a ~12 kHz channel.  This rejects out-of-band
-    ISM interference before envelope detection, giving ~20 dB better SNR in
-    congested 433 MHz bands.
-
-    threshold_frac: fraction between noise floor (0.0) and signal peak (1.0).
-                    Default 0.5 works well; raise to 0.7 in noisy environments.
+    Streaming decoder: each block's bits are appended to a running buffer;
+    UART bytes are decoded incrementally from that buffer; complete messages
+    are drained and printed.  No ring-buffer size limit — long messages and
+    back-to-back transmissions both work without restarting the receiver.
     """
     from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 
-    fs_dec  = SAMPLE_RATE / DECIMATE      # decimated sample rate (12 kHz)
-    spb     = fs_dec / BAUD               # samples per bit after decimation (10.0)
-    block   = int(SAMPLE_RATE * 0.5)      # requested raw block (~500 ms)
+    fs_dec  = SAMPLE_RATE / DECIMATE
+    spb     = fs_dec / BAUD            # 10.0
+    block   = int(SAMPLE_RATE * 0.5)
 
     print(f"RTL-SDR listening on {freq_hz/1e6:.3f} MHz  gain={gain} dB")
     print(f"  IF offset: +{IF_OFFSET/1e3:.0f} kHz  decimation: {DECIMATE}x  "
           f"channel BW: {fs_dec/1e3:.0f} kHz")
     print(f"  {BAUD} baud  {spb:.0f} samples/bit  Ctrl-C to stop\n")
 
-    ring         = None
-    block_dec    = None                   # decimated block size (set on first block)
-    sample_off   = 0                      # running sample offset for phase-continuous mixing
-    running      = True
+    running    = True
+    sample_off = 0
+    phase_step = +2.0 * np.pi * IF_OFFSET / SAMPLE_RATE
 
     import signal as _sig
     def _stop(_s, _f):
         nonlocal running
         running = False
+        # Restore default handler so a second Ctrl-C force-kills the process
+        # in case the graceful shutdown gets stuck on libusb cleanup.
+        _sig.signal(_sig.SIGINT, _sig.SIG_DFL)
     _sig.signal(_sig.SIGINT, _stop)
 
-    # Phase step per raw sample for the IF mix-down.
-    # RTL-SDR tunes to freq_hz + IF_OFFSET, so the carrier appears at -IF_OFFSET
-    # in baseband.  Multiplying by exp(+j*2*pi*IF_OFFSET*t) upshifts it to 0 Hz.
-    phase_step = +2.0 * np.pi * IF_OFFSET / SAMPLE_RATE
+    # Streaming decoder state
+    bits_buf:  np.ndarray    = np.zeros(0, dtype=np.int8)
+    byte_fifo: list[int]     = []
+    decode_pos: int          = 0
+    KEEP_CTX  = int(spb * 12)         # one full byte-period of context before decode_pos
+    MAX_BITS  = int(fs_dec * 30)      # 30 s safety cap on bits_buf
 
     with RTLSDR() as sdr:
-        sdr.set_center_freq(freq_hz + IF_OFFSET)   # tune above carrier
+        sdr.set_center_freq(freq_hz + IF_OFFSET)
         sdr.set_sample_rate(SAMPLE_RATE)
         sdr.set_gain(gain)
 
@@ -231,14 +354,14 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
 
             n = len(raw_iq)
 
-            # Mix: shift the carrier from +IF_OFFSET down to 0 Hz
+            # Mix: shift carrier from +IF_OFFSET down to 0 Hz
             mix = np.exp(1j * phase_step *
                          np.arange(sample_off, sample_off + n,
                                    dtype=np.float32)).astype(np.complex64)
             mixed = raw_iq * mix
             sample_off += n
 
-            # Decimate: mean of every DECIMATE samples (boxcar LPF + downsample)
+            # Decimate: boxcar LPF + downsample
             n_out = n // DECIMATE
             if n_out == 0:
                 continue
@@ -247,124 +370,54 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
                    .mean(axis=1)
                    .astype(np.complex64))
 
-            # Initialise ring buffer from first actual decimated block size.
-            # Three blocks: [old-old | old | new].  We decode the full ring but
-            # report only messages whose sync falls in the "old" middle block —
-            # that block always has at least block_dec samples of tail data
-            # available (the "new" block), preventing message truncation at the
-            # ring boundary.
-            actual = len(dec)
-            if ring is None:
-                ring       = np.zeros(actual * 3, dtype=np.complex64)
-                block_dec  = actual
+            env = np.abs(dec).astype(np.float32)
+            lo  = float(np.percentile(env, 10))
+            hi  = float(np.percentile(env, 99))
 
-            # Shift ring buffer left by one block and insert new decimated block
-            ring[:2 * block_dec] = ring[block_dec:]
-            ring[2 * block_dec:] = dec
-
-            # OOK demodulation: AM envelope
-            env = np.abs(ring).astype(np.float32)
-
-            # Adaptive threshold between noise floor and signal level
-            lo = float(np.percentile(env, 10))
-            hi = float(np.percentile(env, 90))
             if hi - lo < lo * 0.1:
+                # No signal — reset state so spurious edges don't accumulate
+                bits_buf   = np.zeros(0, dtype=np.int8)
+                decode_pos = 0
+                byte_fifo  = []
+                if debug:
+                    print(f"  [flat  lo={lo:.4f} hi={hi:.4f}]", flush=True)
                 continue
-            thresh = lo + (hi - lo) * threshold_frac
-            bits = (env > thresh).astype(np.int8)
 
-            # Report messages in the middle block only (new_start=block_dec,
-            # new_end=2*block_dec).  The newest block provides tail context.
-            _decode_uart_stream(bits, spb,
-                                new_start=block_dec,
-                                new_end=2 * block_dec)
+            thresh   = lo + (hi - lo) * threshold_frac
+            bits_new = (env > thresh).astype(np.int8)
+            ones_pct = 100.0 * bits_new.mean()
+
+            if debug:
+                print(f"  [block lo={lo:.4f} hi={hi:.4f} thresh={thresh:.4f} "
+                      f"ones={ones_pct:.1f}% buf={len(bits_buf)}]", flush=True)
+
+            bits_buf = np.concatenate([bits_buf, bits_new])
+
+            # Safety cap: prevent unbounded growth during sustained noise
+            if len(bits_buf) > MAX_BITS:
+                excess     = len(bits_buf) - MAX_BITS
+                bits_buf   = bits_buf[excess:]
+                decode_pos = max(0, decode_pos - excess)
+
+            # Decode UART bytes from decode_pos onward; stop at incomplete bytes
+            new_bytes, decode_pos = _decode_uart_chunk(bits_buf, spb, decode_pos)
+            if debug and new_bytes:
+                print(f"  [bytes {len(new_bytes)}: "
+                      f"{bytes(new_bytes[:16]).hex()} ...]", flush=True)
+            byte_fifo.extend(new_bytes)
+
+            # Drain complete messages from byte_fifo
+            byte_fifo = _drain_byte_fifo(byte_fifo)
+
+            # Trim bits already decoded (keep one byte of context for edge detection)
+            trim_n = max(0, decode_pos - KEEP_CTX)
+            if trim_n > 0:
+                bits_buf   = bits_buf[trim_n:]
+                decode_pos -= trim_n
+
+        sdr.stop_stream()
 
     print("\nDone.")
-
-
-def _decode_uart_stream(bits: np.ndarray, spb: float,
-                        new_start: int = 0,
-                        new_end: Optional[int] = None) -> None:
-    """
-    Find UART frames in a binary signal and print decoded bytes.
-
-    Looks for start bits (1→0 falling edges) then samples 8 data bits and
-    one stop bit at the centre of each bit period.
-
-    new_start / new_end: only report messages whose sync word's first byte
-        falls within [new_start, new_end).  With a 3-block ring buffer pass
-        new_start=block_dec, new_end=2*block_dec so each message is reported
-        exactly once (when it's in the middle block) and the newest block
-        provides tail data to prevent boundary truncation.
-    """
-    if new_end is None:
-        new_end = len(bits)
-
-    edges = np.where(np.diff(bits.astype(np.int16)) == -1)[0]
-
-    # List of (byte_value, start_bit_position) for each decoded byte
-    decoded: list[tuple[int, int]] = []
-    skip_before = 0
-
-    for edge in edges:
-        if edge < skip_before:
-            continue
-
-        start = edge
-        mid0 = int(start + 0.5 * spb)
-        if mid0 >= len(bits) or bits[mid0] != 0:
-            continue
-
-        byte_val = 0
-        for bit_no in range(8):
-            pos = int(start + (1.5 + bit_no) * spb)
-            if pos >= len(bits):
-                byte_val = None
-                break
-            if bits[pos]:
-                byte_val |= (1 << bit_no)
-
-        if byte_val is None:
-            continue
-
-        stop_pos = int(start + 9.5 * spb)
-        if stop_pos >= len(bits) or bits[stop_pos] == 0:
-            skip_before = int(start + spb)
-            continue
-
-        decoded.append((byte_val, start))
-        skip_before = int(start + 10 * spb)
-
-    if not decoded:
-        return
-
-    raw = bytes(v for v, _ in decoded)
-    sync = bytes([0xAA, 0x55])
-
-    search_from = 0
-    while True:
-        idx = raw.find(sync, search_from)
-        if idx == -1:
-            break
-
-        # Only report messages whose sync word falls within the designated
-        # "report window" [new_start, new_end).  This ensures each message
-        # is printed exactly once across successive ring buffer iterations.
-        sync_ring_pos = decoded[idx][1]
-        if not (new_start <= sync_ring_pos < new_end):
-            search_from = idx + 1
-            continue
-
-        payload = raw[idx + len(sync):]
-        eot = payload.find(EOT)
-        if eot != -1:
-            payload = payload[:eot]
-
-        if payload:
-            text = payload.decode("ascii", errors="replace")
-            print(f"RX: {text!r}")
-
-        search_from = idx + 1
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +455,10 @@ Examples:
                     help="OOK detection threshold 0.0–1.0 (default: 0.5)")
     ap.add_argument("--serial",    default="/dev/ttyACM0",
                     help="Flipper serial port (default: /dev/ttyACM0)")
+    ap.add_argument("--callsign",  default="",
+                    help="Station callsign prepended to TX as 'DE CALLSIGN: message' (ham ID)")
+    ap.add_argument("--debug",     action="store_true",
+                    help="Print per-block signal levels and raw bytes (rx only)")
 
     args = ap.parse_args()
 
@@ -414,10 +471,10 @@ Examples:
     if args.mode == "tx":
         if not args.text:
             ap.error("tx mode requires a text argument")
-        transmit(args.text, args.serial, freq_hz, args.repeat)
+        transmit(args.text, args.serial, freq_hz, args.repeat, args.callsign)
 
     elif args.mode == "rx":
-        receive(freq_hz, args.gain, args.duration, args.threshold)
+        receive(freq_hz, args.gain, args.duration, args.threshold, args.debug)
 
 
 if __name__ == "__main__":

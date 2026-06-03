@@ -434,12 +434,20 @@ class RTLSDR:
         """Stop an active :meth:`stream_iq` session and join the reader thread."""
         if self._stream_stop is not None:
             self._stream_stop.set()
-        if self._stream_thread is not None:
+        thread = self._stream_thread
+        if thread is not None and thread.is_alive():
             try:
                 self._sdr.cancel_read_async()
             except Exception:
                 pass
-            self._stream_thread.join(timeout=3.0)
+            thread.join(timeout=5.0)
+            self._stream_thread = None
+            if thread.is_alive():
+                # libusb/librtlsdr didn't release in time; skip close() to
+                # avoid deadlocking on the USB mutex. The daemon thread will
+                # be killed when the process exits and the OS frees the device.
+                self._stream_stuck = True
+        else:
             self._stream_thread = None
         self._stream_queue = None
         self._stream_stop = None
@@ -482,6 +490,17 @@ class RTLSDR:
     def close(self) -> None:
         """Stop any active stream and close the hardware device."""
         self.stop_stream()
+        if getattr(self, "_stream_stuck", False):
+            # Reader thread is still inside libusb; calling rtlsdr_close() now
+            # would deadlock on the internal USB mutex.  Defuse pyrtlsdr's __del__
+            # so it won't call rtlsdr_close() either, then let the OS release the
+            # USB device when the process exits.
+            try:
+                self._sdr.device_opened = False
+            except Exception:
+                pass
+            self._stream_stuck = False
+            return
         try:
             self._sdr.close()
         except Exception:
