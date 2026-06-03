@@ -45,7 +45,27 @@ BIT_US      = int(1_000_000 / BAUD)   # 833 µs
 FREQ_HZ     = 433_920_000             # 433.92 MHz — ISM/70 cm (CC1101 factory-calibrated here)
 SAMPLE_RATE = 1_200_000               # RTL-SDR sample rate (240 kHz too low for R820T)
 IF_OFFSET   = 200_000                 # Hz; tune SDR this far above carrier, mix down in SW
-DECIMATE    = 100                     # 1.2 MS/s → 12 kS/s (20 dB noise bandwidth reduction)
+
+# Supported baud rates.  Halving the rate gains ~3 dB SNR / ~40 % more range.
+# FSK modes (2fsk_dev238/476, gfsk, msk) support higher rates than OOK.
+BAUD_RATES  = [110, 300, 600, 1200, 2400, 4800, 9600, 99975]
+
+# Per-preset CC1101 configuration.  'mod' selects OOK vs FSK demodulation.
+# 'default_baud' is the rate used when --baud is omitted.
+PRESET_INFO = {
+    'ook270':      dict(mod='ook', flipper='FuriHalSubGhzPresetOok270Async',     default_baud=600),
+    'ook650':      dict(mod='ook', flipper='FuriHalSubGhzPresetOok650Async',     default_baud=1200),
+    '2fsk_dev238': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FskDev238Async', default_baud=1200),
+    '2fsk_dev476': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FskDev476Async', default_baud=2400),
+    'gfsk':        dict(mod='fsk', flipper='FuriHalSubGhzPresetGfsk9_99KbAsync', default_baud=9600),
+    'msk':         dict(mod='fsk', flipper='FuriHalSubGhzPresetMsk99_97KbAsync', default_baud=99975),
+}
+DEFAULT_PRESET = 'ook650'
+
+
+def _decimate_for_baud(baud: int) -> int:
+    """Decimation factor that keeps at least 10 samples/bit (max 100)."""
+    return max(1, min(100, SAMPLE_RATE // (baud * 10)))
 
 SYNC_BYTES  = bytes([0xAA, 0x55])
 EOT         = 0x04                    # end-of-transmission marker
@@ -77,7 +97,6 @@ def _encode_byte(byte: int) -> list[tuple[bool, int]]:
     return bits
 
 
-BAUD_RATES  = [110, 300, 600, 1200, 2400]   # supported baud rates for --baud
 
 
 def encode_message(text: str) -> list[int]:
@@ -127,38 +146,39 @@ def encode_message(text: str) -> list[int]:
 # ---------------------------------------------------------------------------
 
 def transmit(text: str, serial: str, freq_hz: int, repeat: int,
-             callsign: str = "") -> None:
+             callsign: str = "", preset: str = DEFAULT_PRESET) -> None:
     from rf_bench.flipper import FlipperZero, FlipperError
 
-    # Prepend callsign ID so the frame is self-identifying (required for ham operation)
     if callsign:
         text = f"DE {callsign}: {text}"
 
+    mod = PRESET_INFO[preset]['mod']
     timings = encode_message(text)
     total_us = sum(abs(t) for t in timings)
-    n_bytes = len(text) + len(SYNC_BYTES) + 2 + 1  # +2 CRC +1 EOT
+    n_bytes = len(text) + len(SYNC_BYTES) + 2 + 1
 
     print(f"Encoding {len(text)} chars ({n_bytes} bytes including sync/CRC/EOT)")
     print(f"  {len(timings)} timing edges  {total_us/1e6:.3f} s per transmission")
-    print(f"  Baud: {BAUD}  Bit period: {BIT_US} µs  Freq: {freq_hz/1e6:.3f} MHz")
+    print(f"  Baud: {BAUD}  Bit period: {BIT_US} µs  Freq: {freq_hz/1e6:.3f} MHz"
+          f"  Preset: {preset} ({mod.upper()})")
 
     print(f"\nConnecting to Flipper @ {serial} ...")
     with FlipperZero(serial) as fz:
         print(f"  Firmware: {fz.firmware_fork}  ({fz.identify().get('firmware_version','?')})")
         if not fz.uses_carrier_commands:
-            # Momentum/forks: use CLI tx_from_file path
-            _transmit_via_cli(fz, text, freq_hz, repeat)
+            _transmit_via_cli(fz, text, freq_hz, repeat, preset=preset)
         else:
             for i in range(repeat):
                 if repeat > 1:
                     print(f"\nTransmission {i+1}/{repeat} ...")
-                fz.subghz_transmit_raw(freq_hz, timings, preset="ook650", repeat=1)
+                fz.subghz_transmit_raw(freq_hz, timings, preset=preset, repeat=1)
                 print("  Sent.")
                 if i < repeat - 1:
                     time.sleep(1.0)
 
 
-def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int) -> None:
+def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int,
+                      preset: str = DEFAULT_PRESET) -> None:
     """Write .sub file via RPC storage then play via CLI tx_from_file (Momentum)."""
     timings = encode_message(text)
 
@@ -166,15 +186,11 @@ def _transmit_via_cli(fz, text: str, freq_hz: int, repeat: int) -> None:
                 for i, t in enumerate(timings)]
     raw_str = " ".join(str(v) for v in raw_vals)
 
-    preset_map = {
-        "ook270": "FuriHalSubGhzPresetOok270Async",
-        "ook650": "FuriHalSubGhzPresetOok650Async",
-    }
     content = (
         "Filetype: Flipper SubGhz RAW File\n"
         "Version: 1\n"
         f"Frequency: {freq_hz}\n"
-        f"Preset: {preset_map['ook650']}\n"
+        f"Preset: {PRESET_INFO[preset]['flipper']}\n"
         "Protocol: RAW\n"
         f"RAW_Data: {raw_str}\n"
     )
@@ -304,25 +320,32 @@ def _drain_byte_fifo(byte_fifo: list[int]) -> list[int]:
 
 
 def receive(freq_hz: int, gain: float, duration_s: Optional[float],
-            threshold_frac: float, debug: bool = False) -> None:
+            threshold_frac: float, preset: str = DEFAULT_PRESET,
+            debug: bool = False) -> None:
     """
-    Listen on the RTL-SDR, demodulate OOK, decode UART bytes.
+    Listen on the RTL-SDR, demodulate OOK or FSK, and decode UART bytes.
 
-    Streaming decoder: each block's bits are appended to a running buffer;
-    UART bytes are decoded incrementally from that buffer; complete messages
-    are drained and printed.  No ring-buffer size limit — long messages and
-    back-to-back transmissions both work without restarting the receiver.
+    OOK path  — incoherent (abs-then-average) envelope detection.
+    FSK path  — FM discriminator (instantaneous phase difference): positive =
+                mark (logic 1), negative = space (logic 0).  Works for
+                2-FSK, GFSK, and MSK presets.
+
+    Both paths share the same streaming UART decoder; they differ only in how
+    the binary bit array is computed from the IQ samples.
     """
     from rf_bench.rtlsdr import RTLSDR, RTLSDRError
 
-    fs_dec  = SAMPLE_RATE / DECIMATE
-    spb     = fs_dec / BAUD            # 10.0
+    mod     = PRESET_INFO[preset]['mod']
+    decimate = _decimate_for_baud(BAUD)
+    fs_dec  = SAMPLE_RATE / decimate
+    spb     = fs_dec / BAUD
     block   = int(SAMPLE_RATE * 0.5)
 
-    print(f"RTL-SDR listening on {freq_hz/1e6:.3f} MHz  gain={gain} dB")
-    print(f"  IF offset: +{IF_OFFSET/1e3:.0f} kHz  decimation: {DECIMATE}x  "
-          f"channel BW: {fs_dec/1e3:.0f} kHz")
-    print(f"  {BAUD} baud  {spb:.0f} samples/bit  Ctrl-C to stop\n")
+    print(f"RTL-SDR listening on {freq_hz/1e6:.3f} MHz  gain={gain} dB  "
+          f"preset={preset} ({mod.upper()})")
+    print(f"  IF offset: +{IF_OFFSET/1e3:.0f} kHz  decimation: {decimate}×  "
+          f"channel BW: {fs_dec/1e3:.1f} kHz")
+    print(f"  {BAUD} baud  {spb:.1f} samples/bit  Ctrl-C to stop\n")
 
     running    = True
     sample_off = 0
@@ -332,18 +355,21 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
     def _stop(_s, _f):
         nonlocal running
         running = False
-        # Restore default handler so a second Ctrl-C force-kills the process
-        # in case the graceful shutdown gets stuck on libusb cleanup.
         _sig.signal(_sig.SIGINT, _sig.SIG_DFL)
     _sig.signal(_sig.SIGINT, _stop)
 
     # Streaming decoder state
-    bits_buf:  np.ndarray    = np.zeros(0, dtype=np.int8)
-    byte_fifo: list[int]     = []
-    decode_pos: int          = 0
-    carrier_active: bool     = False   # True while hi indicates a carrier is present
-    KEEP_CTX  = int(spb * 12)         # one full byte-period of context before decode_pos
-    MAX_BITS  = int(fs_dec * 30)      # safety cap on bits_buf
+    bits_buf:      np.ndarray    = np.zeros(0, dtype=np.int8)
+    byte_fifo:     list[int]     = []
+    decode_pos:    int           = 0
+    carrier_active: bool         = False
+    KEEP_CTX = int(spb * 12)         # one byte-period of lookback context
+    MAX_BITS = int(fs_dec * 30)      # 30 s safety cap
+
+    # FSK-only: running noise floor used for carrier detection.
+    # Updated during silence; frozen when carrier is present.
+    fsk_noise_floor: float = 0.0
+    FSK_CARRIER_RATIO = 5.0   # mean_env must exceed noise_floor × this to count as carrier
 
     with RTLSDR() as sdr:
         sdr.set_center_freq(freq_hz + IF_OFFSET)
@@ -366,79 +392,126 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
             mixed = raw_iq * mix
             sample_off += n
 
-            # Incoherent envelope: abs each sample first, then average groups.
-            # Unlike complex mean (boxcar), this is frequency-independent — the
-            # carrier amplitude is preserved regardless of how far the CC1101's
-            # VCO drifts from DC after mixing.  Off-frequency ISM signals are still
-            # suppressed because they rotate in phase and partially cancel when added
-            # to a strong DC carrier during carrier-on periods.
-            n_out = n // DECIMATE
+            n_out = n // decimate
             if n_out == 0:
                 continue
-            env = (np.abs(mixed[:n_out * DECIMATE])
-                   .astype(np.float32)
-                   .reshape(n_out, DECIMATE)
-                   .mean(axis=1))
 
-            lo  = float(np.percentile(env, 10))
-            hi  = float(np.percentile(env, 99))
+            # ── OOK path ─────────────────────────────────────────────────────
+            if mod == 'ook':
+                # Incoherent (abs-then-average) envelope: frequency-independent
+                # so CC1101 VCO drift between reconnections doesn't attenuate the
+                # carrier.  ISM signals at other frequencies are still suppressed
+                # by partial phase cancellation against our strong carrier.
+                env = (np.abs(mixed[:n_out * decimate])
+                       .astype(np.float32)
+                       .reshape(n_out, decimate)
+                       .mean(axis=1))
 
-            if hi - lo < lo * 0.4:
-                # Envelope variation is small → noise only, no OOK modulation.
-                # (Incoherent decimation makes noise nearly flat: hi/lo ≈ 1.2,
-                # so hi-lo ≈ 0.2×lo.  Carrier gives hi/lo >> 5 → hi-lo >> 0.4×lo.)
-                bits_buf       = np.zeros(0, dtype=np.int8)
-                decode_pos     = 0
-                byte_fifo      = []
-                carrier_active = False
+                lo = float(np.percentile(env, 10))
+                hi = float(np.percentile(env, 99))
+
+                if hi - lo < lo * 0.4:
+                    # Incoherent noise is nearly flat (hi/lo ≈ 1.2); a real OOK
+                    # carrier gives hi/lo >> 5.  Reset state between messages.
+                    bits_buf = np.zeros(0, dtype=np.int8)
+                    decode_pos = 0; byte_fifo = []; carrier_active = False
+                    if debug:
+                        print(f"  [flat lo={lo:.4f} hi={hi:.4f}]", flush=True)
+                    continue
+
+                is_carrier = hi > lo * 5.0
+                if is_carrier and not carrier_active:
+                    bits_buf = np.zeros(0, dtype=np.int8)
+                    decode_pos = 0; byte_fifo = []
+                    if debug:
+                        print(f"  [OOK carrier start]", flush=True)
+                carrier_active = is_carrier
+
+                thresh   = lo + (hi - lo) * threshold_frac
+                bits_new = (env > thresh).astype(np.int8)
+
                 if debug:
-                    print(f"  [flat  lo={lo:.4f} hi={hi:.4f}]", flush=True)
-                continue
+                    print(f"  [ook lo={lo:.4f} hi={hi:.4f} thresh={thresh:.4f} "
+                          f"ones={100*bits_new.mean():.1f}% buf={len(bits_buf)}]",
+                          flush=True)
 
-            # Carrier detection: hi must be substantially above the noise floor.
-            # Incoherent noise gives hi/lo ≈ 1.2; carrier gives hi/lo >> 5.
-            is_carrier = hi > lo * 5.0
+            # ── FSK path ─────────────────────────────────────────────────────
+            else:
+                # FM discriminator: instantaneous phase difference between
+                # adjacent samples gives instantaneous frequency.
+                # positive = mark (f + Δf) = logic 1 (idle/stop)
+                # negative = space (f − Δf) = logic 0 (start bit)
+                n_in  = n_out * decimate
+                # diff_phase[i] = angle(IQ[i+1] · IQ[i]*) ∈ (−π, +π] rad/sample
+                diff_phase = np.angle(
+                    mixed[1:n_in] * np.conj(mixed[:n_in-1])
+                ).astype(np.float32)
 
-            if is_carrier and not carrier_active:
-                # Noise → carrier transition: stale noise bits in bits_buf would
-                # delay finding the new message by many seconds (decode_pos only
-                # advances ~1400 bits/block but bits_buf grows ~1000 bits/block
-                # during silence). Flush the stale accumulation and start fresh.
-                bits_buf   = np.zeros(0, dtype=np.int8)
-                decode_pos = 0
-                byte_fifo  = []
+                # Decimate the phase-diff signal (average gives mean frequency)
+                n_dec = (n_in - 1) // decimate
+                if n_dec == 0:
+                    continue
+                disc = (diff_phase[:n_dec * decimate]
+                        .reshape(n_dec, decimate)
+                        .mean(axis=1))              # rad/sample; + = mark, − = space
+
+                # Carrier detection via mean envelope level.
+                # FSK always has carrier on; distinguish signal from noise by level.
+                mean_env = float(np.mean(np.abs(mixed[:n_in])))
+
+                if fsk_noise_floor == 0.0:
+                    fsk_noise_floor = mean_env          # first block: calibrate
+                    if debug:
+                        print(f"  [fsk calibrate noise_floor={fsk_noise_floor:.4f}]",
+                              flush=True)
+                    continue
+
+                is_carrier = mean_env > fsk_noise_floor * FSK_CARRIER_RATIO
+
+                if not is_carrier:
+                    # Silence: update noise floor and reset decoder
+                    fsk_noise_floor = fsk_noise_floor * 0.9 + mean_env * 0.1
+                    bits_buf = np.zeros(0, dtype=np.int8)
+                    decode_pos = 0; byte_fifo = []; carrier_active = False
+                    if debug:
+                        print(f"  [fsk quiet mean={mean_env:.4f} "
+                              f"floor={fsk_noise_floor:.4f}]", flush=True)
+                    continue
+
+                if is_carrier and not carrier_active:
+                    bits_buf = np.zeros(0, dtype=np.int8)
+                    decode_pos = 0; byte_fifo = []
+                    if debug:
+                        print(f"  [FSK carrier start mean={mean_env:.4f} "
+                              f"floor={fsk_noise_floor:.4f} "
+                              f"ratio={mean_env/fsk_noise_floor:.1f}x]", flush=True)
+                carrier_active = is_carrier
+
+                # Hard-decision at zero: positive disc = mark = 1
+                bits_new = (disc > 0).astype(np.int8)
+                # n_dec may be one less than n_out — no problem, handled by streaming
+
                 if debug:
-                    print(f"  [carrier start]", flush=True)
+                    print(f"  [fsk mean={mean_env:.4f} floor={fsk_noise_floor:.4f} "
+                          f"ratio={mean_env/fsk_noise_floor:.1f}x "
+                          f"ones={100*bits_new.mean():.1f}% buf={len(bits_buf)}]",
+                          flush=True)
 
-            carrier_active = is_carrier
-
-            thresh   = lo + (hi - lo) * threshold_frac
-            bits_new = (env > thresh).astype(np.int8)
-            ones_pct = 100.0 * bits_new.mean()
-
-            if debug:
-                print(f"  [block lo={lo:.4f} hi={hi:.4f} thresh={thresh:.4f} "
-                      f"ones={ones_pct:.1f}% buf={len(bits_buf)}]", flush=True)
-
+            # ── shared UART decoder ───────────────────────────────────────────
             bits_buf = np.concatenate([bits_buf, bits_new])
 
-            # Safety cap: prevent unbounded growth during sustained noise
             if len(bits_buf) > MAX_BITS:
                 excess     = len(bits_buf) - MAX_BITS
                 bits_buf   = bits_buf[excess:]
                 decode_pos = max(0, decode_pos - excess)
 
-            # Decode UART bytes from decode_pos onward; stop at incomplete bytes
             new_bytes, decode_pos = _decode_uart_chunk(bits_buf, spb, decode_pos)
             if debug and new_bytes:
                 print(f"  [bytes {len(new_bytes)}: "
-                      f"{bytes(new_bytes[:16]).hex()} ...]", flush=True)
+                      f"{bytes(new_bytes[:16]).hex()}]", flush=True)
             byte_fifo.extend(new_bytes)
-
-            # Drain complete messages from byte_fifo
             byte_fifo = _drain_byte_fifo(byte_fifo)
 
-            # Trim bits already decoded (keep one byte of context for edge detection)
             trim_n = max(0, decode_pos - KEEP_CTX)
             if trim_n > 0:
                 bits_buf   = bits_buf[trim_n:]
@@ -455,58 +528,92 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
 
 def main():
     global BAUD, BIT_US  # allow --baud to override module-level constants
+
+    _preset_summary = "  ".join(
+        f"{k}({v['mod'].upper()},{v['default_baud']}bd)"
+        for k, v in PRESET_INFO.items()
+    )
+
     ap = argparse.ArgumentParser(
-        description="OOK ASCII link: Flipper Zero TX ↔ RTL-SDR RX",
+        description="OOK/FSK ASCII link: Flipper Zero TX ↔ RTL-SDR RX",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+Presets (name, modulation, default baud):
+  {_preset_summary}
+
+OOK baud rates and range (approximate, relative to ook650 at 1200 bd):
+  110 bd → ~20 dB gain → ~10× range   300 bd → ~12 dB → ~4×
+  600 bd →  ~6 dB gain →  ~2× range  1200 bd → baseline  2400 bd → −3 dB
+
+FSK baud rates (guidance — TX and RX must match):
+  2fsk_dev238: up to 2400 bd (deviation/baud ≥ 1)
+  2fsk_dev476: up to 4800 bd
+  gfsk:        4800–9600 bd (Gaussian-filtered, lowest adjacent-channel interference)
+  msk:         99975 bd only (preset tuned for this rate; lower rates work but are wide)
+
 Examples:
-  python ook_link.py tx "Hello"          # send from Flipper
-  python ook_link.py rx                  # receive on RTL-SDR
-  python ook_link.py tx "Hi" --repeat 5 # repeat for reliability
-  python ook_link.py rx --gain 30        # lower gain if saturating
+  python ook_link.py tx "Hello" --callsign N0GQ
+  python ook_link.py rx
+  python ook_link.py tx "Hi" --preset 2fsk_dev476 --baud 2400 --callsign N0GQ
+  python ook_link.py rx --preset 2fsk_dev476 --baud 2400
+  python ook_link.py tx "CQ" --preset gfsk --baud 9600 --callsign N0GQ
+  python ook_link.py rx --preset gfsk --baud 9600
+  python ook_link.py tx "Max" --preset msk  --callsign N0GQ
+  python ook_link.py rx --preset msk
+  python ook_link.py tx "Hi"  --preset ook270 --baud 300 --repeat 3 --callsign N0GQ
 """)
     ap.add_argument("mode", choices=["tx", "rx"],
                     help="tx = transmit via Flipper, rx = receive via RTL-SDR")
     ap.add_argument("text", nargs="?", default="",
                     help="ASCII text to send (tx mode only)")
 
-    ap.add_argument("--freq",      type=float, default=FREQ_HZ / 1e6, metavar="MHZ",
+    ap.add_argument("--freq",    type=float, default=FREQ_HZ / 1e6, metavar="MHZ",
                     help=f"Frequency in MHz (default: {FREQ_HZ/1e6})")
-    ap.add_argument("--baud",      type=int,   default=BAUD,
+    ap.add_argument("--preset",  default=DEFAULT_PRESET,
+                    choices=list(PRESET_INFO),
+                    help=f"CC1101 modulation preset (default: {DEFAULT_PRESET}). "
+                         "OOK presets: ook270 (narrow, slow), ook650 (wide, default). "
+                         "FSK presets: 2fsk_dev238, 2fsk_dev476 (default FSK), gfsk, msk.")
+    ap.add_argument("--baud",    type=int,   default=None,
                     choices=BAUD_RATES,
-                    help="Baud rate (default: 1200). Lower = narrower noise BW = more range: "
-                         "halving the baud rate gains ~3 dB SNR (~40%% more distance). "
-                         "110 baud is ~20 dB better than 1200.")
+                    help="Baud rate. Omit to use the preset's default. "
+                         "Lower rates narrow noise bandwidth: halving gains ~3 dB SNR "
+                         "(~40%% more range). TX and RX must match.")
     ap.add_argument("--repeat",    type=int,   default=1,
-                    help="Number of times to repeat transmission (default: 1)")
+                    help="Number of transmissions (default: 1)")
     ap.add_argument("--gain",      type=float, default=40,
                     help="RTL-SDR gain in dB (default: 40)")
     ap.add_argument("--duration",  type=float, default=None, metavar="SECS",
                     help="RX duration in seconds (default: until Ctrl-C)")
     ap.add_argument("--threshold", type=float, default=0.5, metavar="FRAC",
-                    help="OOK detection threshold 0.0–1.0 (default: 0.5)")
-    ap.add_argument("--serial",      default="/dev/ttyACM0",
+                    help="OOK envelope threshold fraction 0–1 (default: 0.5, rx only)")
+    ap.add_argument("--serial",    default="/dev/ttyACM0",
                     help="Flipper serial port (default: /dev/ttyACM0)")
-    ap.add_argument("--callsign",    default="",
-                    help="Station callsign prepended to TX as 'DE CALLSIGN: message' (ham ID)")
-    ap.add_argument("--debug",       action="store_true",
-                    help="Print per-block signal levels and raw bytes (rx only)")
+    ap.add_argument("--callsign",  default="",
+                    help="Callsign prepended as 'DE CALLSIGN: msg' for ham ID (tx only)")
+    ap.add_argument("--debug",     action="store_true",
+                    help="Print per-block signal diagnostics (rx only)")
 
     args = ap.parse_args()
 
     freq_hz = int(args.freq * 1e6)
+    preset  = args.preset
 
-    if args.baud != BAUD:
-        BAUD   = args.baud
+    # Baud: use explicit --baud, else preset's default
+    baud = args.baud if args.baud is not None else PRESET_INFO[preset]['default_baud']
+    if baud != BAUD:
+        BAUD   = baud
         BIT_US = int(1_000_000 / BAUD)
 
     if args.mode == "tx":
         if not args.text:
             ap.error("tx mode requires a text argument")
-        transmit(args.text, args.serial, freq_hz, args.repeat, args.callsign)
+        transmit(args.text, args.serial, freq_hz, args.repeat,
+                 args.callsign, preset=preset)
 
     elif args.mode == "rx":
-        receive(freq_hz, args.gain, args.duration, args.threshold, args.debug)
+        receive(freq_hz, args.gain, args.duration, args.threshold,
+                preset=preset, debug=args.debug)
 
 
 if __name__ == "__main__":
