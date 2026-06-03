@@ -270,7 +270,9 @@ class GPSD:
 
         # Written only from the reader thread; float writes are atomic in CPython.
         # External readers (is_stale, is_connected) use volatile read semantics.
-        self._last_tpv_monotonic: float = 0.0
+        # Initialise to now so is_stale is False while the first connection is
+        # being established (avoids a spurious stale flag on startup).
+        self._last_tpv_monotonic: float = time.monotonic()
         self._connected: bool = False
 
         self._stop_event = threading.Event()
@@ -568,6 +570,11 @@ class GPSD:
     # ── context manager ───────────────────────────────────────────────────────
 
     def __enter__(self) -> "GPSD":
+        # Wait up to 2 s for the background thread to establish the TCP
+        # connection so callers don't need to poll is_connected themselves.
+        deadline = time.monotonic() + 2.0
+        while not self._connected and time.monotonic() < deadline:
+            time.sleep(0.05)
         return self
 
     def __exit__(self, *_) -> None:
