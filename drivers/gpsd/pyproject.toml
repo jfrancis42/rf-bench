@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench-drivers-gpsd"
-version = "0.1.0"
+version = "0.1.1"
 description = "gpsd client driver for bench automation — GPS position, speed, altitude, heading, fix quality"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
