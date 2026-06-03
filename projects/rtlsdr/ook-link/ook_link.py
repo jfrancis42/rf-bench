@@ -55,10 +55,10 @@ BAUD_RATES  = [110, 300, 600, 1200, 2400, 4800, 9600, 99975]
 PRESET_INFO = {
     'ook270':      dict(mod='ook', flipper='FuriHalSubGhzPresetOok270Async',     default_baud=600),
     'ook650':      dict(mod='ook', flipper='FuriHalSubGhzPresetOok650Async',     default_baud=1200),
-    '2fsk_dev238': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FskDev238Async', default_baud=1200),
-    '2fsk_dev476': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FskDev476Async', default_baud=2400),
-    'gfsk':        dict(mod='fsk', flipper='FuriHalSubGhzPresetGfsk9_99KbAsync', default_baud=9600),
-    'msk':         dict(mod='fsk', flipper='FuriHalSubGhzPresetMsk99_97KbAsync', default_baud=99975),
+    '2fsk_dev238': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FSKDev238Async', default_baud=1200),
+    '2fsk_dev476': dict(mod='fsk', flipper='FuriHalSubGhzPreset2FSKDev476Async', default_baud=2400),
+    'gfsk':        dict(mod='fsk', flipper='FuriHalSubGhzPresetGFSK9_99KbAsync', default_baud=9600),
+    'msk':         dict(mod='fsk', flipper='FuriHalSubGhzPresetMSK99_97KbAsync', default_baud=99975),
 }
 DEFAULT_PRESET = 'ook650'
 
@@ -145,9 +145,21 @@ def encode_message(text: str) -> list[int]:
 # TX — Flipper Zero
 # ---------------------------------------------------------------------------
 
+_TX_ONLY_PRESETS = {'ook270', 'ook650', '2fsk_dev238', '2fsk_dev476'}
+_RX_ONLY_PRESETS = {'gfsk', 'msk'}   # crash Flipper in RAW TX mode on Momentum
+
+
 def transmit(text: str, serial: str, freq_hz: int, repeat: int,
              callsign: str = "", preset: str = DEFAULT_PRESET) -> None:
     from rf_bench.flipper import FlipperZero, FlipperError
+
+    if preset in _RX_ONLY_PRESETS:
+        print(f"ERROR: preset '{preset}' is receive-only — the Flipper's RAW TX "
+              f"mode is incompatible with GFSK/MSK register configuration on "
+              f"Momentum firmware and will crash the Flipper.\n"
+              f"Use --preset 2fsk_dev476 for high-speed FSK TX instead.",
+              file=__import__('sys').stderr)
+        raise SystemExit(1)
 
     if callsign:
         text = f"DE {callsign}: {text}"
@@ -487,8 +499,15 @@ def receive(freq_hz: int, gain: float, duration_s: Optional[float],
                               f"ratio={mean_env/fsk_noise_floor:.1f}x]", flush=True)
                 carrier_active = is_carrier
 
-                # Hard-decision at zero: positive disc = mark = 1
-                bits_new = (disc > 0).astype(np.int8)
+                # Adaptive threshold: midpoint of the 5th–95th percentile range.
+                # UART data is mark-biased (~57% marks due to idle/stop bits),
+                # so the median sits at the mark frequency, not the center.
+                # (p5 + p95)/2 gives the center between space and mark frequencies,
+                # which equals the VCO offset — correctly compensating for CC1101
+                # VCO drift between reconnections regardless of data balance.
+                fsk_thresh = (float(np.percentile(disc, 5)) +
+                              float(np.percentile(disc, 95))) / 2.0
+                bits_new = (disc > fsk_thresh).astype(np.int8)
                 # n_dec may be one less than n_out — no problem, handled by streaming
 
                 if debug:

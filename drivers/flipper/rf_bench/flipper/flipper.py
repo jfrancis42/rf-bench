@@ -77,10 +77,10 @@ _GPIO_PINS = ("PC0", "PC1", "PC3", "PB2", "PB3", "PA4", "PA6", "PA7")
 _SUBGHZ_PRESETS = {
     "ook270":     "FuriHalSubGhzPresetOok270Async",
     "ook650":     "FuriHalSubGhzPresetOok650Async",
-    "2fsk_dev238":"FuriHalSubGhzPreset2FskDev238Async",
-    "2fsk_dev476":"FuriHalSubGhzPreset2FskDev476Async",
-    "msk":        "FuriHalSubGhzPresetMsk99_97KbAsync",
-    "gfsk":       "FuriHalSubGhzPresetGfsk9_99KbAsync",
+    "2fsk_dev238":"FuriHalSubGhzPreset2FSKDev238Async",
+    "2fsk_dev476":"FuriHalSubGhzPreset2FSKDev476Async",
+    "msk":        "FuriHalSubGhzPresetMSK99_97KbAsync",
+    "gfsk":       "FuriHalSubGhzPresetGFSK9_99KbAsync",
 }
 
 # Temporary directory for bench-generated files on Flipper SD card
