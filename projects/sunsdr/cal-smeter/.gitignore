@@ -1,0 +1,8 @@
+*.db
+*.sqlite
+*.json
+!requirements.txt
+__pycache__/
+*.pyc
+*.npz
+*.sigmf-data

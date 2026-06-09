@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCI Remote Speaker</title>
+    <style>
+        :root {
+            --bg:       #0a0e14;
+            --panel:    #141920;
+            --panel2:   #1c2330;
+            --border:   #2a3444;
+            --green:    #00e676;
+            --green-dim:#004d28;
+            --amber:    #ffb300;
+            --red:      #f44336;
+            --blue:     #58a6ff;
+            --text:     #c9d1d9;
+            --dim:      #6e7681;
+            --mono:     'Courier New', 'Lucida Console', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            width: 440px;
+            padding: 28px 28px 24px;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .header-title {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--dim);
+        }
+        .header-badge {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--green);
+            background: var(--green-dim);
+            border: 1px solid rgba(0,230,118,0.25);
+            border-radius: 4px;
+            padding: 2px 8px;
+            letter-spacing: 1px;
+        }
+        .section { margin-bottom: 18px; }
+        label {
+            display: block;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 7px;
+            font-weight: 500;
+        }
+        .field-row { display: flex; gap: 10px; }
+        .field-row > div { flex: 1; }
+        .field-row > div.narrow { flex: 0 0 72px; }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 14px;
+            padding: 8px 11px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input:focus {
+            border-color: var(--green);
+            box-shadow: 0 0 0 3px rgba(0,230,118,0.1);
+        }
+        input:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        /* ── status display ── */
+        .status-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 18px;
+            min-height: 106px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+        }
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+        .led {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--dim);
+            flex-shrink: 0;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .led.connected  { background: var(--green); box-shadow: 0 0 8px var(--green), 0 0 16px rgba(0,230,118,0.3); }
+        .led.connecting { background: var(--amber); animation: blink 0.9s ease-in-out infinite; }
+        .led.error      { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+        .status-label {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--text);
+            letter-spacing: 0.5px;
+        }
+        .status-label.dim { color: var(--dim); }
+
+        .freq-row {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            padding-left: 18px;
+        }
+        .freq-display {
+            font-family: var(--mono);
+            font-size: 26px;
+            font-weight: bold;
+            color: var(--green);
+            letter-spacing: 1px;
+            text-shadow: 0 0 12px rgba(0,230,118,0.3);
+        }
+        .freq-display.dim { color: var(--dim); text-shadow: none; }
+        .mode-display {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--amber);
+            letter-spacing: 2px;
+        }
+        .mode-display.dim { color: var(--dim); }
+
+        /* ── volume ── */
+        .volume-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            flex: 1;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px rgba(0,230,118,0.6);
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 0 12px rgba(0,230,118,0.8);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--green);
+            border: none;
+            cursor: pointer;
+        }
+        .vol-value {
+            font-family: var(--mono);
+            font-size: 14px;
+            color: var(--green);
+            min-width: 42px;
+            text-align: right;
+        }
+
+        /* ── button ── */
+        button {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--mono);
+            margin-bottom: 16px;
+        }
+        button.btn-start {
+            background: var(--green);
+            color: #000;
+        }
+        button.btn-start:hover {
+            background: #33ff9d;
+            box-shadow: 0 0 20px rgba(0,230,118,0.35);
+        }
+        button.btn-stop {
+            background: transparent;
+            color: var(--green);
+            border: 1px solid rgba(0,230,118,0.5);
+        }
+        button.btn-stop:hover {
+            background: rgba(0,230,118,0.06);
+            border-color: var(--green);
+        }
+        button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        /* ── log ── */
+        .log-wrap {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 10px 12px;
+            max-height: 88px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .log-line {
+            font-family: var(--mono);
+            font-size: 11px;
+            line-height: 1.65;
+            color: var(--dim);
+        }
+        .log-line.ok   { color: var(--green); }
+        .log-line.info { color: var(--blue); }
+        .log-line.warn { color: var(--amber); }
+        .log-line.err  { color: var(--red); }
+
+        /* scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+    </style>
+</head>
+<body>
+<div class="panel">
+
+    <div class="header">
+        <span class="header-title">TCI Remote Speaker</span>
+        <span class="header-badge" id="badge">OFFLINE</span>
+    </div>
+
+    <div class="section">
+        <label>Connection</label>
+        <div class="field-row">
+            <div>
+                <input type="text" id="host" value="localhost" placeholder="192.168.1.x" title="ExpertSDR3 host">
+            </div>
+            <div class="narrow">
+                <input type="number" id="port" value="50001" min="1" max="65535" title="TCI port">
+            </div>
+            <div class="narrow">
+                <input type="number" id="trx" value="0" min="0" max="3" title="TRX index (0 or 1)">
+            </div>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <div class="status-row">
+            <div class="led" id="led"></div>
+            <span class="status-label dim" id="statusText">Disconnected</span>
+        </div>
+        <div class="freq-row">
+            <span class="freq-display dim" id="freqDisp">———</span>
+            <span class="mode-display dim" id="modeDisp">—</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <label>Volume</label>
+        <div class="volume-row">
+            <input type="range" id="volume" min="0" max="100" value="70">
+            <span class="vol-value" id="volVal">70%</span>
+        </div>
+    </div>
+
+    <button id="mainBtn" class="btn-start" onclick="toggle()">Connect &amp; Play</button>
+
+    <div>
+        <label>Log</label>
+        <div class="log-wrap" id="logBox"></div>
+    </div>
+
+</div>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// TCI Protocol v2.0 — Expert Electronics, January 2024
+//
+// Text commands:  COMMAND:arg1,arg2,...;   (comma-separated args after first colon)
+//
+// Binary frame — Stream struct (all fields uint32_t little-endian):
+//   offset  0  receiver    — TRX index
+//   offset  4  sample_rate — actual Hz
+//   offset  8  format      — SampleType: 0=INT16  1=INT24  2=INT32  3=FLOAT32
+//   offset 12  codec       — always 0
+//   offset 16  crc         — always 0
+//   offset 20  length      — samples per channel in this packet
+//   offset 24  type        — StreamType: 0=IQ  1=RX_AUDIO  2=TX_AUDIO  3=TX_CHRONO  4=LINEOUT
+//   offset 28  channels    — 1 or 2
+//   offset 32  reserv[8]   — reserved
+//   offset 40  data[]      — sample bytes
+//
+// Audio stream setup (sent before AUDIO_START):
+//   AUDIO_SAMPLERATE:N;          — 8000 / 12000 / 24000 / 48000 Hz
+//   AUDIO_STREAM_SAMPLE_TYPE:T;  — int16 / int32 / float32  (default: float32)
+//   AUDIO_STREAM_CHANNELS:N;     — 1 or 2  (default: 2)
+//   AUDIO_START:trx;
+//   AUDIO_STOP:trx;
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── requested audio stream parameters ────────────────────────────────────────
+// These are sent to ExpertSDR3 before AUDIO_START.
+// The server may or may not honour them; actual values come from frame header.
+const REQ_SAMPLERATE = 8000;    // 8000 / 12000 / 24000 / 48000
+const REQ_FORMAT     = 'int16'; // int16 / int32 / float32
+const REQ_CHANNELS   = 1;       // 1 = mono, 2 = stereo
+
+// ── TCI constants ─────────────────────────────────────────────────────────────
+const STREAM_HDR_BYTES  = 40;   // fixed Stream struct header size
+const STREAM_RX_AUDIO   = 1;    // StreamType: RX_AUDIO_STREAM
+const SAMPLE_INT16      = 0;    // SampleType enum
+const SAMPLE_INT32      = 2;
+const SAMPLE_FLOAT32    = 3;
+
+// ── timing ────────────────────────────────────────────────────────────────────
+const MAX_AHEAD_S       = 2.0;
+const CATCHUP_OFFSET_S  = 0.05;
+const RECONNECT_BASE_MS = 3000;
+const RECONNECT_MAX_MS  = 30000;
+
+// ── state ─────────────────────────────────────────────────────────────────────
+let ws           = null;
+let audioCtx     = null;
+let gainNode     = null;
+let nextPlayAt   = 0;
+let running      = false;
+let reconnTimer  = null;
+let reconnCount  = 0;
+let audioStarted = false;
+let rciInfo      = { freq: null, mode: null, device: null };
+
+// ── log ──────────────────────────────────────────────────────────────────────
+function logMsg(text, cls = '') {
+    const box = document.getElementById('logBox');
+    const d = document.createElement('div');
+    d.className = 'log-line' + (cls ? ' ' + cls : '');
+    d.textContent = new Date().toTimeString().slice(0, 8) + '  ' + text;
+    box.appendChild(d);
+    while (box.childElementCount > 60) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+}
+
+// ── status UI ─────────────────────────────────────────────────────────────────
+function setStatus(text, ledClass, badgeText) {
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('led').className = 'led' + (ledClass ? ' ' + ledClass : '');
+    const badge = document.getElementById('badge');
+    badge.textContent = badgeText || 'OFFLINE';
+    badge.style.color = ledClass === 'connected' ? 'var(--green)' :
+                        ledClass === 'connecting' ? 'var(--amber)' :
+                        ledClass === 'error'      ? 'var(--red)'   : 'var(--dim)';
+}
+
+function refreshDisplay() {
+    const freqEl = document.getElementById('freqDisp');
+    const modeEl = document.getElementById('modeDisp');
+    const f = rciInfo.freq;
+    if (f != null) {
+        const khz = (f / 1000).toFixed(1);
+        const parts = khz.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        freqEl.textContent = parts.join('.') + ' kHz';
+        freqEl.className = 'freq-display';
+    } else {
+        freqEl.textContent = '———';
+        freqEl.className = 'freq-display dim';
+    }
+    if (rciInfo.mode) {
+        modeEl.textContent = rciInfo.mode;
+        modeEl.className = 'mode-display';
+    } else {
+        modeEl.textContent = '—';
+        modeEl.className = 'mode-display dim';
+    }
+}
+
+// ── TCI text parser ───────────────────────────────────────────────────────────
+// Format: COMMAND:arg1,arg2,...;   args are comma-separated after the first colon.
+function parseTCI(text) {
+    return text.split(';')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(s => {
+            const ci = s.indexOf(':');
+            if (ci === -1) return { cmd: s.toLowerCase(), args: [] };
+            return {
+                cmd:  s.slice(0, ci).toLowerCase(),
+                args: s.slice(ci + 1).split(','),
+            };
+        });
+}
+
+function onTCIEvent(cmd, args) {
+    const trx = parseInt(document.getElementById('trx').value) || 0;
+    if (cmd === 'vfo' && args.length >= 3 && parseInt(args[0]) === trx && parseInt(args[1]) === 0) {
+        // VFO:receiver,channel,freq  — channel 0 = VFO A (main receive)
+        rciInfo.freq = parseInt(args[2]);
+        refreshDisplay();
+    } else if (cmd === 'dds' && args.length >= 2 && parseInt(args[0]) === trx) {
+        // DDS:receiver,freq  — panorama centre; use only if VFO not yet received
+        if (rciInfo.freq == null) { rciInfo.freq = parseInt(args[1]); refreshDisplay(); }
+    } else if (cmd === 'modulation' && args.length >= 2 && parseInt(args[0]) === trx) {
+        rciInfo.mode = args[1].toUpperCase();
+        refreshDisplay();
+    } else if (cmd === 'device' && args.length >= 1) {
+        rciInfo.device = args[0];
+        document.getElementById('statusText').textContent = 'Connected — ' + args[0];
+    } else if (cmd === 'ready') {
+        logMsg('TCI ready', 'ok');
+        triggerAudio();
+    }
+}
+
+// ── audio setup ───────────────────────────────────────────────────────────────
+function ensureAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        gainNode = audioCtx.createGain();
+        gainNode.connect(audioCtx.destination);
+        gainNode.gain.value = parseInt(document.getElementById('volume').value) / 100;
+        nextPlayAt = audioCtx.currentTime + 0.15;
+        logMsg('Audio context @ ' + audioCtx.sampleRate + ' Hz', 'info');
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function queueAudio(floatSamples, sampleRate) {
+    if (!audioCtx || !gainNode || !running || floatSamples.length === 0) return;
+    if (nextPlayAt > audioCtx.currentTime + MAX_AHEAD_S) {
+        nextPlayAt = audioCtx.currentTime + CATCHUP_OFFSET_S;
+        return;
+    }
+    if (nextPlayAt < audioCtx.currentTime) {
+        nextPlayAt = audioCtx.currentTime + CATCHUP_OFFSET_S;
+    }
+    const buf = audioCtx.createBuffer(1, floatSamples.length, sampleRate);
+    buf.copyToChannel(floatSamples, 0);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(gainNode);
+    src.start(nextPlayAt);
+    nextPlayAt += buf.duration;
+}
+
+// ── binary frame handler ──────────────────────────────────────────────────────
+function onBinaryFrame(data) {
+    if (data.byteLength < STREAM_HDR_BYTES) return;
+    const v        = new DataView(data);
+    const receiver = v.getUint32(0,  true);
+    const sampleRate = v.getUint32(4, true);
+    const format   = v.getUint32(8,  true);
+    const length   = v.getUint32(20, true);   // samples per channel
+    const type     = v.getUint32(24, true);
+    const channels = v.getUint32(28, true);
+
+    const myTRX = parseInt(document.getElementById('trx').value) || 0;
+    if (receiver !== myTRX) return;
+    if (type !== STREAM_RX_AUDIO) return;
+    if (length === 0 || sampleRate === 0) return;
+
+    const totalSamples = length * (channels || 1);
+    let mono;
+
+    if (format === SAMPLE_INT16) {
+        const raw = new Int16Array(data, STREAM_HDR_BYTES, totalSamples);
+        if (channels >= 2) {
+            mono = new Float32Array(length);
+            for (let i = 0; i < length; i++)
+                mono[i] = (raw[i * 2] + raw[i * 2 + 1]) / 2 / 32768;
+        } else {
+            mono = new Float32Array(length);
+            for (let i = 0; i < length; i++) mono[i] = raw[i] / 32768;
+        }
+    } else if (format === SAMPLE_FLOAT32) {
+        const raw = new Float32Array(data, STREAM_HDR_BYTES, totalSamples);
+        if (channels >= 2) {
+            mono = new Float32Array(length);
+            for (let i = 0; i < length; i++)
+                mono[i] = (raw[i * 2] + raw[i * 2 + 1]) * 0.5;
+        } else {
+            mono = new Float32Array(raw);
+        }
+    } else if (format === SAMPLE_INT32) {
+        const raw = new Int32Array(data, STREAM_HDR_BYTES, totalSamples);
+        if (channels >= 2) {
+            mono = new Float32Array(length);
+            for (let i = 0; i < length; i++)
+                mono[i] = (raw[i * 2] + raw[i * 2 + 1]) / 2 / 2147483648;
+        } else {
+            mono = new Float32Array(length);
+            for (let i = 0; i < length; i++) mono[i] = raw[i] / 2147483648;
+        }
+    } else {
+        logMsg('Unsupported sample format: ' + format + ' (INT24 not supported)', 'warn');
+        return;
+    }
+
+    queueAudio(mono, sampleRate);
+}
+
+// ── TCI audio stream control ──────────────────────────────────────────────────
+function triggerAudio() {
+    if (audioStarted) return;
+    audioStarted = true;
+    ensureAudio();
+    const trx = parseInt(document.getElementById('trx').value) || 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send('AUDIO_SAMPLERATE:' + REQ_SAMPLERATE + ';');
+        ws.send('AUDIO_STREAM_SAMPLE_TYPE:' + REQ_FORMAT + ';');
+        ws.send('AUDIO_STREAM_CHANNELS:' + REQ_CHANNELS + ';');
+        ws.send('AUDIO_START:' + trx + ';');
+        logMsg('AUDIO_START:' + trx + ' (' + REQ_SAMPLERATE / 1000 + ' kHz ' + REQ_FORMAT + ' ' + REQ_CHANNELS + 'ch)', 'ok');
+    }
+}
+
+function sendAudioStop() {
+    const trx = parseInt(document.getElementById('trx').value) || 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send('AUDIO_STOP:' + trx + ';'); } catch(e) {}
+    }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+    const host = document.getElementById('host').value.trim() || 'localhost';
+    const port = parseInt(document.getElementById('port').value) || 50001;
+    const url  = 'ws://' + host + ':' + port;
+
+    logMsg('Connecting → ' + url, 'info');
+    setStatus('Connecting…', 'connecting', 'CONNECTING');
+    audioStarted = false;
+
+    try {
+        ws = new WebSocket(url);
+    } catch(e) {
+        logMsg('WebSocket error: ' + e.message, 'err');
+        setStatus('Error', 'error', 'ERROR');
+        scheduleReconnect();
+        return;
+    }
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+        reconnCount = 0;
+        setStatus('Connected', 'connected', 'LIVE');
+        logMsg('Connected to ' + url, 'ok');
+        // ExpertSDR3 sends READY; after its init burst; 2s fallback if it never arrives
+        setTimeout(() => { if (running && !audioStarted) triggerAudio(); }, 2000);
+    };
+
+    ws.onmessage = (evt) => {
+        if (typeof evt.data === 'string') {
+            for (const { cmd, args } of parseTCI(evt.data)) onTCIEvent(cmd, args);
+        } else if (evt.data instanceof ArrayBuffer) {
+            onBinaryFrame(evt.data);
+        }
+    };
+
+    ws.onerror = () => logMsg('WebSocket error', 'err');
+
+    ws.onclose = (evt) => {
+        logMsg('Disconnected (code ' + evt.code + ')', 'warn');
+        ws = null;
+        audioStarted = false;
+        if (running) {
+            setStatus('Reconnecting…', 'connecting', 'RECONNECTING');
+            scheduleReconnect();
+        } else {
+            setStatus('Disconnected', '', 'OFFLINE');
+            rciInfo = { freq: null, mode: null, device: null };
+            refreshDisplay();
+        }
+    };
+}
+
+function scheduleReconnect() {
+    if (!running) return;
+    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * Math.pow(1.5, reconnCount));
+    reconnCount++;
+    logMsg('Reconnecting in ' + (delay / 1000).toFixed(1) + 's…', 'warn');
+    reconnTimer = setTimeout(connect, delay);
+}
+
+function disconnect() {
+    running = false;
+    if (reconnTimer) { clearTimeout(reconnTimer); reconnTimer = null; }
+    sendAudioStop();
+    if (ws) { ws.close(1000, 'user stop'); ws = null; }
+    audioStarted = false;
+    nextPlayAt = 0;
+    setStatus('Disconnected', '', 'OFFLINE');
+    rciInfo = { freq: null, mode: null, device: null };
+    refreshDisplay();
+    logMsg('Stopped', 'info');
+}
+
+// ── main button ───────────────────────────────────────────────────────────────
+function toggle() {
+    const btn = document.getElementById('mainBtn');
+    if (running) {
+        disconnect();
+        btn.textContent = 'Connect & Play';
+        btn.className = 'btn-start';
+        setFields(false);
+    } else {
+        running = true;
+        btn.textContent = 'Stop';
+        btn.className = 'btn-stop';
+        setFields(true);
+        connect();
+    }
+}
+
+function setFields(locked) {
+    ['host', 'port', 'trx'].forEach(id => {
+        document.getElementById(id).disabled = locked;
+    });
+}
+
+// ── volume ────────────────────────────────────────────────────────────────────
+document.getElementById('volume').addEventListener('input', function () {
+    const v = parseInt(this.value);
+    document.getElementById('volVal').textContent = v + '%';
+    if (gainNode) gainNode.gain.linearRampToValueAtTime(v / 100, audioCtx.currentTime + 0.05);
+});
+
+// ── init ──────────────────────────────────────────────────────────────────────
+refreshDisplay();
+</script>
+</body>
+</html>

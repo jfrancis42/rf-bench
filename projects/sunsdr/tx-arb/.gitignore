@@ -1,0 +1,8 @@
+*.db
+*.sqlite
+*.json
+__pycache__/
+*.pyc
+*.npz
+*.sigmf-data
+wspr_message.npz
