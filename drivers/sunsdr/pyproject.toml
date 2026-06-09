@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-sunsdr"
+version = "0.2.0"
+description = "SunSDR2 Pro / ExpertSDR3 TCI driver for bench automation — radio control, IQ streaming, TX injection"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
+requires-python = ">=3.9"
+dependencies = [
+    "websocket-client>=1.6",
+    "numpy",
+]
+keywords = [
+    "sunsdr", "sunsdr2", "expertsdr", "tci", "sdr", "hf", "vhf", "uhf",
+    "software-defined-radio", "iq", "spectrum", "amateur-radio", "ham-radio",
+    "bench-automation", "transceiver",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.urls]
+Homepage   = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+
+[tool.setuptools.packages.find]
+where      = ["."]
+include    = ["rf_bench.*"]
+namespaces = true
