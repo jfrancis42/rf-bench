@@ -12,11 +12,18 @@
 | SDG1062X | Function generator | 2 independent channels, 60 MHz, −50 to ~+24 dBm, LAN SCPI |
 | Yertai ET5406A+ | Programmable DC load | 200W, 0–120V, 0–20A; CC/CV/CR/CP/battery/transient/list/LED modes; USB (CH340 → /dev/ttyUSBx); SCPI-like over serial |
 | Icom IC-7300 (×2) | HF transceiver | 160m–10m + 6m; CAT via USB CI-V; Hamlib support; AGC disableable via CAT; SDR-based DSP with calibrated S-meter |
+| Icom IC-9700 | VHF/UHF/SHF transceiver | 2 m + 70 cm + 23 cm; CAT via USB CI-V or LAN; Hamlib support; satellite mode (split VFOs with cross-band Doppler tracking); `rf_bench.icom.IC9700` adds split / PTT / TX freq / Doppler / band-of helpers on top of the core radio API |
+| Yaesu FT-891 | HF + 6 m transceiver | 160 m–6 m, 100 W; CAT via USB at 38400 baud (factory default; menu 031 CAT RATE); preamp (off / IPO / AMP1) and 12 dB attenuator are CAT-controlled; AGC "off" maps to slowest setting only — not a true AGC bypass; `rf_bench.yaesu.FT891` |
 | Bus Pirate | USB protocol bridge | SPI/I2C/UART/1-Wire/raw-wire master; 3.3V/5V selectable I/O; USB CDC serial → `/dev/ttyUSBx`; scriptable via pyserial. Version v3/v4 assumed; v5 uses different protocol — verify at connect time. |
 | Flipper Zero | Multi-tool sub-GHz radio | 300–928 MHz Sub-GHz (CC1101) OOK/2-FSK/4-FSK/GFSK; 125 kHz LF RFID; 13.56 MHz NFC; IR; GPIO; USB protobuf RPC → `/dev/ttyACM0` |
 | RTL-SDR Blog v4 | Software-defined radio receiver | 500 kHz–1766 MHz; 2.4 MHz instantaneous IQ bandwidth; R828D tuner; 1 PPM TCXO; bias tee (5V/180 mA); USB → librtlsdr/pyrtlsdr |
 | gpsd | GPS daemon client | lat/lon/alt/speed/heading/DOP; TCP → localhost:2947; auto-reconnect; metric + imperial; `rf_bench.gpsd` |
 | HP 8712B | Vector network analyzer | 300 kHz–1.3 GHz; HPIB/GPIB; full 2-port SOLT calibration; S11/S21/S12/S22 + phase; *pending Ethernet-GPIB adapter* |
+| Solartron 7151 | 6.5-digit Computing Multimeter (1985) | DCV (200 mV–2 kV), ACV, kΩ (20k–20M), DC/AC current; 6.5-digit (~8 s int), 5.5-digit (400 ms), 3.5-digit (6.7 ms); IEEE-488; calibration via internal HI/LO/WRITE routine + 2.5 mm CAL plug; `rf_bench.solartron`; *pending Ethernet-GPIB adapter* |
+| Koolertron / MHinstek MHS-5225A | Dual-channel DDS signal generator + frequency counter (rebranded KKmoon) | 0–25 MHz sine (CH1 limit per model suffix), 200 MSa/s, 12-bit; sine/square/triangle/up-saw/down-saw + 16 user-arb slots; per-channel ampl/duty/offset/phase/atten; built-in counter (frequency / count / period / +pulse / -pulse / duty modes); sweep (linear/log); 10 memory slots; CH340 USB at 57600 baud; `rf_bench.koolertron`; **tested 2026-06-08** against the unit on 10.1.1.52 |
+| SunSDR2 Pro | HF/VHF SDR transceiver | 0.1–55 MHz (TX+RX) + 100–150 MHz (RX only); 192 kHz IQ bandwidth (±96 kHz); dual simultaneous TRX; TX IQ injection; Ethernet → ExpertSDR3 TCI port 50001; `rf_bench.sunsdr` |
+| KiwiSDR | HF software-defined receiver | 0–30 MHz; 14-bit ADC at 66 MS/s; GPS-disciplined TCXO; 4–8 simultaneous channels; 12 kS/s per channel; ±5 kHz BW per channel; WebSocket SND API; `rf_bench.kiwisdr` |
+| XL9535 relay board | I2C relay controller | 16-bit I/O (XL9535/PCA9535/TCA9535); 8 or 16 relays; I2C master via Bus Pirate; `rf_bench.relay`; ⚠ on-board HK19F relays are DC/audio only — use external RF-rated relays for RF signal routing |
 
 **Software options:** All factory software upgrades installed on all Siglent instruments. Notable:
 - SDS2504X Plus: full 500 MHz BW; AWG built-in (confirmed working via driver)
@@ -107,6 +114,8 @@ All driver packages now include Tkinter virtual instrument panels with working c
 | SDM3045X Multimeter | `rf-bench-drivers-siglent/sdm3045x_panel.py` | Siglent SDM3045X | Large measurement display; function badge; working controls for measurement mode (VDC/VAC/IDC/IAC/2W Ω/4W Ω/FREQ/DIODE/CONT); demo mode |
 | IC-7300 Radio | `rf-bench-drivers-icom/ic7300_panel.py` | Icom IC-7300 | Large frequency display; mode/passband/S-meter/AGC tiles; working controls for mode (USB/LSB/CW/AM/FM/RTTY), AGC (OFF/FAST/MID/SLOW), frequency entry (Hz/kHz/MHz), quick band buttons (160m–10m); blue/amber Icom theme; demo mode |
 | FT-891 Radio | `rf-bench-drivers-yaesu/ft891_panel.py` | Yaesu FT-891 | Large frequency display; mode/passband/S-meter/AGC/preamp/ATT tiles; working controls for mode (USB/LSB/CW/AM/FM/RTTY/PKT-U), AGC (OFF/FAST/MID/SLOW), preamp (IPO/AMP1), attenuator (OFF/6 dB/12 dB), frequency entry, quick band buttons; green Yaesu theme; demo mode |
+| SSA3032X Spectrum Analyzer | `rf-bench-drivers-siglent/ssa3032x_panel.py` | Siglent SSA3032X Plus | Live spectrum trace (matplotlib embedded); center freq/span/RBW/ref level/attenuation tiles; peak search (freq + dBm); tracking generator on/off + level; marker readouts; demo mode (sweeping carrier + harmonics + noise) |
+| SDS2504X Oscilloscope | `rf-bench-drivers-siglent/sds2504x_panel.py` | Siglent SDS2504X Plus | Four-channel waveform plot (matplotlib embedded); timebase/trigger/coupling/CH on-off tiles; V/div per channel; Vpp/freq/RMS readouts; demo mode (sine/square/pulse/noise per channel) |
 
 **Common features across all panels:**
 - Thread-safe command queue pattern: UI controls queue commands that execute in the background poll thread, avoiding race conditions
@@ -2019,6 +2028,69 @@ DB schema and SMS alert reuse patterns from other projects.
 
 ---
 
+### ✓ 95. Bubba Detector — Multi-Band Handheld Radio Activity Scanner — *rf-bench-rtlsdr-bubba*
+
+Scans all common handheld radio frequencies (FRS, GMRS, Marine VHF, MURS, NOAA weather,
+and business band itinerant frequencies) using the RTL-SDR, detects signal energy above
+a squelch threshold, and logs each detection with timestamp, frequency, channel name, and
+relative signal strength. Displays a rolling terminal log of recent activity.
+
+**The "Bubba Detector" concept:** A scanner pre-loaded with consumer/commercial handheld
+radio frequencies to detect nearby radio traffic — useful for situational awareness in
+field or survival scenarios where nearby groups may be using cheap bubble-pack radios,
+marine handhelds, or business-band radios.
+
+**Detection technique:** Group nearby channels into clusters that fit within the RTL-SDR's
+2.4 MHz instantaneous bandwidth. For each group: tune to the cluster center, capture IQ,
+FFT, extract power at each channel offset, compare against the estimated noise floor
+(median of FFT bins). A channel is flagged "active" if its power exceeds the noise floor
+by the squelch threshold (default: 10 dB). This approach gives ~1 second full-sweep cycle
+time across 9 scan groups and 74 channels.
+
+**Frequency coverage:**
+
+| Band | Channels | Frequency range |
+|------|---------|-----------------|
+| FRS channels 1–7 / GMRS CH 1–7 | 7 simplex | 462.5625–462.7125 MHz |
+| FRS channels 8–14 | 7 simplex | 467.5625–467.7125 MHz |
+| FRS channels 15–22 / GMRS CH 15–22 | 8 simplex | 462.5500–462.7250 MHz |
+| GMRS repeater outputs | 8 duplex | 467.5500–467.7250 MHz |
+| MURS | 5 simplex | 151.820–154.600 MHz |
+| Marine VHF (key channels: 16, 06, 09, 22A, 68–72, 78–80) | ~18 | 156.050–157.400 MHz |
+| NOAA weather | 7 | 162.400–162.550 MHz |
+| Business band VHF itinerant | ~10 | 151.505–154.600 MHz |
+| Business band UHF itinerant | ~4 | 451.800–467.937 MHz |
+
+**Signal strength note:** RTL-SDR power output is uncalibrated dBFS (decibels relative
+to full scale). Values are useful for comparing relative signal strength within a session
+but do not correspond to dBm without running `rx-crosscheck`. The display shows a bar
+graph and raw dBFS value; if `~/.rtlsdr_vhf_cal.json` exists (from rx-crosscheck at the
+relevant frequency), calibrated dBm is shown instead.
+
+**Scan groups (11 total, ~1 second per full cycle):**
+
+Each group is one RTL-SDR capture at a fixed center frequency. Within that capture, all
+channels within ±1.1 MHz of the center are evaluated simultaneously.
+
+**Output:**
+- Rolling terminal log: `[HH:MM:SS] FRS CH 1 / GMRS CH 1  462.5625 MHz  -74 dBFS  ████████░░`
+- SQLite database: `bubba_<timestamp>.db` — (ts, freq_hz, channel_name, band, signal_dbfs)
+- Scan statistics: detections per channel since startup
+- Optional SMS alert when any activity detected (via `~/money/sms.py`)
+
+**Configurable:**
+- `--squelch DB` — detection threshold above noise floor (default 10 dB)
+- `--gain DB` — RTL-SDR gain (default 40 dB; reduce if overload)
+- `--no-gmrs`, `--no-marine`, `--no-murs` — disable individual band groups
+- `--alert` — send SMS on first detection in each scan cycle
+- `--log FILE` — SQLite output path
+
+**Effort:** Low. RTL-SDR capture and FFT are established. The channel database and
+scan group geometry are the main new work. No demodulation required — energy detection
+only. The rolling display is simpler than a waterfall.
+
+---
+
 ---
 
 ## Priority Order
@@ -2103,6 +2175,7 @@ DB schema and SMS alert reuse patterns from other projects.
 | ✓ Done | Transmission Line Characterizer (#31) | HP 8712B | Ethernet-GPIB adapter | ✓ pushed |
 | ✓ Done | Filter Characterization + Group Delay (#32) | HP 8712B | Ethernet-GPIB adapter | ✓ pushed |
 | ✓ Done | Antenna Feed-Point Impedance R+jX (#33) | HP 8712B | Ethernet-GPIB adapter | ✓ pushed |
+| ✓ Done | Bubba Detector (#95) — multi-band handheld radio scanner | RTL-SDR | RTL-SDR + wideband antenna | local only |
 
 ---
 
@@ -2411,6 +2484,180 @@ an antenna as the DUT, with VSWR output added for backwards compatibility with s
 workflows.
 
 ---
+
+---
+
+## Future Projects — Solartron 7151 6.5-Digit DMM (1985, IEEE-488)
+
+These projects require the Solartron 7151 (or its 7150 / 7150-plus siblings) and the
+same KISS-488 Rev 2 Ethernet-GPIB adapter used by the HP 8712B VNA. The 7151 is a
+6.5-digit bench DMM with full DC voltage (200 mV–2 kV), AC voltage, kΩ (20 k–20 M),
+and DC/AC current ranges. Resolution scales with integration time:
+
+| Integration | Resolution | Use case |
+|------------|-----------|----------|
+| 6.7 ms (I0) | 3.5 digits | Free-running, high speed |
+| 40 ms (I1) | 4.5 digits | 50 Hz line-cycle averaging |
+| 50 ms (I2) | 4.5 digits | 60 Hz line-cycle averaging |
+| 400 ms (I3) | 5.5 digits | General bench measurement |
+| 1.6 s (I5) | 5.5 digits | Filter-on, low-noise |
+| ~8 s (I4) | 6.5 digits | "Walking window" — best resolution |
+
+The complementary case to the 4.5-digit Siglent SDM3045X: when the project genuinely
+needs 6.5-digit precision (TCR measurements, voltage-reference characterization, low-
+level offset hunting), this is the bench DMM that delivers it. The driver
+(`rf_bench.solartron.Solartron7151`) is implemented from documentation; hardware
+verification and the projects below are blocked on the KISS-488 adapter being installed.
+
+---
+
+### Solartron GPIB Driver — *rf-bench-drivers-solartron* — code complete, untested
+
+A `rf_bench.solartron` driver subpackage for the Solartron 7151 over Ethernet-GPIB.
+Implements the full 1985-vintage shortform command set (single ASCII letters with
+integer arguments) extracted directly from the User Manual ND/7151/2 Issue 2 (1985)
+and the GPL-2.0 open-source `s7150` C reference driver by Joerg Hau (which works
+against 7150, 7150-plus, and 7151 with the same code). Includes calibration commands
+(HI/LO/WRITE/REFRESH) gated behind a 2.5 mm CAL shorting plug.
+
+**Interface:** Same KISS-488 Rev 2 adapter as the HP 8712B, port 1234. Important
+caveat: the 7151's default GPIB primary address (set by rear-panel DIP switches) and
+the HP 8712B's are both 16. They cannot share the same bus on the same address.
+Either move the 7151 (or the HP) to a different address, or only have one of them
+powered on at a time during early bring-up.
+
+**First-power-on bring-up plan:**
+
+1. Set GPIB DIP switches on the 7151 to a non-conflicting address (e.g., 5).
+2. `++mode 1` / `++addr 5` / `A` (DCL) / wait 2 s for the RESTART message.
+3. Switch to `U7N0T1` (CR delimiter, literals on, tracking on).
+4. `M0R0I3` (DCV, autorange, 5.5 digits) → first reading.
+5. Verify reading parser handles both `LITERALS ON` (`"+ 2.798450 V DC ..."`) and
+   `LITERALS OFF` (`"+ 2.798450"`) forms, and that the `!` overload flag is detected.
+
+---
+
+### Solartron 6.5-Digit Voltage-Reference Logger
+
+Long-term drift logger for precision voltage references (LM399, LTZ1000, MAX6126, etc.).
+The Solartron 7151 at 6.5 digits (~8 s integration) provides ~1 ppm absolute resolution
+on its 2 V range, enough to track the 1–10 ppm/yr drift of a temperature-compensated
+zener over weeks of logging. SQLite log + matplotlib drift plot. Compares multiple
+references on the same DUT board if a relay multiplexer (XL9535) is added.
+
+**Hardware:** Solartron 7151 (DCV mode, 2 V range, I4 = 8 s integration), XL9535 relay
+board (optional, for N-up reference comparison), SPD3303X-E PSU to power the references.
+GPS-disciplined timestamping via `rf_bench.gpsd` for metrologically traceable timing.
+
+**Why the 7151 specifically:** the 4.5-digit SDM3045X tops out at ~10 ppm resolution on
+the 10 V range, which is coarser than the drift you're trying to measure. This is the
+canonical case where 6.5 digits matters.
+
+---
+
+### TCR Bridge — Temperature Coefficient of Resistance via Two DMMs
+
+The 7151's 6.5-digit kΩ measurement combined with the 4-wire Kelvin capability of the
+SDM3045X enables a high-resolution TCR measurement: place the DUT in a temperature-
+controlled chamber (or simply on a Peltier element with a thermocouple), sweep
+temperature, log `R(T)`. Compute `(1/R0) · dR/dT` in ppm/°C across the range.
+
+The 7151 measures the DUT (high resolution); the SDM3045X measures the chamber
+thermocouple (good enough for ±0.1 °C). Existing `projects/dmm/tcr/` would gain a
+`--use-7151` flag selecting the 6.5-digit DMM as the resistance instrument.
+
+---
+
+### 6.5-Digit Contact Resistance Tester
+
+The existing `projects/dmm/contact/` measures contact / connector resistance with the
+4.5-digit SDM3045X. Sub-milliohm contact resistance (gold-on-gold connectors, RF coax
+center-pin contact) is below the SDM3045X's noise floor on the 200 Ω range. Switching
+the same project to the Solartron 7151 on its 20 kΩ range with 6.5-digit averaging
+gets you ~10 µΩ resolution after averaging — adequate for matched-pair connector
+selection or aging studies.
+
+---
+
+### Calibration Verification of the 7151 Itself
+
+The 7151's own internal calibration is performed via CALIBRATE ON / HI / LO / WRITE
+commands against external calibrator references. The driver exposes these as
+`calibrate_on()` / `cal_hi(count)` / `cal_lo(count)` / `cal_write()`. A future
+project could automate the full annual calibration sequence using the SPD3303X-E
+plus a precision shunt as the calibration source for low-current and low-voltage
+ranges, and a dedicated calibrator (Fluke 5500A or equivalent — not in the lab) for
+the rest. This is more of a maintenance procedure than a project.
+
+---
+
+## Future Projects — Koolertron / MHinstek MHS-5225A DDS Generator + Counter
+
+The Koolertron / MHinstek MHS-5200A series is a low-cost dual-channel DDS
+function generator with a built-in frequency counter and sweep generator.
+It's wildly rebranded (KKmoon, AliExpress "200MSa/s 12Bit DDS", various eBay
+listings); the unit on the bench identifies as **MHS-5225A** (25 MHz CH1 sine
+limit, raw model code `5225A5040000`). The driver is fully implemented and
+tested as of 2026-06-08.
+
+What it adds to the bench that wasn't there before:
+
+- **A second function generator** complementing the SDG1062X. The SDG is
+  cleaner (better phase noise, more sample memory, true AWG with 14-bit DAC at
+  300 MSa/s) but only has 2 channels total; pairing the SDG and the MHS-5225A
+  gives **4 simultaneous independent signal channels** for things like
+  intermodulation testing and vector-source approximations.
+- **A built-in frequency counter** — useful as a sanity check on any other
+  generator's commanded vs actual output, or as a standalone counter for
+  external signals on its EXT IN.
+- **Internal sweep mode** that runs autonomously without a controller — useful
+  for one-shot scalar transfer-function plots when paired with a scope or SSA.
+
+---
+
+### MHS-5225A Two-Tone IMD Source
+
+Drive CH1 + CH2 at f1 and f2 (≈100 kHz apart, both in some target band) into
+a hybrid combiner, feed the resulting two-tone composite into a DUT, and
+measure the IM3 products on the SSA3032X. Pure software project — uses
+`rf_bench.koolertron` for the source side and `rf_bench.siglent` for the
+analyzer. The MHS-5225A has independent phase per channel, which is required
+for repeatable two-tone work.
+
+**Hardware:** MHS-5225A, hybrid combiner (Mini-Circuits ZFSC-2-1+ or
+equivalent at ~1 MHz–1 GHz; or wound bifilar at HF), DUT, SSA3032X.
+
+---
+
+### MHS-5225A as Backup Frequency Reference Counter
+
+When the Siglent SSA's frequency-marker readout is suspect (or just for
+cross-checking), the MHS-5225A's counter can be patched onto the same source
+via a power splitter and read out independently. ~7 ppm uncalibrated TCXO
+accuracy from the MHS-5225A; better than that if compared against the
+GPS-disciplined Si5351 reference (already in the project map under
+`projects/gps/freq-cal/`).
+
+---
+
+### Bring-up Test Project — MHS-5225A Validation Sweep
+
+A simple `projects/signal-sources/koolertron-validation/` script that drives
+each waveform / each frequency decade / each amplitude setting on each
+channel, captures the result on the SDS2504X scope (FFT for spectral
+purity), and produces a one-shot validation report. Useful both for verifying
+new units coming off AliExpress and for periodic calibration drift checks.
+
+---
+
+### MHS-5225A Sweep + Scope Bode Plotter
+
+The unit can sweep linearly or logarithmically without controller intervention.
+Combined with the SDS2504X scope's measured-amplitude readback, this enables
+a Bode plot capture without driver-level sweep timing — let the MHS-5225A
+sweep autonomously while the scope captures envelope versus time, then map
+time → frequency from the sweep parameters. Less precise than an SDG-driven
+software-stepped sweep, but ~10× faster.
 
 ---
 
@@ -2812,7 +3059,7 @@ The XL9535 is a 16-bit I/O port expander (I2C, address 0x20–0x27) that drives 
 
 ---
 
-### 78. XL9535 I2C Relay Driver — *rf-bench-drivers-relay*
+### ✓ 78. XL9535 I2C Relay Driver — *rf-bench-drivers-relay*
 
 Prerequisite for all other XL9535 relay projects. A thin `rf_bench.relay.XL9535` wrapper following the same pattern as the Bus Pirate and Flipper drivers. The XL9535 register map is simple: configuration registers (0x06/0x07) set each pin as input or output; output registers (0x02/0x03) set output states; input registers (0x00/0x01) read pin states. The driver hides the port-split (Port 0 = relays 0–7, Port 1 = relays 8–15).
 
@@ -2848,7 +3095,7 @@ with XL9535(bp) as rl:
 
 ---
 
-### 79. Multi-DUT Sequential Component Tester — *rf-bench-relay-multidut*
+### ✓ 79. Multi-DUT Sequential Component Tester — *rf-bench-relay-multidut*
 
 Connects up to 8 (4-relay board), 8 (8-relay board), or 16 (16-relay board) DUT sockets to a single instrument input via relay switching. Steps through all populated sockets automatically, measuring each one in turn. Eliminates the physically most tedious part of batch component characterization: touching and swapping leads for each new part.
 
@@ -2872,7 +3119,7 @@ Connects up to 8 (4-relay board), 8 (8-relay board), or 16 (16-relay board) DUT 
 
 ---
 
-### 80. Automated VNA Calibration Fixture — *rf-bench-relay-solt*
+### ✓ 80. Automated VNA Calibration Fixture — *rf-bench-relay-solt*
 
 Automates SOLT calibration for the HP 8712B (#26) by wiring OPEN, SHORT, LOAD, and THRU standards to relay positions. The calibration sequence — which currently requires interactive manual steps ("connect OPEN at port 1, press Enter") — becomes a single `cal.auto_solt()` call.
 
@@ -2914,7 +3161,7 @@ cal.save("~/.8712b_cal.json")
 
 ---
 
-### 81. Band-Switched Filter Bank Controller — *rf-bench-relay-filterbank*
+### ✓ 81. Band-Switched Filter Bank Controller — *rf-bench-relay-filterbank*
 
 Controls a relay-switched bandpass/lowpass filter bank in the instrument signal path. The XL9535 selects the appropriate filter for the current operating frequency, eliminating manual cable changes between test bands and enabling the transmitter test suite (#18) to sweep all HF bands automatically without pausing for filter swaps.
 
@@ -2950,7 +3197,7 @@ The XL9535 board is used *only* as a coil driver: XL9535 output → transistor �
 
 ---
 
-### 82. Instrument Port and Antenna Router — *rf-bench-relay-router*
+### ✓ 82. Instrument Port and Antenna Router — *rf-bench-relay-router*
 
 An N×M signal routing matrix that connects any of N antennas/signal sources to any of M instrument inputs, under full software control. Eliminates the #1 source of manual intervention in bench automation: physically moving coax between the SSA, IC-7300, RTL-SDR, and different antennas between measurements.
 
@@ -2984,7 +3231,7 @@ Each source-to-instrument pair uses one relay (or a relay tree for mutual exclus
 
 ---
 
-### 83. Reference/DUT Path Switcher for Normalization — *rf-bench-relay-normalize*
+### ✓ 83. Reference/DUT Path Switcher for Normalization — *rf-bench-relay-normalize*
 
 A focused 2-relay application that automates the most common manual step in scalar RF measurements: switching between a "reference" (through) path and the "DUT" path for normalization. Applies to the Bode plotter (#1), scalar VNA (#3), RF amplifier (#2), balun analyzer (#4), and any other measurement that requires a baseline before measuring the DUT.
 
@@ -3090,7 +3337,7 @@ python spd3303x_panel.py --demo             # simulated data, cycles tracking mo
 
 ---
 
-### 87. SSA3032X Virtual Panel — *rf-bench-drivers-siglent/ssa3032x_panel.py*
+### ✓ 87. SSA3032X Virtual Panel — *rf-bench-drivers-siglent/ssa3032x_panel.py*
 
 **Instrument: SSA3032X Plus spectrum analyzer (9 kHz–3.2 GHz).**
 
@@ -3119,9 +3366,9 @@ python ssa3032x_panel.py --demo             # simulated spectrum with carrier + 
 
 ---
 
-### 88. SDS2354X Virtual Panel — *rf-bench-drivers-siglent/sds2354x_panel.py*
+### ✓ 88. SDS2504X Virtual Panel — *rf-bench-drivers-siglent/sds2504x_panel.py*
 
-**Instrument: SDS2354X Plus oscilloscope (500 MHz, 4-ch, upgraded).**
+**Instrument: SDS2504X Plus oscilloscope (500 MHz, 4-ch).**
 
 Proposed panel displays:
 - Four-channel waveform plot (matplotlib embedded in Tkinter, time-domain traces)
@@ -3132,10 +3379,10 @@ Proposed panel displays:
 - Acquisition status: running / stopped / triggered
 
 ```bash
-python sds2354x_panel.py                    # default 10.1.1.58:5025
-python sds2354x_panel.py --host 10.1.1.58   # explicit IP
-python sds2354x_panel.py --interval 500     # refresh every 500 ms (continuous acquisition)
-python sds2354x_panel.py --demo             # simulated 4-channel waveforms (sine/square/pulse/noise)
+python sds2504x_panel.py                    # default 10.1.1.58:5025
+python sds2504x_panel.py --host 10.1.1.58   # explicit IP
+python sds2504x_panel.py --interval 500     # refresh every 500 ms (continuous acquisition)
+python sds2504x_panel.py --demo             # simulated 4-channel waveforms (sine/square/pulse/noise)
 ```
 
 **Demo mode:** Generates four synthetic time-domain waveforms: CH1 = sine wave with gentle amplitude/frequency variation, CH2 = square wave, CH3 = pulse train, CH4 = noise. All with plausible voltage scales and timebase settings.
@@ -3148,7 +3395,7 @@ python sds2354x_panel.py --demo             # simulated 4-channel waveforms (sin
 
 ---
 
-### 89. IC-7300 Virtual Panel — *rf-bench-drivers-icom/ic7300_panel.py*
+### ✓ 89. IC-7300 Virtual Panel — *rf-bench-drivers-icom/ic7300_panel.py*
 
 **Instrument: Icom IC-7300 HF transceiver (via rigctld on port 4532).**
 
@@ -3178,7 +3425,7 @@ python ic7300_panel.py --demo               # simulated VFO + S-meter with drift
 
 ---
 
-### 90. FT-891 Virtual Panel — *rf-bench-drivers-yaesu/ft891_panel.py*
+### ✓ 90. FT-891 Virtual Panel — *rf-bench-drivers-yaesu/ft891_panel.py*
 
 **Instrument: Yaesu FT-891 HF transceiver (via rigctld on port 4532).**
 
@@ -3198,7 +3445,7 @@ python ft891_panel.py --demo                # simulated VFO + S-meter
 
 ---
 
-### 91. RTL-SDR Virtual Panel — *rf-bench-drivers-rtlsdr/rtlsdr_panel.py*
+### ✓ 91. RTL-SDR Virtual Panel — *rf-bench-drivers-rtlsdr/rtlsdr_panel.py*
 
 **Instrument: RTL-SDR Blog v4 (500 kHz–1766 MHz receiver).**
 
@@ -3227,7 +3474,7 @@ python rtlsdr_panel.py --demo               # simulated waterfall with sweeping 
 
 ---
 
-### 92. Si5351 Virtual Panel — *rf-bench-si5351-gen/si5351_panel_gtk.py* (alternative to curses TUI)
+### ✓ 92. Si5351 Virtual Panel — *rf-bench-si5351-gen/si5351_panel_gtk.py* (alternative to curses TUI)
 
 **Instrument: Si5351A clock generator (I2C via Bus Pirate, 3 kHz–200 MHz, 3 outputs).**
 
@@ -3252,7 +3499,7 @@ python si5351_panel_gtk.py --demo           # simulated 3-channel output (no Bus
 
 ---
 
-### 93. Flipper Zero Virtual Panel — *rf-bench-drivers-flipper/flipper_panel.py*
+### ✓ 93. Flipper Zero Virtual Panel — *rf-bench-drivers-flipper/flipper_panel.py*
 
 **Instrument: Flipper Zero (Sub-GHz, IR, RFID, NFC multi-tool).**
 
@@ -3501,3 +3748,284 @@ other stations in the passband simultaneously — useful for linear transponders
 **Status:** Implemented in `satellite_monitor.py`. Real-time waterfall display with
 optional Doppler tracking and SigMF recording. Built-in database for AO-91, AO-92,
 SO-50, ISS, FO-29, AO-7. Complementary to `projects/radio/satellite/satellite.py`.
+
+---
+
+## KiwiSDR — HF Receiver Projects
+
+**Hardware:** KiwiSDR (BeagleBone Black cape). 0–30 MHz, 14-bit ADC at 66 MS/s,
+GPS-disciplined TCXO. Delivers IQ or audio via WebSocket SND API. Up to 4–8 simultaneous
+independent channels on one device. Driver: `rf_bench.kiwisdr` (WebSocket, 12 kS/s fixed).
+
+### KiwiSDR standalone
+
+**HF band activity monitor** (`projects/kiwisdr/hf-monitor/`)
+Use `scan_band()` to sweep one or more HF amateur or shortwave bands and log detected
+signals to SQLite.  Track frequency, power, timestamp, and optionally the classified
+modulation (AM/SSB/CW/digital via `_classify_iq()`).  Build a daily/weekly activity
+heatmap (frequency vs. time-of-day) to understand propagation patterns on each band.
+Natural companion to bubba-detector's VHF/UHF scanning.
+
+**HF propagation / noise floor logger** (`projects/kiwisdr/propagation/`)
+Continuously log noise floor at specific HF frequencies (20m, 40m, 80m, 160m, WWV at
+5/10/15 MHz, NCDXF beacons at 14.100 MHz etc.) to SQLite every N minutes.  Correlate
+noise floor variations with solar flux data (K-index, A-index) or with known propagation
+events.  The KiwiSDR's GPS-disciplined clock gives precise timestamps for cross-correlation.
+
+**Shortwave broadcast band scanner** (`projects/kiwisdr/swbc/`)
+Scan AM broadcast bands (LW 150–285 kHz, MW 520–1710 kHz, SW 2.3–26.1 MHz) in steps,
+detect carriers, and log frequency + signal strength.  During band openings (especially
+on 49m, 41m, 31m), distant stations become audible — the log reveals which bands are open
+and to which parts of the world (by correlating station ID with broadcast schedules).
+
+**WWV/WWVH time signal monitor** (`projects/kiwisdr/wwv/`)
+Monitor WWV (5, 10, 15, 20, 25 MHz) and WWVH (2.5, 5, 10, 15 MHz) signal strength
+continuously.  The S/N ratio at each frequency follows the ionosphere's daily and
+seasonal variation.  Plot all WWV frequencies simultaneously using the multi-channel
+capability (one channel per WWV frequency) for a real-time ionogram proxy.  Requires
+4–5 simultaneous KiwiSDR channels.
+
+**CW skimmer / spotting** (`projects/kiwisdr/cw-skimmer/`)
+Monitor a CW subband (e.g. 20m CW: 14.000–14.060 MHz) continuously via `stream_iq()`.
+Run `_classify_iq()` blocks to detect CW; pass detected segments to the CW modem
+library (`~/Dropbox/build/cw-modem/`) for decoding.  Output callsign spots to SQLite
+or a local RBN-style web page.  Complements the CodeMonkey transceiver for contest use.
+
+**Digital mode activity logger** (`projects/kiwisdr/digital-monitor/`)
+Monitor FT8/FT4/JS8 calling frequencies (e.g. 14.074, 14.078, 7.074 MHz) and log raw
+IQ to SigMF files or pipe to WSJT-X's UDP input.  The 12 kHz bandwidth covers a full
+FT8 passband (0–3 kHz used).  Useful for long-term activity recording without tying up
+a transceiver.
+
+**HF direction finding (multi-KiwiSDR TDoA)** (`projects/kiwisdr/tdoa/`)
+If access to multiple KiwiSDR receivers is available (via the public KiwiSDR network at
+http://kiwisdr.com/public/), use Time Difference of Arrival between geographically
+separated receivers to estimate bearing to an HF transmitter.  The KiwiSDR GPS timestamp
+provides the precise timing required.  The KiwiSDR project's own TDoA tool is the reference
+implementation; this project would wrap it for automated measurement logging.
+
+### KiwiSDR + RTL-SDR integrations
+
+**HF + VHF band opening detector** (`projects/kiwisdr/band-opening/`)
+Run KiwiSDR monitoring 6m (up to 30 MHz for the low end of 50 MHz — actually limited to
+30 MHz, so this would cover propagation indicators like 10m beacons at 28.200 MHz) and
+RTL-SDR monitoring 6m/2m SSB calling frequencies simultaneously.  When the KiwiSDR sees
+unusual 10m activity, flag the RTL-SDR's 50.125 MHz channel as high-priority in the
+bubba-detector analyzer queue.  Propagation indicators on one band predict openings on
+the next.
+
+**Full-spectrum HF + VHF/UHF scanner** (`projects/kiwisdr/full-spectrum/`)
+Combine KiwiSDR (0–30 MHz) with one or more RTL-SDRs (24 MHz–1766 MHz) for continuous
+HF-through-microwave coverage.  The KiwiSDR handles HF with its multi-channel capability;
+the RTL-SDR(s) handle VHF/UHF as in bubba-detector.  A unified SQLite database records
+all activity with consistent timestamp and modulation fields.  This is effectively
+bubba-detector extended to include HF.
+
+**HF groundwave / NVIS coverage mapping** (extends `projects/radio/coverage/`)
+Use the KiwiSDR as the receive endpoint while driving a low-power HF transmitter (IC-7300)
+from a mobile setup.  Record the KiwiSDR's received signal strength vs. GPS position
+(from `rf_bench.gpsd`) to map groundwave or NVIS coverage at various HF frequencies.
+The KiwiSDR's calibrated GPS clock provides precise signal strength timestamps; the
+IC-7300 provides the known transmit power reference.
+
+### KiwiSDR + IC-7300 integrations
+
+**HF transceiver + KiwiSDR panadapter** (`projects/kiwisdr/panadapter/`)
+Tap the IC-7300's IF output (or a T-connector on the antenna) into the KiwiSDR while
+the IC-7300 is operating.  The KiwiSDR provides a wide panadapter display (up to ±6 kHz
+around the operating frequency, or scan a wider range) while the IC-7300 handles the
+actual transceive.  Capture IQ of the full band around the operating frequency to a
+SigMF file for post-contest analysis.
+
+**Noise figure measurement via Y-factor** (`projects/kiwisdr/noise-figure/`)
+The KiwiSDR's 14-bit ADC and GPS-calibrated clock make it suitable as the measurement
+receiver in a Y-factor noise figure test.  Use a calibrated noise source (or the
+IC-7300's internal noise source if available) and measure Y-factor across HF frequencies.
+The KiwiSDR's multi-channel capability allows simultaneous NF measurement at multiple
+frequencies.
+
+
+---
+
+## SunSDR2 Pro — Projects
+
+**Hardware:** SunSDR2 Pro by Expert Electronics. 0.1–55 MHz + 100–150 MHz.
+14-bit ADC, GPS-disciplined TCXO. Connects via Ethernet to ExpertSDR3 (TCI WebSocket,
+port 50001). Two simultaneous independent receivers (TRX 0 + TRX 1). IQ output up to
+192 kHz (±96 kHz instantaneous bandwidth). Full TX on HF/6m. Driver: `rf_bench.sunsdr`.
+IP address TBD. ExpertSDR3 version TBD.
+
+### SunSDR standalone
+
+**✓ Wideband HF band scanner** (`projects/sunsdr/hf-scanner/`)
+The 192 kHz IQ rate means a single capture covers ±96 kHz — the entire 30m band in one
+shot, 40m in 3 captures, 20m in 4.  Sweep 0–55 MHz ~19× faster than the KiwiSDR.
+Similar to hf-monitor but exploiting the wide bandwidth: at each step, run the full PSD
+and extract all signals above threshold simultaneously.  SQLite log + rolling display.
+
+**✓ VHF band monitor** (`projects/sunsdr/vhf-monitor/`)
+Use TRX 1 on the SunSDR's VHF port (144 MHz) while TRX 0 handles HF.
+Monitor 2m with the dual-receiver capability.
+The SunSDR's VHF sensitivity is better than the RTL-SDR's; this replaces
+bubba-detector's `--ham-vhf` mode with higher dynamic range.
+Combines naturally with bubba-detector's VHF SSB opening detection.
+
+**✓ Dual-band simultaneous scanner** (`projects/sunsdr/dual-scan/`)
+TRX 0 sweeps HF (e.g. 40m/20m), TRX 1 holds on the 2m calling frequency.
+Two SunSDR instances in two threads, unified SQLite log.  First rf-bench project
+to exploit true dual-receiver operation on one device.
+
+**✓ TX waveform injection / arbitrary signal generator** (`projects/sunsdr/tx-arb/`)
+Use `transmit_iq()` to inject Python-generated waveforms: WSPR, FT8, CW, test tones,
+swept signals for antenna impedance analysis.  The SunSDR becomes a calibrated HF signal
+source.  Combine with the KiwiSDR or IC-7300 as the monitoring receiver.
+⚠ Requires valid amateur licence and appropriate power level.
+
+**HF noise figure measurement** (`projects/sunsdr/noise-figure/`)
+Improved version of the KiwiSDR NF project: the SunSDR's wide IQ bandwidth means you
+can characterize an entire 100 kHz band in one capture (rather than stepping through
+10 kHz windows).  Use a calibrated noise source, Y-factor method, log NF vs frequency
+across HF.  More accurate than the KiwiSDR version due to simultaneous multi-frequency
+measurement within one capture window.
+
+### SunSDR + IC-7300 integrations
+
+**✓ HF transmitter characterization** (`projects/sunsdr/tx-characterize/`)
+Use the IC-7300 as the HF transmitter and the SunSDR as the measurement receiver.
+At 192 kHz IQ bandwidth, simultaneously measure: harmonic levels, IMD products,
+spectral purity, carrier suppression, ALC response — all in a single capture.
+The SunSDR has better dynamic range and calibrated amplitude tracking than the RTL-SDR.
+Compare with `projects/radio/transmitter-test/` which uses the SSA.
+
+**✓ Phase noise measurement** (`projects/sunsdr/phase-noise/`)
+Tune IC-7300 to a stable carrier; SunSDR receives it.  At 192 kHz IQ rate, the full
+close-in phase noise profile (±96 kHz offsets) is visible in one capture.  Compare
+to the SSA-based `projects/radio/phase-noise/` — the SunSDR approach is faster
+(one capture vs. SSA sweep) but less dynamic range at large offsets.
+
+**✓ SO2R two-radio integration** (`projects/sunsdr/so2r/`)
+Single-operator two-radio (SO2R) contest automation: IC-7300 on one band,
+SunSDR on another.  Coordinate VFO changes, band switches, and PTT inhibit between
+the two radios via rf_bench.icom and rf_bench.sunsdr.  Log all activity with
+unified timestamps.
+
+**✓ Cross-receiver S-meter calibration** (`projects/sunsdr/cal-smeter/`)
+Same signal, both receivers simultaneously.  Map SunSDR dBFS → IC-7300 dBm using
+the IC-7300's calibrated S-meter as the reference.  Extends the existing
+`projects/radio/rx-crosscheck/` (RTL-SDR vs IC-9700) to the HF SunSDR path.
+
+### SunSDR + KiwiSDR integrations
+
+**✓ Diversity reception** (`projects/sunsdr/diversity/`)
+Two antennas → KiwiSDR + SunSDR, both tuned to the same frequency simultaneously.
+Combine the IQ streams in software (equal-gain combining, maximal-ratio combining,
+or switched diversity) to improve SNR on weak HF signals.  The KiwiSDR's GPS-
+disciplined clock makes coherent combining feasible if the phase offset is calibrated.
+
+**✓ Full HF spectrum comparison** (`projects/sunsdr/hf-compare/`)
+Both devices sweep the same HF band simultaneously; compare detected signals,
+signal strengths, and noise floors.  Useful for antenna comparison (different antenna
+on each device) or for verifying the SunSDR driver's amplitude accuracy against the
+KiwiSDR's known-good GPS-referenced signal path.
+
+### SunSDR + RTL-SDR integrations
+
+**✓ Wideband station monitor** (`projects/sunsdr/station-monitor/`)
+SunSDR handles 0–55 MHz + 100–150 MHz via TCI; RTL-SDR fills in 55–1766 MHz.
+Together: near-complete coverage from 100 kHz to 1.7 GHz with a combined unified
+SQLite detection log.  The SunSDR's 192 kHz IQ and the RTL-SDR's 2.4 MHz IQ complement
+each other — no single device does both well.
+
+**✓ VHF band-opening relay** (`projects/sunsdr/band-opening-relay/`)
+SunSDR TRX 1 monitors 6m (50 MHz) with its HF receiver port — not possible on KiwiSDR.
+When 50.125 MHz USB activity is detected, write a JSON alert file for bubba-detector
+to boost VHF/UHF SSB priority.  More direct than the KiwiSDR's 10m-beacon proxy
+because the SunSDR can actually receive 6m directly.
+
+### SunSDR + SSA integrations
+
+**✓ VHF transmitter measurement** (`projects/sunsdr/vhf-tx-test/`)
+Use an IC-9700 as the 2m transmitter, SunSDR TRX 1 as the wideband IQ receiver,
+and the SSA3032X as the calibrated reference for harmonic content and spectral
+purity.  The SunSDR's 192 kHz IQ captures the full ±96 kHz around the carrier
+simultaneously for IMD product analysis.
+
+---
+
+## TCI Audio Router — Linux sound device bridge
+
+**Status:** Discussed, not yet started.
+
+**The problem:** Linux ham software (WSJT-X, Fldigi, Direwolf, JS8Call, etc.) expects
+audio I/O via a standard sound card — an ALSA/PulseAudio/PipeWire device it can open
+like hardware.  ExpertSDR3 exposes audio via TCI (WebSocket binary stream), not as a
+sound device.  There is currently no bridge.
+
+**The solution that covers ~99% of use cases:**
+
+A single Python CLI tool that:
+1. Connects to ExpertSDR3 TCI and subscribes to `RX_AUDIO_STREAM` (StreamType=1)
+2. Writes the decoded PCM audio to a named audio device via `sounddevice` (PortAudio)
+3. Ham software reads from the other side of an ALSA loopback (`snd-aloop`)
+
+```bash
+tci-audio --host 192.168.1.x --device "Loopback: PCM (hw:Loopback,0)"
+# ham software then uses hw:Loopback,1 as its soundcard input
+```
+
+One `modprobe snd-aloop` creates the virtual loopback.  `sounddevice` (PortAudio)
+abstracts ALSA/PulseAudio/PipeWire — the same code works on all three.
+
+**Minimal CLI:**
+```
+tci-audio --host HOST
+          [--port 50001]
+          [--trx 0]
+          [--rate 8000]       # 8/12/24/48 kHz; sent as AUDIO_SAMPLERATE to TCI
+          [--device DEVICE]   # default: system default output
+          [--list-devices]    # print available audio devices and exit
+```
+
+**Key implementation note — ring buffer is mandatory:**
+TCI pushes audio in ~32 ms chunks (256 samples @ 8 kHz).  PortAudio's callback
+also fires in chunks, on its own timer.  Without a ring buffer between them, the
+two timers drift and cause dropouts.  A `collections.deque` or `queue.Queue`
+circular buffer is ~20 extra lines but the difference between glitchy and clean.
+
+**TCI audio setup sequence (sent before AUDIO_START):**
+```
+AUDIO_SAMPLERATE:8000;
+AUDIO_STREAM_SAMPLE_TYPE:int16;
+AUDIO_STREAM_CHANNELS:1;
+AUDIO_START:0;
+```
+The binary frame header carries `sample_rate`, `format`, `length`, and `channels`
+fields — read from each frame rather than hardcoded, so mismatches are self-correcting.
+
+**Why not stdout?**
+Stdout piped into `aplay` works for manual listening but requires the user to manage
+the pipe and know ALSA syntax.  Writing directly to a named device is one command
+with no user plumbing, and it's what ham software actually needs.
+
+**TX (sending audio to TCI for transmission) — deferred:**
+TX is harder, not because of the audio path (TCI `TX_CHRONO` is a clean
+request/response model — server sends a timestamp asking for N samples, client
+responds with N samples from its buffer), but because of **PTT coordination**.
+Something must assert `TRX:0,true,tci;` to tell ExpertSDR3 to use TCI audio for TX,
+and that requires integrating with how the ham software does PTT (Hamlib CAT, RTS/DTR,
+VOX, etc.).  That's a system-integration problem, not a TCI protocol problem.
+
+Options for PTT when TX is eventually added:
+- **VOX:** detect audio level above threshold in the TX buffer → assert PTT.
+  Simple, adds ~50–100 ms latency, no external dependencies.
+- **Hamlib integration:** watch for PTT state changes via rigctld polling.
+  Correct, but adds a dependency and requires the user to configure Hamlib.
+- **Named pipe / socket:** external PTT signal from ham software.
+  Clean but requires per-app configuration.
+
+For now, the RX-only tool covers monitoring, decoding (WSJT-X, Fldigi, Direwolf),
+recording, and spectrum display — the majority of ham software use cases.
+
+**Implemented:** `projects/sunsdr/tci-audiopipe/tci-audiopipe.py`
+**Dependencies:** `websocket-client` (already in sunsdr driver), `numpy`, `pacat`/`parec` (PulseAudio/PipeWire CLI tools)
+

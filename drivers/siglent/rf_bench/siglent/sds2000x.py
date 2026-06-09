@@ -280,34 +280,51 @@ class SDS2000X:
         self.disconnect()
 
     # ------------------------------------------------------------------
-    # Built-in AWG (arbitrary waveform generator)
+    # Built-in AWG ("Gen Out" arbitrary waveform generator)
     # ------------------------------------------------------------------
     # SDS2000X Plus has a licensed 25 MHz AWG on a dedicated "Gen Out" BNC.
-    # SCPI prefix: AWG: (not channel-prefixed — single-channel AWG output).
+    #
+    # SCPI: the AWG is addressed as channel C1 with SDG-style commands —
+    # `C1:BSWV` for waveform parameters (TYPE, FRQ, AMP, OFST, DUTY, etc.),
+    # `C1:OUTP` for output enable + load impedance, `C1:ARWV` for selecting
+    # built-in arbitrary waveforms by index. This mirrors the standalone
+    # Siglent SDG signal generator command set.
+    #
+    # NOTE: the AWG's "C1" namespace is disjoint from the analog input C1
+    # commands (`C1:CPL`, `C1:VDIV`, etc.) — the second token disambiguates.
+    # The published Siglent programming guide's WGEN/WAVEGENERATOR family
+    # is for the older non-Plus SDS2000X, NOT this scope; live testing on
+    # firmware 5.4.0.1.6.2R5 confirms WGEN-prefixed commands return -113
+    # Undefined header.
+    #
+    # Verified working against:
+    #   *IDN?  Siglent Technologies,SDS2504X Plus,SDS2PEEX7R1702,5.4.0.1.6.2R5
+    #   *OPT?  ...,FG,...   (Function Generator license installed)
+
+    # Default load impedance for the AWG (50 Ω = into-50Ω; HZ = high-Z).
+    # Most measurements assume a 50 Ω load. Change with set_awg_load(...).
+    _AWG_LOAD = "50"
 
     def set_awg_sine(self, freq_hz: float, amplitude_vpp: float,
                      offset_v: float = 0.0, phase_deg: float = 0.0) -> None:
-        """
-        Configure the AWG for sine wave output and enable the output.
+        """Configure the AWG for sine wave and enable the output.
 
         Args:
             freq_hz:       Frequency in Hz (1 mHz – 25 MHz on SDS2504X Plus)
-            amplitude_vpp: Peak-to-peak amplitude in V (0.002–6 V into high impedance)
+            amplitude_vpp: Peak-to-peak amplitude in V into the configured load
             offset_v:      DC offset in V (default 0)
             phase_deg:     Phase offset in degrees (default 0)
         """
-        self._cmd(f":AWG:FUNCtion SINE")
-        self._cmd(f":AWG:FREQuency {freq_hz:.6f}")
-        self._cmd(f":AWG:AMPLitude {amplitude_vpp:.4f}")
-        self._cmd(f":AWG:OFFSet {offset_v:.4f}")
-        self._cmd(f":AWG:PHASe {phase_deg:.3f}")
-        self._cmd(":AWG:OUTPut ON")
+        self._cmd(
+            f"C1:BSWV WVTP,SINE,FRQ,{freq_hz:g}HZ,AMP,{amplitude_vpp:g}V,"
+            f"OFST,{offset_v:g}V,PHSE,{phase_deg:g}"
+        )
+        self._cmd(f"C1:OUTP ON,LOAD,{self._AWG_LOAD}")
         time.sleep(0.1)
 
     def set_awg_square(self, freq_hz: float, amplitude_vpp: float,
                        duty_pct: float = 50.0, offset_v: float = 0.0) -> None:
-        """
-        Configure the AWG for square wave output and enable the output.
+        """Configure the AWG for square wave and enable the output.
 
         Args:
             freq_hz:       Frequency in Hz
@@ -315,18 +332,16 @@ class SDS2000X:
             duty_pct:      Duty cycle in percent (1–99, default 50)
             offset_v:      DC offset in V (default 0)
         """
-        self._cmd(f":AWG:FUNCtion SQUARE")
-        self._cmd(f":AWG:FREQuency {freq_hz:.6f}")
-        self._cmd(f":AWG:AMPLitude {amplitude_vpp:.4f}")
-        self._cmd(f":AWG:DUTyCycle {duty_pct:.2f}")
-        self._cmd(f":AWG:OFFSet {offset_v:.4f}")
-        self._cmd(":AWG:OUTPut ON")
+        self._cmd(
+            f"C1:BSWV WVTP,SQUARE,FRQ,{freq_hz:g}HZ,AMP,{amplitude_vpp:g}V,"
+            f"OFST,{offset_v:g}V,DUTY,{duty_pct:g}"
+        )
+        self._cmd(f"C1:OUTP ON,LOAD,{self._AWG_LOAD}")
         time.sleep(0.1)
 
     def set_awg_ramp(self, freq_hz: float, amplitude_vpp: float,
                      symmetry_pct: float = 100.0, offset_v: float = 0.0) -> None:
-        """
-        Configure the AWG for ramp (sawtooth) wave output and enable the output.
+        """Configure the AWG for ramp (sawtooth) wave and enable the output.
 
         Args:
             freq_hz:       Frequency in Hz
@@ -334,12 +349,11 @@ class SDS2000X:
             symmetry_pct:  Ramp symmetry — 100% = sawtooth, 50% = triangle (default 100)
             offset_v:      DC offset in V (default 0)
         """
-        self._cmd(f":AWG:FUNCtion RAMP")
-        self._cmd(f":AWG:FREQuency {freq_hz:.6f}")
-        self._cmd(f":AWG:AMPLitude {amplitude_vpp:.4f}")
-        self._cmd(f":AWG:SYMMetry {symmetry_pct:.2f}")
-        self._cmd(f":AWG:OFFSet {offset_v:.4f}")
-        self._cmd(":AWG:OUTPut ON")
+        self._cmd(
+            f"C1:BSWV WVTP,RAMP,FRQ,{freq_hz:g}HZ,AMP,{amplitude_vpp:g}V,"
+            f"OFST,{offset_v:g}V,SYM,{symmetry_pct:g}"
+        )
+        self._cmd(f"C1:OUTP ON,LOAD,{self._AWG_LOAD}")
         time.sleep(0.1)
 
     def set_awg_dc(self, offset_v: float) -> None:
@@ -348,39 +362,107 @@ class SDS2000X:
         Args:
             offset_v: DC level in V (within the AWG's offset range).
         """
-        self._cmd(":AWG:FUNCtion DC")
-        self._cmd(f":AWG:OFFSet {offset_v:.4f}")
-        self._cmd(":AWG:OUTPut ON")
+        self._cmd(f"C1:BSWV WVTP,DC,OFST,{offset_v:g}V")
+        self._cmd(f"C1:OUTP ON,LOAD,{self._AWG_LOAD}")
         time.sleep(0.1)
+
+    def set_awg_load(self, load) -> None:
+        """Set the AWG output load convention.
+
+        Args:
+            load: 50 / "50" → 50 Ω termination (most measurements);
+                  "HZ" / None → high-impedance (open-circuit) reporting.
+
+        The setting affects how the AWG reports its amplitude, not its
+        actual output impedance. The AWG's source impedance is fixed at
+        ~50 Ω; this just tells it which units the user expects.
+        """
+        if load is None or str(load).upper() == "HZ":
+            self._AWG_LOAD = "HZ"
+        else:
+            self._AWG_LOAD = str(int(load))
+        # Push the new load setting to the scope without changing output state
+        self._cmd(f"C1:OUTP LOAD,{self._AWG_LOAD}")
 
     def awg_output_on(self) -> None:
         """Enable the AWG output without changing the waveform configuration."""
-        self._cmd(":AWG:OUTPut ON")
+        self._cmd(f"C1:OUTP ON,LOAD,{self._AWG_LOAD}")
 
     def awg_output_off(self) -> None:
         """Disable the AWG output."""
-        self._cmd(":AWG:OUTPut OFF")
+        self._cmd(f"C1:OUTP OFF,LOAD,{self._AWG_LOAD}")
 
     def get_awg_state(self) -> dict:
-        """
-        Query the current AWG configuration.
+        """Query the current AWG configuration.
 
         Returns:
             dict with keys: function (str), freq_hz (float), amplitude_vpp (float),
-            offset_v (float), output_on (bool).
+            offset_v (float), phase_deg (float, where applicable),
+            duty_pct (float, where applicable), output_on (bool), load (str).
         """
-        func   = self._query(":AWG:FUNCtion?").strip()
-        freq   = float(self._query(":AWG:FREQuency?").strip())
-        amp    = float(self._query(":AWG:AMPLitude?").strip())
-        offset = float(self._query(":AWG:OFFSet?").strip())
-        outp   = self._query(":AWG:OUTPut?").strip().upper()
+        bswv_response = self._query("C1:BSWV?").strip()
+        outp_response = self._query("C1:OUTP?").strip()
         return {
-            "function":      func,
-            "freq_hz":       freq,
-            "amplitude_vpp": amp,
-            "offset_v":      offset,
-            "output_on":     outp in ("ON", "1"),
+            **self._parse_bswv(bswv_response),
+            **self._parse_outp(outp_response),
         }
+
+    @staticmethod
+    def _parse_bswv(response: str) -> dict:
+        """Parse a `C1:BSWV WVTP,SINE,FRQ,1000000HZ,AMP,1V,...` response."""
+        result: dict = {}
+        # Strip leading 'C1:BSWV ' prefix
+        if response.startswith("C1:BSWV"):
+            response = response[len("C1:BSWV"):].lstrip()
+        tokens = response.split(",")
+        # tokens come in KEY,VALUE,KEY,VALUE,... pairs
+        i = 0
+        while i + 1 < len(tokens):
+            key = tokens[i].strip().upper()
+            val = tokens[i + 1].strip()
+            i += 2
+            if key == "WVTP":
+                result["function"] = val.upper()
+            elif key == "FRQ":
+                result["freq_hz"] = SDS2000X._strip_unit(val, "HZ")
+            elif key == "AMP":
+                result["amplitude_vpp"] = SDS2000X._strip_unit(val, "V")
+            elif key == "OFST":
+                result["offset_v"] = SDS2000X._strip_unit(val, "V")
+            elif key == "PHSE":
+                result["phase_deg"] = float(val) if val else 0.0
+            elif key == "DUTY":
+                result["duty_pct"] = float(val) if val else 0.0
+            elif key == "SYM":
+                result["symmetry_pct"] = float(val) if val else 0.0
+        return result
+
+    @staticmethod
+    def _parse_outp(response: str) -> dict:
+        """Parse a `C1:OUTP ON,LOAD,50,PLRT,NOR` response."""
+        result = {"output_on": False, "load": "HZ"}
+        if response.startswith("C1:OUTP"):
+            response = response[len("C1:OUTP"):].lstrip()
+        tokens = response.split(",")
+        if tokens:
+            result["output_on"] = tokens[0].strip().upper() == "ON"
+        # Walk remaining KEY,VALUE pairs
+        i = 1
+        while i + 1 < len(tokens):
+            key = tokens[i].strip().upper()
+            val = tokens[i + 1].strip()
+            i += 2
+            if key == "LOAD":
+                result["load"] = val.upper()
+        return result
+
+    @staticmethod
+    def _strip_unit(value: str, unit_suffix: str) -> float:
+        """Convert e.g. '1000000HZ' or '1.000000E+06HZ' to float Hz."""
+        v = value.strip()
+        if v.upper().endswith(unit_suffix):
+            v = v[: -len(unit_suffix)]
+        return float(v)
 
     # ------------------------------------------------------------------
     # MSO / Digital channels [Option — requires MSO hardware probe pod]

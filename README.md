@@ -23,11 +23,14 @@
 > | `rf-bench-drivers-icom` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-icom)](https://pypi.org/project/rf-bench-drivers-icom/) | ✅ | IC7300, IC9700 |
 > | `rf-bench-drivers-yaesu` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yaesu)](https://pypi.org/project/rf-bench-drivers-yaesu/) | ✅ | FT891 |
 > | `rf-bench-drivers-utils` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-utils)](https://pypi.org/project/rf-bench-drivers-utils/) | ✅ | RF math utilities |
-> | `rf-bench-drivers-buspirate` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-buspirate)](https://pypi.org/project/rf-bench-drivers-buspirate/) | 🔶 | Bus Pirate SPI/I2C/UART master |
+> | `rf-bench-drivers-buspirate` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-buspirate)](https://pypi.org/project/rf-bench-drivers-buspirate/) | 🔶 | Bus Pirate SPI/I2C/UART master — published 0.1.0; untested against hardware |
 > | `rf-bench-drivers-yertai` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-yertai)](https://pypi.org/project/rf-bench-drivers-yertai/) | ✅ | Yertai ET5406A+ programmable DC load |
 > | `rf-bench-drivers-flipper` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-flipper)](https://pypi.org/project/rf-bench-drivers-flipper/) | 🔶 | Flipper Zero Sub-GHz/IR/RFID/NFC — OOK+FSK TX/RX tested; IR/RFID untested |
 > | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
-> | `rf-bench-drivers-gpsd` | (GitHub) | 🧪 | gpsd GPS client — lat/lon/alt/speed/heading/DOP; metric + imperial |
+> | `rf-bench-drivers-gpsd` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-gpsd)](https://pypi.org/project/rf-bench-drivers-gpsd/) | ✅ | gpsd GPS client 0.1.1 — tested with u-blox receiver; lat/lon/alt/speed/heading/DOP |
+> | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
+> | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
+> | `rf-bench-drivers-koolertron` | not on PyPI yet | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A |
 >
 > **Projects** (in `projects/`) follow the same grading. Highlights:
 >
@@ -39,9 +42,17 @@
 > | `rtlsdr/recorder` | 🧪 | SigMF IQ recorder — basic operation tested |
 > | `rtlsdr/wxsat` | ❌ | Weather satellite pass prediction + decode — untested end-to-end |
 > | `flipper/*` | ❌ | Sub-GHz library, IR, RFID, sensor-hub etc. — minimally tested |
-> | `relay/*` | ❌ | XL9535 relay board projects — hardware not yet connected |
-> | `radio/*` | ❌ | MDS, NF, IP3 measurements — code complete, no hardware run |
+> | `relay/*` | ❌ | XL9535 relay board projects — hardware ordered, not yet arrived |
+> | `radio/receiver-test` | 🧪 | HF MDS, NF, IP3 — code complete; limited hardware testing |
+> | `radio/transmitter-test` | 🧪 | TX power, harmonics, ALC — code complete; limited hardware testing |
+> | `radio/beacon-logger` | ❌ | IC-9700 VHF/UHF beacon logger — code complete, untested |
+> | `radio/vhf-receiver-test` | ❌ | IC-9700 + SSA MDS/NF on 2m/70cm/23cm — code complete, untested |
+> | `radio/fm-deviation` | ❌ | IC-9700 FM deviation via Carson's rule — code complete, untested |
+> | `radio/rx-crosscheck` | ❌ | IC-9700 ↔ RTL-SDR cross-calibration — code complete, untested |
+> | `radio/aprs-igate` | ❌ | IC-9700 USB audio APRS igate — code complete, untested |
+> | `radio/dstar-monitor` | ❌ | IC-9700 D-STAR activity monitor — code complete, untested |
 > | `vna/*` | ❌ | HP 8712B VNA — hardware adapter not yet installed |
+> | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
 
 ---
 
@@ -138,6 +149,64 @@ with GPSD() as gps:
     print(fix.hdop, fix.satellites_used)
 ```
 
+### Koolertron / MHinstek (`rf_bench.koolertron`) ✅ TESTED
+
+| Class | Instrument family | Tested with | Protocol |
+|-------|------------------|-------------|---------|
+| `MHS5200A` | Koolertron / MHinstek MHS-5200A series dual-channel DDS, 200 MSa/s 12-bit, with built-in frequency counter and sweep generator. Sold rebranded as KKmoon and others. | MHS-5225A (25 MHz sine), CH340 USB, firmware/HW code 5040000, confirmed 2026-06-08 | ASCII over USB-CDC virtual serial / 57600 8N1 / CR LF |
+
+Written from scratch from the public wd5gnr/MHS5200AProtocol.pdf reverse-
+engineering document; no source code copied from any other implementation.
+Full set of supported features: per-channel frequency / amplitude / waveform /
+duty cycle / offset / phase / output attenuator / per-channel enable; master
+output enable; built-in frequency counter (frequency / count / period / +pulse
+width / -pulse width / duty modes; configurable gate; analogue or TTL input
+selectable); sweep generator (linear or logarithmic, configurable start /
+stop / time); 10 memory slots; optional power amplifier toggle.
+
+```python
+from rf_bench.koolertron import MHS5200A, Waveform, Gate
+
+with MHS5200A() as gen:
+    print(gen.identify())                          # 'MHS-5225A (5040000)'
+    gen.set_frequency(1, 1_000_000)                # CH1: 1 MHz
+    gen.set_amplitude(1, 1.0)
+    gen.set_waveform(1, Waveform.SINE)
+    gen.output_on()
+    hz = gen.measure_frequency_hz(gate=Gate.S1)    # via EXT IN counter
+    print(f"counter sees {hz:.1f} Hz")
+    gen.output_off()
+```
+
+### Solartron (`rf_bench.solartron`) ⚠️ UNTESTED
+
+| Class | Instrument family | Tested with | Protocol |
+|-------|------------------|-------------|---------|
+| `Solartron7151` | Solartron 7151 6.5-digit Computing Multimeter (1985) | none yet — awaiting KISS-488 + Solartron 7151 | IEEE-488 / KISS-488 Ethernet-GPIB / TCP port 1234 |
+
+The Solartron 7151 (and its 7150/7150-plus siblings) speaks a 1985-era
+device-specific ASCII command language — single ASCII letters with optional
+integer arguments — that pre-dates SCPI. Driver wraps the full shortform
+command set (MODE/RANGE/NINES/TRACK/TRIG/DELIMIT/LITERALS/DRIFT/NULL/SRQ/LOCK/
+STATUS/CALIBRATE) plus calibration commands (HI/LO/WRITE/REFRESH).
+
+```python
+from rf_bench.solartron import Solartron7151
+
+with Solartron7151("10.1.1.70") as dmm:
+    dmm.set_mode("VDC")
+    dmm.set_range_auto()
+    dmm.set_integration(Solartron7151.INT_5X9_FILT_OFF)   # 5.5 digits, 400 ms
+    dmm.set_track(True)                                   # continuous
+    print(dmm.read_value())   # 2.798450
+```
+
+### HP (`rf_bench.hp`) ⚠️ UNTESTED
+
+| Class | Instrument family | Tested with | Protocol |
+|-------|------------------|-------------|---------|
+| `HP8712B` | HP 8712B Vector Network Analyzer (300 kHz–1.3 GHz) | none yet — awaiting KISS-488 + HP 8712B | IEEE-488 / KISS-488 Ethernet-GPIB / TCP port 1234 |
+
 ### Utilities (`rf_bench.utils`)
 
 `rf_utils` — pure-Python RF math library. Power conversions, impedance and
@@ -161,6 +230,7 @@ pip install rf-bench-drivers-yaesu     # Yaesu FT-891
 pip install rf-bench-drivers-utils     # RF math utilities (no instruments)
 pip install rf-bench-drivers-yertai    # Yertai ET5406A+ DC load
 pip install rf-bench-drivers-gpsd      # gpsd GPS client
+pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — not on PyPI yet
 ```
 
 **Dependency:** [NumPy](https://numpy.org/) (for `rf_bench.utils` and the
@@ -531,6 +601,7 @@ from rf_bench.utils import (
 | `SPD3303X` | SPD3303X-E | 10.1.1.56 | 5025 | LAN/SCPI |
 | `IC7300` | IC-7300 | localhost | 4532 | `rigctld -m 3073 -r /dev/ttyUSB0 -s 115200` |
 | `FT891` | FT-891 | localhost | 4532 | `rigctld -m 1036 -r /dev/ttyUSB0 -s 38400` |
+| `MHS5200A` | MHS-5225A (KKmoon rebrand) | `/dev/ttyUSB0` (auto-detect CH340/PL2303) | n/a | 57600 8N1 USB CDC; auto-detected by USB VID/PID |
 
 All drivers accept `host` and `port` constructor arguments to override defaults.
 
@@ -633,6 +704,30 @@ every TDIV change, using the VDIV that was last set by `capture_audio()` for
 that channel (tracked in `self._last_capture_vdiv`), or 0.5 V/div if no
 prior capture has been done.
 
+**Bug 9: Built-in AWG ("Gen Out") uses SDG-style `C1:` commands, NOT documented `WGEN`**
+
+The Siglent programming guide documents the AWG using a `WGEN`/`WAVEGENERATOR`
+flat-keyword command family. On firmware 5.4.0.1.6.2R5 these commands ALL
+return SCPI error -113 "Undefined header". The actual accepted command set is
+the SDG-style `C1:BSWV` / `C1:OUTP` / `C1:ARWV` family — the same syntax used
+by Siglent's standalone SDG signal generators. The AWG's "C1" command
+namespace is disjoint from the analog-input C1 commands (e.g. `C1:CPL`,
+`C1:VDIV`); the second token disambiguates.
+
+The discrepancy is between the published programming guide (which describes
+the older non-Plus SDS2000X) and the SDS2000X+ firmware. The Plus firmware
+re-uses the SDG generator command set rather than introducing a new WGEN
+namespace, but the docs were never updated.
+
+*Symptom of the bad commands:* `set_awg_*` commands appear to succeed (no
+exception, scope returns no error to the user) but no actual change occurs;
+queries via `get_awg_state()` time out with empty responses.
+
+*Workaround:* the driver was rewritten to use `C1:BSWV WVTP,SINE,FRQ,...HZ,...`
+for set and `C1:BSWV?` / `C1:OUTP?` for query. Verified on the SDS2504X Plus
+(2026-06-08) — all six AWG methods (sine, square, ramp, DC, output on/off,
+state query) round-trip correctly.
+
 ### SSA3000X Plus — firmware 3.2.2.6.3R2
 
 **Quirk: `:SENS:SWE:POIN` command silently ignored — trace length fixed at 751**
@@ -648,6 +743,26 @@ actual count.
 point count before computing the RBW, ensuring the RBW matches what the
 firmware will use.  The `:SENS:SWE:POIN` command is still sent (it may work
 on other firmware versions) but the actual count is read back and used.
+
+**Bug: FM demodulation measurement commands not implemented**
+
+The SSA3032X Plus has an on-screen FM demodulation display mode, but the
+corresponding SCPI commands are entirely absent from firmware 3.2.2.6.3R2.
+All of the following return `-113,"Undefined header"`:
+
+- `:CALC:DMOD:FM?` / `:CALC:DMOD:FM ON`
+- `:CALC:MARK1:FUNC:DMOD:TYPE FM`
+- `:MEAS:FM?`, `:MEAS:FDEV?`, `:MEAS:ADEM:FM?`
+- `:DMOD:FM?`, `:CALC:DEMOD:FM?`
+
+There is no SCPI path to read FM deviation from this firmware, regardless of
+which command syntax is tried.
+
+*Workaround:* `projects/radio/fm-deviation/fm_deviation.py` uses Carson's rule
+applied to the spectrum trace: the −26 dB bandwidth of an FM signal equals
+2(Δf + fa), so deviation Δf = BW₋₂₆/2 − fa.  The SSA captures the trace via
+the standard `:TRAC:DATA?` path (which does work), and Python computes the
+bandwidth by finding the −26 dB crossings around the carrier peak.
 
 ### SDG1062X — firmware 1.01.01.33R3
 
@@ -701,7 +816,7 @@ and to radios via Hamlib rigctld.
 
 ## Driver Packages
 
-Instrument drivers are distributed as four PyPI packages:
+Instrument drivers are distributed as separate PyPI packages:
 
 | Package | Provides |
 |---------|---------|
@@ -713,6 +828,7 @@ Instrument drivers are distributed as four PyPI packages:
 | `rf-bench-drivers-yertai` | Yertai ET5406A+ DC load — CC/CV/CP/CR/BATT/TRAN modes |
 | `rf-bench-drivers-rtlsdr` | RTLSDR receiver — IQ capture, streaming, PPM calibration |
 | `rf-bench-drivers-gpsd` | gpsd GPS client — position, speed, altitude, heading, DOP; metric + imperial |
+| `rf-bench-drivers-koolertron` | MHinstek MHS-5200A series dual-channel DDS gen + counter + sweep (covers KKmoon and other rebrands; tested 2026-06-08 against MHS-5225A) |
 
 ---
 
@@ -1883,6 +1999,23 @@ Provides `rf_bench.hp.HP8712B` — the foundation for all HP 8712B projects.
 
 **Requires:** KISS-488 Rev 2 adapter (HX Engineering) at a static IP on the bench LAN.
 HP 8712B GPIB address: 16 (default). KISS-488 TCP port: 1234.
+
+---
+
+### rf-bench-drivers-solartron *(future)*
+
+**GitHub:** part of the rf-bench monorepo (path: `drivers/solartron/`).
+
+**Purpose:** Python driver for the Solartron 7151 6.5-digit Computing Multimeter (1985,
+IEEE-488) via the same KISS-488 Ethernet-GPIB adapter as the HP 8712B. Provides
+`rf_bench.solartron.Solartron7151`. Implements the full single-letter ASCII command
+set (MODE, RANGE, NINES, TRACK, TRIG, DELIMIT, LITERALS, DRIFT, NULL, SRQ, LOCK,
+STATUS, CALIBRATE/HI/LO/WRITE/REFRESH) extracted from the User Manual ND/7151/2 and
+the JoergCH/s7150 reference C driver. Untested against hardware.
+
+**Requires:** KISS-488 Rev 2 adapter (HX Engineering). Solartron 7151 GPIB address
+(rear-panel DIP switches): driver default 16. KISS-488 TCP port: 1234. The 7151
+must not share an address with the HP 8712B on the same bus.
 
 ---
 
