@@ -1,0 +1,2 @@
+rf-bench-drivers-icom>=0.2.0
+# System dependency: direwolf (pacman -S direwolf)
