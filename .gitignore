@@ -31,3 +31,15 @@ antenna_analysis_*.csv
 ~/.sdg_cal.json
 ~/.dig_atten_cal.json
 ~/.relay_router_state.json
+
+# Project-local backups and personal notes
+ideas.md.backup
+fuck.fuck.fuck
+
+# Project-local runtime data
+*.db
+*.jsonl
+*.sigmf-data
+*.sigmf-meta
+recordings/
+recordings_test/
