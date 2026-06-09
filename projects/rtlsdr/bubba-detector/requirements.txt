@@ -1,0 +1,7 @@
+rf-bench-drivers-rtlsdr>=0.1.2
+numpy>=1.20
+# Scanner mode (log mode works without these):
+sounddevice>=0.4      # audio playback
+lameenc>=1.7          # MP3 encoding
+scipy>=1.7            # lowpass filter for FM/AM demodulation
+webrtcvad>=2.0        # voice activity detection
