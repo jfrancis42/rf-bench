@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-kiwisdr"
+version = "0.1.0"
+description = "KiwiSDR HF receiver driver for bench automation — IQ capture, spectrum, band scan, streaming"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
+requires-python = ">=3.9"
+dependencies = [
+    "websocket-client>=1.6",
+    "numpy",
+]
+keywords = [
+    "kiwisdr", "kiwi-sdr", "sdr", "hf", "shortwave", "ham-radio",
+    "software-defined-radio", "iq", "spectrum", "websocket",
+    "bench-automation", "amateur-radio",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.urls]
+Homepage   = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+
+[tool.setuptools.packages.find]
+where      = ["."]
+include    = ["rf_bench.*"]
+namespaces = true
