@@ -1,5 +1,5 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
+> 🔶 **Mostly tested** — IQ capture and streaming verified working.
+> Device enumeration by serial number and some edge cases may need verification.
 
 # rf-bench-drivers-rtlsdr
 

@@ -1,5 +1,25 @@
 # rf-bench-si5351-gen
 
+Two UIs available — the original curses TUI (`si5351_gen.py`) and a new
+Tkinter graphical panel (`si5351_panel.py`).
+
+## Tkinter panel
+
+```bash
+python si5351_panel.py                   # auto-detect Bus Pirate
+python si5351_panel.py --bp /dev/ttyACM1 # explicit port
+python si5351_panel.py --xtal 26e6       # 26 MHz crystal
+python si5351_panel.py --ssa 10.1.1.60   # enable SSA measure button
+python si5351_panel.py --demo            # no hardware needed
+```
+
+Features: three-channel frequency/drive/enable display, Set Frequency dialog,
+preset save/load (`~/.si5351_presets.json`), SSA measurement button, PLL-B
+contention warning when CLK1 and CLK2 are both active.
+
+---
+# rf-bench-si5351-gen
+
 Cheap multi-channel frequency generator using the Si5351A I2C clock chip.
 Three independent outputs from ~3 kHz to ~200 MHz via a $5 breakout board.
 

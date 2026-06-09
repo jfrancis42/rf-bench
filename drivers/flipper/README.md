@@ -1,5 +1,5 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
+> 🔶 **Partially tested** — Sub-GHz OOK and 2-FSK TX/RX confirmed working.
+> IR, LF RFID, NFC, and GPIO untested against hardware.
 
 # rf-bench-drivers-flipper
 

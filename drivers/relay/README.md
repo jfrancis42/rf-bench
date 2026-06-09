@@ -1,5 +1,5 @@
-> ⚠️ **UNTESTED** — This implementation has not been verified against physical hardware.
-> Code is complete but has not been bench-tested. Verify behavior before relying on output.
+> ⚠️ **Hardware not yet connected** — XL9535 relay board ordered 2026-06-03, not yet arrived.
+> Code is complete. Testing will follow once the hardware is in hand.
 
 # rf-bench-drivers-relay
 
