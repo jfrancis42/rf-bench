@@ -1,0 +1,9 @@
+data,baudrate,data_bits,parity,stop_bits,description
+"Hello World",115200,8,NONE,1,Standard 8N1 ASCII string
+"The quick brown fox",9600,8,NONE,1,Classic test string at 9600 baud
+0xDEADBEEF,115200,8,NONE,1,Hex data transmission
+"@ABCDEFG",57600,7,EVEN,1,7E1 configuration (7 data bits + even parity)
+"Parity test",19200,8,ODD,2,8O2 configuration (odd parity + 2 stop bits)
+"Fast UART",921600,8,NONE,1,High-speed 921600 baud
+"AT+GMR",115200,8,NONE,1,ESP-AT command example
+"$GPGGA,123519,4807.038,N,01131.000,E",4800,8,NONE,1,NMEA GPS sentence at typical GPS baud rate

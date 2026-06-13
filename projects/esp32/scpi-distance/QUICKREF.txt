@@ -1,0 +1,45 @@
+ESP32 SCPI Distance Sensor — Quick Reference
+=============================================
+
+Hardware:
+  TRIG = GPIO 25
+  ECHO = GPIO 26
+  Serial: 115200 baud
+
+SCPI Commands:
+  *IDN?                      — Identification
+  *RST                       — Reset to defaults
+
+  DIST:MEAS?                 — Single measurement
+  DIST:CONT?                 — Averaged (10 samples)
+  
+  DIST:UNIT,<MM|CM|IN>       — Set unit
+  DIST:UNIT?                 — Query unit
+  
+  DIST:ALAR:HIGH,<mm>        — Set high threshold
+  DIST:ALAR:LOW,<mm>         — Set low threshold
+  DIST:ALAR?                 — Query alarm (0=OK, 1=LOW, 2=HIGH)
+
+Example Session:
+  > *IDN?
+  N0GQ,ESP32-SCPI-DISTANCE,HC-SR04,v1.0
+  
+  > DIST:MEAS?
+  245.32 MM
+  
+  > DIST:UNIT,CM
+  OK
+  
+  > DIST:CONT?
+  24.51 CM
+  
+  > DIST:ALAR:LOW,50
+  OK
+  
+  > DIST:ALAR:HIGH,500
+  OK
+  
+  > DIST:ALAR?
+  0
+
+Range: 20–4000 mm (±3 mm accuracy)

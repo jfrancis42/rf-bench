@@ -1240,6 +1240,193 @@ recording, and spectrum — the majority of ham software use cases.
 
 ---
 
+### Future-esp32-combos
+
+ESP32 SCPI controllers paired with existing bench instruments for automated measurement, closed-loop control, and remote operation. Each combines an ESP32 project from `projects/esp32/` with one or more instruments from the hardware inventory.
+
+**Pattern:** ESP32 acts as the orchestration layer — it reads sensors, commands instruments via their Python drivers, makes control decisions, and exposes high-level SCPI commands that abstract the complete measurement system.
+
+#### ESP32 + SSA3032X: Automated antenna tuner with SWR feedback
+
+`projects/esp32-combos/auto-tuner-ssa/` — 🔨 built to documentation.
+
+**Hardware:** scpi-tuner (stepper L/C network) + scpi-ptt (TX sequencing) + SSA3032X tracking generator + power sensor.
+
+**What it does:** Close-loop antenna tuner that keys the radio, measures forward/reflected power on the SSA, adjusts L/C via stepper motors, iterates until SWR < 1.5:1, then unkeys. Exposes `TUNE:AUTO,<freq_mhz>` SCPI command that abstracts the entire sequence.
+
+**Why ESP32:** SSA has no power-sensor SCPI commands (only spectrum trace). ESP32 scpi-swr reads forward/reflected directly from AD8307 detectors, computes SWR, and drives the tuner. Python script on the host orchestrates SSA tracking generator enable/disable and reads SWR from the ESP32.
+
+**Alternative:** scpi-tuner alone can auto-tune with built-in SWR sensor, but SSA tracking generator gives calibrated RF source and spectrum verification of harmonics.
+
+#### ESP32 + SPD3303X: Closed-loop battery charger with temperature monitoring
+
+`projects/esp32-combos/battery-charger/` — 🔨 built to documentation.
+
+**Hardware:** scpi-temp (DS18B20 on battery case) + scpi-relay (output enable/disable) + SPD3303X (CC/CV source) + SDM3045X or scpi-adc (terminal voltage readback).
+
+**What it does:** Multi-chemistry battery charger with per-chemistry state machines (lead-acid 3-stage, LiFePO4 CC/CV, Li-ion CC/CV taper, NiMH −ΔV detection). ESP32 monitors temperature via DS18B20, reads terminal voltage, commands PSU setpoints, and gates the relay for safety. Python script implements the state machine and logs V/I/T/Ah vs time.
+
+**Why ESP32:** Adds temperature sensing and hardware interlock (relay gating) that the PSU alone lacks. scpi-temp provides 0.5°C resolution for −ΔV/dT detection on NiMH. scpi-relay acts as emergency cutoff if temperature or voltage anomalies occur.
+
+#### ESP32 + IC-7300: Remote HF rig with rotator, PTT, and SWR monitoring
+
+`projects/esp32-combos/remote-hf-station/` — 🔨 built to documentation.
+
+**Hardware:** scpi-rotator (antenna az/el) + scpi-ptt (TX sequencing + VOX) + scpi-swr (forward/reflected power) + IC-7300 (via Hamlib rigctld).
+
+**What it does:** Complete remote HF station control. Web UI sets frequency/mode on the IC-7300, aims the antenna, monitors SWR during TX, and provides visual feedback. ESP32 handles all near-radio hardware; Python backend bridges Hamlib and ESP32 SCPI.
+
+**Why ESP32:** Puts antenna control, PTT sequencing, and SWR monitoring at the antenna/radio, eliminating long control cables. Web UI on the LAN or internet (via VPN) for remote operation.
+
+#### ESP32 + SDG1062X: Arbitrary waveform recorder/playback with external trigger
+
+`projects/esp32-combos/waveform-capture/` — 🔨 built to documentation.
+
+**Hardware:** scpi-adc (ADS1115 16-bit 4-ch) + scpi-relay (trigger input) + SDG1062X (arb waveform playback).
+
+**What it does:** scpi-adc samples an analog waveform at up to 860 SPS, stores it in CSV, uploads to SDG1062X as arbitrary waveform, replays on trigger. Use case: capture a transient (motor startup, audio glitch, RF burst), then replay it repeatedly for debugging.
+
+**Why ESP32:** ADS1115 gives 16-bit resolution vs SDG's 14-bit internal arbitrary waveform depth. scpi-relay provides hardware trigger input. Python script handles CSV → SDG arb waveform upload via `rf_bench.siglent.SDG1000X`.
+
+#### ESP32 + ET5406A+: Automated battery discharge tester with capacity logging
+
+`projects/esp32-combos/battery-discharge/` — 🔨 built to documentation.
+
+**Hardware:** scpi-load (or scpi-relay controlling the ET5406A+ via Yertai driver) + scpi-temp (battery temperature) + scpi-adc (terminal voltage).
+
+**What it does:** Automated battery discharge test. Sets constant current load via ET5406A+, monitors terminal voltage via scpi-adc, logs V/I/T vs time, integrates for mAh/Wh capacity, terminates at cutoff voltage. Multi-cell parallel testing via scpi-mux.
+
+**Why ESP32:** scpi-temp provides per-cell temperature monitoring (critical for lithium cells). scpi-adc gives isolated voltage sensing if testing multiple cells in parallel. Python script logs to SQLite and generates capacity curves.
+
+**Alternative:** Use scpi-load (ESP32 MOSFET electronic load) directly instead of ET5406A+ for lower-power testing (<50W).
+
+#### ESP32 + SDS2504X: Automated Bode plot with relay-switched filter bank
+
+`projects/esp32-combos/bode-plotter/` — 🔨 built to documentation.
+
+**Hardware:** scpi-relay (input switching for multi-DUT) + scpi-mux (analog mux for single DUT with multiple test points) + SDS2504X (scope CH1=input, CH2=output) + SDG1062X (swept sine).
+
+**What it does:** Automated Bode plot measurement. SDG sweeps frequency, scope captures CH1/CH2 amplitude ratio and phase, scpi-relay switches between DUTs, Python script generates magnitude/phase plots. Extends existing `projects/scope/bode/` with multi-DUT capability.
+
+**Why ESP32:** scpi-relay allows testing 4 filters back-to-back without manual cable swaps. scpi-mux allows probing multiple nodes on a single DUT (e.g., input, inter-stage, output of a 3-stage amplifier).
+
+#### ESP32 + RTL-SDR: Wideband RF scanner with relay-switched antenna array
+
+`projects/esp32-combos/antenna-array-scanner/` — 🔨 built to documentation.
+
+**Hardware:** scpi-relay (4× antennas to single RTL-SDR input) + RTL-SDR + scpi-gps (position logging).
+
+**What it does:** Scans 4 antennas sequentially across a frequency band, logs power spectrum per antenna, generates antenna pattern plots. Use case: compare dipole/vertical/loop/Yagi gain patterns across HF/VHF.
+
+**Why ESP32:** scpi-relay switches antennas under software control. scpi-gps timestamps each scan for correlation with mobile surveys. Python script uses `rf_bench.rtlsdr` for power spectrum capture.
+
+#### ESP32 + Flipper Zero: Automated Sub-GHz TX/RX protocol tester
+
+`projects/esp32-combos/flipper-protocol-tester/` — 🔨 built to documentation.
+
+**Hardware:** scpi-relay (DUT switching) + scpi-ptt (TX enable) + Flipper Zero (Sub-GHz TX/RX via `rf_bench.flipper`).
+
+**What it does:** Automated protocol compliance testing. Flipper transmits OOK/FSK signals at various frequencies/data rates/modulation indices, scpi-relay switches between DUTs (receivers), Python script logs which DUTs decode correctly. Use case: test 433 MHz remote control receivers, garage door openers, tire pressure sensors.
+
+**Why ESP32:** scpi-relay switches between up to 4 DUTs automatically. scpi-ptt provides TX sequencing if testing transmitters (Flipper in RX mode).
+
+#### ESP32 + SDM3045X: Multi-point temperature profiling for thermal chambers
+
+`projects/esp32-combos/thermal-profiler/` — 🔨 built to documentation.
+
+**Hardware:** scpi-temp (8-16× DS18B20 sensors placed throughout chamber) + SDM3045X (reference thermometer) + scpi-heater (chamber heater PID control).
+
+**What it does:** Measures temperature uniformity in a DIY thermal chamber. scpi-temp reads 8-16 sensors simultaneously, scpi-heater controls chamber temperature via PID, SDM3045X provides calibrated reference. Python script logs spatial temperature distribution and computes max deviation.
+
+**Why ESP32:** DS18B20 1-Wire bus supports 8-16 sensors on a single GPIO, providing spatial profiling impossible with a single DMM. scpi-heater closes the loop for setpoint tracking.
+
+#### ESP32 + Bus Pirate: I2C/SPI device characterization with automated sweeps
+
+`projects/esp32-combos/peripheral-tester/` — 🔨 built to documentation.
+
+**Hardware:** scpi-i2c (or scpi-spi) + Bus Pirate (for comparison/golden reference) + scpi-relay (power cycling DUT).
+
+**What it does:** Automated I2C/SPI device testing. Sweep register addresses, write test patterns, read back, verify. Compare ESP32 I2C master vs Bus Pirate for signal integrity. scpi-relay power-cycles DUT between tests. Use case: characterize ADCs, DACs, EEPROMs, sensors.
+
+**Why ESP32:** scpi-i2c and scpi-spi provide network-accessible I2C/SPI masters. Bus Pirate serves as golden reference for signal-level verification. Python script orchestrates both via `rf_bench.buspirate` and ESP32 SCPI.
+
+#### ESP32 + Koolertron MHS-5225A: Dual-channel IQ modulator with ESP32 DAC correction
+
+`projects/esp32-combos/iq-modulator/` — 🔨 built to documentation.
+
+**Hardware:** scpi-dac (MCP4728 4-ch DAC for I/Q offset/gain trim) + MHS-5225A (dual-channel DDS for I/Q carriers) + SSA3032X (IQ quality measurement).
+
+**What it does:** Generates IQ-modulated RF via MHS-5225A dual channels, uses scpi-dac to trim I/Q DC offsets and amplitude imbalance, measures carrier suppression and sideband symmetry on SSA. Iterates for optimal IQ balance. Use case: SDR TX calibration, IQ modulator testing.
+
+**Why ESP32:** scpi-dac provides 12-bit I/Q trim adjust. MHS-5225A has independent phase per channel (required for IQ). Python script optimizes DAC settings by reading SSA carrier/sideband levels via `rf_bench.siglent.SSA3000X` and `rf_bench.koolertron.MHS5200A`.
+
+#### ESP32 + IC-9700: Automated satellite pass recorder with Doppler correction
+
+`projects/esp32-combos/satellite-recorder/` — 🔨 built to documentation.
+
+**Hardware:** scpi-rotator (antenna az/el tracking) + scpi-gps (position + time) + IC-9700 (VHF/UHF RX with Doppler correction via Hamlib).
+
+**What it does:** Fully automated satellite pass recording. Predicts passes via TLE (AMSAT/SatNOGS), aims antenna, tunes IC-9700 with real-time Doppler correction, records audio, stores metadata (pass time, max elevation, Doppler curve). Use case: unattended capture of ISS SSTV, weather satellite APT, amateur FM repeaters in LEO.
+
+**Why ESP32:** scpi-rotator provides precise antenna aiming. scpi-gps supplies position (for pass prediction) and time (for TLE propagation). Python script uses `rf_bench.icom.IC9700` for Doppler updates and `rf_bench.gpsd` for observer state vector.
+
+#### ESP32 + SPD3303X + SDM3045X: Precision op-amp offset voltage measurement
+
+`projects/esp32-combos/opamp-offset/` — 🔨 built to documentation.
+
+**Hardware:** scpi-mux (CD4067 16-ch analog mux for multi-DUT) + scpi-relay (power supply switching) + SPD3303X (±15V rails) + SDM3045X (µV-resolution DC voltage).
+
+**What it does:** Automated op-amp input offset voltage measurement. scpi-mux switches between 16 DUT op-amps, scpi-relay powers them sequentially, SPD3303X supplies ±15V rails, SDM3045X measures output voltage in unity-gain configuration (Vout = Vos). Python script logs Vos vs temperature if combined with scpi-temp.
+
+**Why ESP32:** scpi-mux allows testing 16 op-amps automatically. scpi-relay gates power to prevent heating adjacent DUTs. Python script uses `rf_bench.siglent.SPD3303X` and `rf_bench.siglent.SDM3000X`.
+
+#### ESP32 + XL9535 relay: Multi-instrument RF routing matrix
+
+`projects/esp32-combos/rf-matrix/` — 🔨 built to documentation (blocked on XL9535 hardware).
+
+**Hardware:** scpi-relay (or scpi-matrix) + XL9535 relay board (16 relays) + RF coaxial relays (external, driven by XL9535 via `rf_bench.relay.XL9535`).
+
+**What it does:** 4×4 or 8×2 RF signal routing matrix. Routes SSA TG, SDG output, IC-7300 TX, or RTL-SDR input to any of 4-8 DUTs or test fixtures. Controlled via SCPI `ROUT:CLOS (@in!out)` commands. Use case: automated multi-DUT RF testing without manual cable swaps.
+
+**Why ESP32:** scpi-matrix provides SCPI interface. XL9535 provides 16 relay outputs for complex routing topologies. Python script abstracts routing as "connect source X to DUT Y" rather than low-level relay bit patterns.
+
+**Note:** XL9535 hardware not yet available (ordered 2026-06-03). Project blocked until board arrives and `rf_bench.relay.XL9535` driver is tested.
+
+#### ESP32 + SSA3032X + scpi-atten: Automated receiver sensitivity (MDS) measurement
+
+`projects/esp32-combos/mds-sweep/` — 🔨 built to documentation.
+
+**Hardware:** scpi-atten (PE4302/HMC472 0-31 dB) + SSA3032X tracking generator + IC-7300 or IC-9700 (RX under test via Hamlib).
+
+**What it does:** Automated minimum detectable signal (MDS) measurement across HF/VHF bands. SSA TG outputs calibrated signal, scpi-atten steps from 0 to −140 dBm (TG + attenuation), radio reports S-meter reading via Hamlib, Python script finds the attenuation where S-meter drops below noise floor. Generates MDS vs frequency plot.
+
+**Why ESP32:** scpi-atten provides programmable attenuation in 0.5 dB steps. Python script uses `rf_bench.siglent.SSA3000X` (TG control), SCPI to scpi-atten, and `rf_bench.icom.IC7300` (S-meter readback).
+
+**Enhancement:** Add scpi-ptt to measure TX power vs frequency for complete TX/RX characterization in one script.
+
+#### ESP32 + SDG1062X: Precision function generator with DAC-corrected offset/amplitude
+
+`projects/esp32-combos/precision-funcgen/` — 🔨 built to documentation.
+
+**Hardware:** scpi-dac (MCP4728 4-ch 12-bit DAC) + SDG1062X + SDM3045X (voltage verification) + summing amplifier circuit (external).
+
+**What it does:** Extends SDG1062X with external DAC-generated DC offset and amplitude scaling. scpi-dac outputs 0-3.3V control voltages, external analog circuit sums SDG AC with DAC DC offset and scales amplitude. Python script commands SDG waveform, adjusts scpi-dac for precise Vpp and Voffset, verifies on SDM3045X. Use case: generate signals with <0.1% amplitude accuracy or µV-level offsets beyond SDG specs.
+
+**Why ESP32:** scpi-dac provides network-controlled analog outputs. SDG alone has 1% amplitude accuracy; adding external DAC + verification loop tightens to SDM resolution (~0.01%). Python script uses `rf_bench.siglent.SDG1000X`, SCPI to scpi-dac, and `rf_bench.siglent.SDM3000X`.
+
+#### ESP32 + SDS2504X: Multi-channel logic analyzer with I2C/SPI/UART decode
+
+`projects/esp32-combos/logic-analyzer/` — 🔨 built to documentation.
+
+**Hardware:** scpi-i2c or scpi-spi or scpi-uart (DUT traffic generation) + SDS2504X digital channels (protocol decode).
+
+**What it does:** Generates I2C/SPI/UART traffic via ESP32, captures on scope digital channels, verifies protocol decode matches transmitted data. Use case: validate I2C sensor datasheets, debug SPI timing violations, test UART parity/framing error handling.
+
+**Why ESP32:** scpi-i2c/spi/uart provide known-good reference traffic. SDS2504X decodes I2C/SPI/UART in hardware. Python script uses `rf_bench.siglent.SDS2000X` to read decoded frames and compares to ESP32 transmitted data via SCPI.
+
+**Note:** Requires SDS2504X MSO option (digital probes). If not installed, use scope analog channels + manual decode.
+
+---
 ## Bench-internal traceability chain (calibration plan)
 
 A cross-cutting idea that ties several future projects together. The goal

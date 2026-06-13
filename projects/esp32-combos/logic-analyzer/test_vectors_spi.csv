@@ -1,0 +1,10 @@
+operation,data,frequency,mode,bit_order,byte_count,description
+write,0xAA,1000000,0,MSB,,Single byte write at 1 MHz mode 0
+write,0xDEADBEEF,1000000,0,MSB,,4-byte write MSB first
+write,0xDEADBEEF,1000000,0,LSB,,4-byte write LSB first
+read,0xFF,1000000,0,MSB,4,Read 4 bytes with dummy 0xFF
+transfer,0x12345678,500000,0,MSB,,Full duplex transfer mode 0
+transfer,0xABCDEF01,500000,1,MSB,,Full duplex transfer mode 1 (CPHA=1)
+transfer,0x55AA55AA,500000,2,MSB,,Full duplex transfer mode 2 (CPOL=1)
+transfer,0xF0F0F0F0,500000,3,MSB,,Full duplex transfer mode 3 (CPOL=1 CPHA=1)
+write,0x9F,8000000,0,MSB,,High-speed write at 8 MHz (flash READ_ID command)

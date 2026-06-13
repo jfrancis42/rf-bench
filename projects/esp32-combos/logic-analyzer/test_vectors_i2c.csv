@@ -1,0 +1,9 @@
+operation,address,data,frequency,byte_count,description
+scan,,,100000,,Address scan 0x00-0x7F at 100 kHz
+write,0x50,0xAA,100000,,Write single byte to EEPROM address 0x50
+write,0x50,0xDEADBEEF,100000,,Write 4 bytes to EEPROM
+read,0x50,,100000,1,Read 1 byte from EEPROM
+read,0x50,,100000,16,Read 16-byte block from EEPROM
+write,0x68,0x75,400000,,Write to MPU-6050 (WHO_AM_I register) at 400 kHz
+read,0x68,,400000,1,Read WHO_AM_I response (should be 0x68)
+scan,,,400000,,Fast mode address scan at 400 kHz
