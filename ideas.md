@@ -40,6 +40,7 @@ the design intent and the cross-cutting context.
    - [projects/rtlsdr](#projectsrtlsdr)
    - [projects/kiwisdr](#projectskiwisdr)
    - [projects/sunsdr](#projectssunsdr)
+   - [projects/esp32](#projectsesp32)
 6. [Hardware-pending projects](#hardware-pending-projects)
    - [HP 8712B VNA (projects/vna/)](#hp-8712b-vna)
    - [Solartron 7151 6.5-digit DMM](#solartron-7151)
@@ -830,6 +831,60 @@ which has an archived working proxy at
 | `tx-characterize/` | HF TX characterization with 192 kHz IQ. |
 | `vhf-monitor/` | 100–150 MHz wideband activity monitor (TRX 1). |
 | `vhf-tx-test/` | IC-9700 TX → SunSDR TRX 1 wideband measurement. |
+
+### projects/esp32
+
+ESP32-based SCPI-over-WiFi controllers. Each project connects to WiFi, exposes SCPI commands on TCP port 5025 (industry standard), and controls external hardware via GPIO/I2C/SPI/UART. Common pattern across all projects: Arduino IDE sketch (~400-600 lines), WiFi credentials embedded in source, IEEE 488.2 common commands (*IDN?, *RST, SYST:ERR?), domain-specific SCPI subsystem. Each project directory contains: `.ino` sketch, `README.md` (user guide with wiring, commands, examples), `README` (developer notes), `test_*.py` (Python demo).
+
+**Status codes:** ✅ = tested on hardware; 🔨 = built to documentation (not yet tested); 💭 = idea only.
+
+**All 35 ESP32 SCPI projects are now built to documentation (🔨)**. Each includes complete `.ino` firmware, `README.md` user guide, and `README` developer documentation. Hardware testing pending.
+
+| Project | Status | Hardware | SCPI Subsystem | Use Case |
+|---------|--------|----------|----------------|----------|
+| `scpi-relay/` | ✅ | 4× relay outputs + 4× digital inputs + 1× analog input (0-3.3V ADC) | `ROUTE:`, `MEAS:` | ATE switching, DUT control, sensor monitoring |
+| `scpi-gps/` | ✅ | Serial GPS module (NEO-6M/7M/8M), UART @ 9600 baud | `GPS:` | Position logging, RF field testing, time sync |
+| `scpi-servo/` | ✅ | 4× RC hobby servos (SG90, MG996R), external 5V PSU required | `SERV:` | Antenna positioning, sample rotation, optical alignment |
+| `scpi-temp/` | ✅ | DS18B20 1-Wire (8-16 sensors on single GPIO) | `TEMP:` | Environmental monitoring, thermal testing |
+| `scpi-imu/` | ✅ | MPU6050 or LSM9DS1 (accel/gyro/mag via I2C) | `IMU:` | Vibration testing, tilt monitoring, motion detection |
+| `scpi-power/` | ✅ | INA219/INA226 I2C voltage/current sensor | `MEAS:` (V/I/P/energy) | Power consumption logging, DUT characterization |
+| `scpi-adc/` | 🔨 | ADS1115 16-bit 4-channel I2C ADC with PGA | `MEAS:`, `ADC:` | Precision voltage measurement, sensor interfacing |
+| `scpi-counter/` | 🔨 | GPIO interrupt + ESP32 PCNT peripheral | `COUN:` | Frequency/event counting, RPM measurement |
+| `scpi-encoder/` | 🔨 | Quadrature decoder (2-4 rotary encoders) | `ENC:` | Position feedback, knob reading, angle measurement |
+| `scpi-distance/` | 🔨 | HC-SR04 ultrasonic or VL53L0X ToF laser | `DIST:` | Level sensing, proximity detection, automated positioning |
+| `scpi-stepper/` | 🔨 | A4988/DRV8825 drivers (2-4 stepper motors) | `STEP:` | Linear stages, rotary tables, precise positioning |
+| `scpi-motor/` | 🔨 | L298N/TB6612 H-bridge (2-4 DC motors) | `MOT:` | Drive test rigs, conveyor control, robotic arms |
+| `scpi-pwm/` | 🔨 | 4-16 independent PWM channels (LED PWM peripheral) | `PWM:` | LED dimming, fan control, signal generation |
+| `scpi-dac/` | 🔨 | MCP4725 (1-ch) or MCP4728 (4-ch) I2C DAC, 12-bit | `DAC:` | Programmable voltage source, bias control, waveform gen |
+| `scpi-neo/` | 🔨 | WS2812B/NeoPixel addressable RGB LED strip | `LED:` | Status indicators, light shows, visual test feedback |
+| `scpi-heater/` | 🔨 | Heater element + DS18B20 + PID control via SSR/MOSFET | `HEAT:` | Environmental chambers, PCB reflow, thermal testing |
+| `scpi-i2c/` | 🔨 | I2C master interface (scan bus, read/write arbitrary devices) | `I2C:` | I2C device testing, sensor development, debugging |
+| `scpi-spi/` | 🔨 | SPI master interface (generic transactions) | `SPI:` | SPI device control, flash memory, ADC/DAC interfacing |
+| `scpi-uart/` | 🔨 | Serial UART bridge (transparent or command parser) | `UART:` | Control serial devices over network, GPS forwarding |
+| `scpi-can/` | 🔨 | MCP2515 CAN controller (automotive/industrial) | `CAN:` | Vehicle diagnostics (OBD-II), industrial automation |
+| `scpi-modbus/` | 🔨 | RS-485 Modbus RTU/TCP gateway | `MODB:` | Industrial sensor/actuator control, building automation |
+| `scpi-ir/` | 🔨 | IR LED (TX) + TSOP receiver (RX) | `IR:` | Remote control testing, appliance automation, IR replay |
+| `scpi-rotator/` | 🔨 | Antenna rotator: 2 servos (az/el) + limit switches | `ROT:` | Antenna aiming, satellite tracking, antenna pattern measurement |
+| `scpi-ptt/` | 🔨 | PTT (push-to-talk) controller: GPIO outputs + VOX sense inputs | `PTT:` | Remote radio keying, automated TX sequences, amplifier sequencing |
+| `scpi-atten/` | 🔨 | RF attenuator: PE4302, HMC472, or relay-switched network | `ATTE:` | Signal level control, gain/loss measurement, dynamic range testing |
+| `scpi-swr/` | 🔨 | SWR/power meter: AD8707 log detector or directional coupler + ADC | `SWR:`, `POW:` | Antenna tuning automation, transmitter testing, protection monitoring |
+| `scpi-keyer/` | 🔨 | CW keyer: iambic with paddle inputs | `KEY:` | Automated CW testing, beacon control, contest logging |
+| `scpi-tuner/` | 🔨 | Antenna tuner controller: motorized variable caps or relay L/C network | `TUNE:` | Automated antenna matching, remote tuner control |
+| `scpi-funcgen/` | 🔨 | Function generator: DAC + DDS for sine/square/tri/arb waveforms | `FUNC:` | Audio testing, sensor stimulation, filter response |
+| `scpi-pulse/` | 🔨 | Pulse/pattern generator: GPIO with precise timing | `PULS:`, `PATT:` | Clock generation, trigger signals, digital pattern injection |
+| `scpi-tone/` | 🔨 | Audio tone generator: I2S DAC or PWM audio output | `TONE:` | Audio testing, DTMF generation, calibration tones |
+| `scpi-mux/` | 🔨 | Analog multiplexer: CD4051/CD4067 or relay matrix | `MUX:` | Multi-DUT switching, instrumentation multiplexing |
+| `scpi-load/` | 🔨 | Electronic load: MOSFET + op-amp constant current sink | `LOAD:` | Battery discharge testing, PSU characterization, LED testing |
+| `scpi-decade/` | 🔨 | Programmable decade box: relay-switched resistor/capacitor network | `RES:`, `CAP:` | Resistance substitution, sensor simulation, calibration |
+| `scpi-matrix/` | 🔨 | Signal routing matrix: relay crosspoint (N inputs × M outputs) | `MATR:` | Automated signal routing, multi-instrument switching |
+
+**Hardware notes:**
+- **Power:** Most projects run on USB power alone. Servos, relays, motors, and LED strips require external 5V power supply (2-5A depending on load).
+- **I/O levels:** ESP32 is 3.3V logic. Use level shifters or voltage dividers for 5V interfacing.
+- **Libraries:** Most projects use built-in Arduino libraries (Wire for I2C, SPI for SPI, HardwareSerial for UART). Servos need ESP32Servo library. DS18B20 needs OneWire + DallasTemperature. IMU needs sensor-specific library (e.g., Adafruit_MPU6050).
+- **GPIO:** Common assignments reused across projects (relays/servos on GPIO 25/26/27/14; I2C on SDA=21/SCL=22; SPI on VSPI MOSI=23/MISO=19/SCK=18/CS=5; UART2 on RX=16/TX=17). Alternatives documented in each project's README.
+
+**Integration:** All projects integrate with LabVIEW, MATLAB, Python (pyvisa or raw socket), Keysight VEE, TestStand via standard SCPI/VISA. Python test scripts included in each project directory.
 
 ---
 

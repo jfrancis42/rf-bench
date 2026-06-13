@@ -1977,6 +1977,56 @@ via `~/money/sms.py` when a new PI region is detected.
 
 ---
 
+## ESP32 Network-Controlled Instruments
+
+ESP32-based SCPI-over-WiFi controllers in `projects/esp32/`. Each project exposes SCPI commands on TCP port 5025, integrates with LabVIEW/MATLAB/Python via standard SCPI/VISA, and controls external hardware via GPIO/I2C/SPI/UART. Common architecture: Arduino IDE sketch (~400-600 lines), WiFi credentials embedded in source, IEEE 488.2 common commands, domain-specific SCPI subsystem.
+
+**All 35 ESP32 SCPI projects are now built to documentation (🔨 = untested)**. Categories:
+- **Sensors:** temperature (DS18B20), IMU (MPU6050), power (INA219), ADC (ADS1115), counter (PCNT), encoder (quadrature), distance (HC-SR04)
+- **Actuators:** relay, servo, stepper (A4988/DRV8825), DC motor (L298N), PWM (LEDC), DAC (MCP4728), LED strips (WS2812B), heater (PID control)
+- **Bridges:** I2C master, SPI master, UART, CAN (MCP2515), Modbus (RS-485), IR TX/RX
+- **RF-specific:** GPS, antenna rotator, PTT controller, RF attenuator (PE4302/HMC472), SWR meter (AD8307), CW keyer (iambic), antenna tuner
+- **Signal generation:** function generator (DDS), pulse generator (hw_timer), tone generator (PWM)
+- **Test equipment:** analog mux (CD4067), electronic load (MOSFET), decade box (relay), signal routing matrix (4×4 crosspoint)
+
+### Example Projects
+
+| Project | Hardware | SCPI Subsystem | Key Features |
+|---------|----------|----------------|--------------|
+| **scpi-relay** | 4× relay + 4× digital in + 1× analog in | `ROUTE:`, `MEAS:` | ATE switching, DUT control |
+| **scpi-gps** | Serial GPS (NEO-6M/7M/8M) | `GPS:` | Position/time sync |
+| **scpi-adc** | ADS1115 16-bit 4-ch I2C ADC | `MEAS:`, `ADC:` | Per-channel PGA, ±0.256V to ±6.144V |
+| **scpi-counter** | ESP32 PCNT peripheral | `COUN:` | Freq/event counting, DC-40 MHz |
+| **scpi-stepper** | A4988/DRV8825 drivers | `STEP:` | Non-blocking motion, dual motor |
+| **scpi-swr** | AD8307 log detector + ADC | `SWR:`, `POW:` | 16-point cal, dBm/watt units |
+| **scpi-funcgen** | ESP32 DAC + DDS | `FUNC:` | Sin/sq/tri/saw, 0.1 Hz-10 kHz |
+| **scpi-can** | MCP2515 CAN controller | `CAN:` | OBD-II, J1939, CANopen |
+
+**See `ideas.md` section "projects/esp32"** for the complete table with all 35 projects
+
+Each project directory contains:
+- `.ino` Arduino sketch (WiFi, SCPI parser, hardware control)
+- `README.md` (wiring, commands, Python examples, use cases)
+- `README` (architecture, GPIO assignments, limitations, future enhancements)
+- `test_*.py` (Python demo script)
+
+**Integration:** Standard SCPI via raw TCP socket or pyvisa. Example:
+```python
+import socket
+s = socket.socket()
+s.connect(('192.168.1.42', 5025))
+s.sendall(b'*IDN?\n')
+print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
+```
+
+**Hardware notes:**
+- Most projects run on USB power; servos/motors/relays need external 5V (2-5A)
+- ESP32 is 3.3V logic (use level shifters for 5V interfacing)
+- Common GPIO assignments documented in each project's README
+- Required libraries: ESP32Servo, OneWire/DallasTemperature, Adafruit sensors, Wire/SPI (built-in)
+
+---
+
 ## Future Projects — HP 8712B Vector Network Analyzer
 
 > **These projects require the HP 8712B VNA and an Ethernet-GPIB adapter (KISS-488 Rev 2).**
