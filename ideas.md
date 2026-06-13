@@ -54,6 +54,13 @@ the design intent and the cross-cutting context.
    - [Solartron 7151 applications](#future-solartron)
    - [Cross-cutting bench services](#future-cross-cutting)
    - [TCI Audio Router](#future-tci-router)
+   - [ESP32 + instrument combinations](#future-esp32-combos)
+   - [Multi-instrument coordination](#future-multi-instrument)
+   - [Machine learning signal analysis](#future-ml-signal-analysis)
+   - [Remote lab orchestration](#future-remote-lab)
+   - [Contest / Field Day automation](#future-contest-field-day)
+   - [DUT characterization / production test](#future-dut-characterization)
+   - [Propagation science](#future-propagation-science)
 8. [Bench-internal traceability chain (calibration plan)](#traceability-chain)
 9. [Cross-cutting bugs and quirks (one-stop reference)](#cross-cutting-bugs)
 
@@ -1425,6 +1432,278 @@ ESP32 SCPI controllers paired with existing bench instruments for automated meas
 **Why ESP32:** scpi-i2c/spi/uart provide known-good reference traffic. SDS2504X decodes I2C/SPI/UART in hardware. Python script uses `rf_bench.siglent.SDS2000X` to read decoded frames and compares to ESP32 transmitted data via SCPI.
 
 **Note:** Requires SDS2504X MSO option (digital probes). If not installed, use scope analog channels + manual decode.
+
+---
+### Future-multi-instrument
+
+Multi-instrument coordination via Python for measurements impossible with single instruments. No ESP32 required — pure `rf_bench.*` driver integration.
+
+#### SSA + SDG phase-locked two-tone IMD
+
+`projects/rf/two-tone-imd/` — 💭 not started.
+
+SSA3032X + SDG1062X generate phase-coherent two tones (f1, f2) for true IP3 measurement. Existing MHS-5225A two-tone idea uses non-phase-locked sources (realistic for OFDM but not for IMD spec). This project synchronizes SDG CH1/CH2 via internal phase lock (if available) or external 10 MHz reference. SSA measures IM3 products at 2f1-f2 and 2f2-f1. Extends `projects/radio/receiver-test/` with proper two-tone IMD measurement.
+
+**Why this combination:** SDG phase-locks CH1/CH2 internally. SSA measures IM3 with calibrated dBm. MHS-5225A alternative (separate project) uses independent phases for OFDM-style testing.
+
+**Blocked on:** Verify SDG1062X internal phase-lock capability via SCPI or 10 MHz reference.
+
+#### IC-7300 + IC-9700 diversity reception
+
+`projects/radio/diversity/` — 💭 not started.
+
+Two radios tuned to same frequency, Python combines audio via equal-gain combining (EGC) or maximal-ratio combining (MRC) based on SNR estimates. Logs SNR improvement vs single receiver. Use case: weak signal DX, EME, meteor scatter.
+
+**Hardware:** 2× radios (IC-7300 + IC-9700 or 2× IC-7300), 2× antennas with independent fading, USB audio capture, sounddevice Python library.
+
+**Why this combination:** Existing hardware. IC-9700 VHF/UHF ideal for space communications. IC-7300 HF for ionospheric fading. Python synchronizes samples, estimates SNR per channel, weights/combines.
+
+#### Dual SSA coherent measurements
+
+`projects/rf/coherent-ssa/` — ❌ blocked on second SSA.
+
+Two SSA3032X units with 10 MHz reference lock for phase noise correlation, EMI source location via TDoA, or coherent gain measurement. Use cases: identify correlated vs uncorrelated noise sources, locate interference via antenna array + time delay.
+
+**Why this combination:** Phase-locked SSAs enable coherent measurements impossible with single unit.
+
+**Blocked on:** Acquiring second SSA3032X Plus.
+
+#### SDG + scope fast transfer function analyzer
+
+`projects/scope/fast-bode/` — 💭 not started.
+
+Extends `projects/scope/bode/` with real-time swept frequency response. SDG sweeps via hardware sweep mode (autonomous, no SCPI per-point), scope captures envelope via fast acquisition mode. Orders of magnitude faster than software-stepped sweep for scalar (magnitude-only) Bode plots.
+
+**Why this combination:** SDG hardware sweep (~100 Hz sweep rate) + scope fast acquisition (~1000 wfm/s) eliminates SCPI round-trip latency. Tradeoff: magnitude only (no phase) unless scope supports FFT phase extraction.
+
+### Future-ml-signal-analysis
+
+Machine learning applied to SDR streams (RTL-SDR, KiwiSDR, SunSDR) for automated signal analysis. All projects require pre-recorded training datasets or live labeling.
+
+#### Modulation classifier
+
+`projects/rtlsdr/ml-modulation/` — 💭 not started.
+
+Train CNN or ResNet on IQ samples from AM/FM/SSB/CW/PSK/FSK/OFDM/QAM. Classify unknown signals in real-time from RTL-SDR or KiwiSDR stream. Use case: spectrum monitoring, interference identification, SIGINT.
+
+**Dataset:** GNU Radio synthetic signals, public datasets (RML2016.10a), or locally generated via SDG + RTL-SDR recording.
+
+**Model:** 1D CNN on IQ time series or 2D CNN on spectrogram. TensorFlow/PyTorch inference in Python, feeds `rf_bench.rtlsdr` or `rf_bench.kiwisdr` stream.
+
+#### Interference detector
+
+`projects/spectrum/ml-interference/` — 💭 not started.
+
+Learn "normal" spectrum from weeks of RTL-SDR captures. Flag anomalies: harmonics, EMI, new transmitters, spurious. Use case: EMC compliance monitoring, RFI hunting, regulatory enforcement.
+
+**Method:** Autoencoder or isolation forest on power spectrum features. Trains on clean baseline, flags deviations. Alerts via email/SMS when anomaly detected.
+
+#### Propagation predictor
+
+`projects/kiwisdr/ml-propagation/` — 💭 not started.
+
+Logs KiwiSDR beacon S-meters + solar/geomagnetic indices (K/A from NOAA API) for months. Predicts HF band openings 1-24 hours ahead via LSTM or gradient boosted trees. Use case: contest prep, DXpedition planning.
+
+**Dataset:** `projects/kiwisdr/beacon-logger/` output + space weather API. Features: time-of-day, season, sunspot number, K-index, recent S-meter trend.
+
+**Output:** Probability of opening per band, recommended QSY times.
+
+#### Automatic QRM notch
+
+`projects/rtlsdr/ml-notch/` — 💭 not started.
+
+Real-time interferer characterization (bandwidth, center freq, modulation) from RTL-SDR IQ stream. Generates notch filter coefficients, applies via GNU Radio or SciPy. Use case: adaptive filtering for weak signal work.
+
+**Method:** Detect interferer via energy detection, characterize via FFT, compute notch (IIR or FIR), apply to IQ stream. Optional: ML-based interferer type classification to optimize notch shape.
+
+### Future-remote-lab
+
+Meta-system coordinating all instruments and projects. Provides unified interface, automation, and data management across the entire bench.
+
+#### Test sequence engine
+
+`lab-automation/sequence-engine/` — 💭 not started.
+
+YAML-defined workflows that chain projects. Example: "tune antenna → measure MDS → measure TX power → log to database → email report if SWR > 2.0". Handles parameter passing, error recovery, parallel execution where safe.
+
+**Format:**
+```yaml
+sequence:
+  - name: Tune antenna
+    script: projects/esp32-combos/auto-tuner-ssa/auto_tuner.py
+    args: {freq: 14.2, target_swr: 1.5}
+  - name: Measure MDS
+    script: projects/radio/receiver-test/receiver_test.py
+    args: {freq: 14.2, mode: usb}
+    requires: [Tune antenna]
+  - name: Log results
+    script: lab-automation/logger.py
+    args: {table: daily_checks}
+```
+
+**Engine:** Python (or Prefect/Airflow if complexity grows). Runs via cron or manual trigger. Stores results in SQLite or PostgreSQL.
+
+#### Web dashboard
+
+`lab-automation/dashboard/` — 💭 not started.
+
+Single-pane-of-glass for all instruments. Flask or FastAPI backend, Vue.js or React frontend. Real-time updates via WebSocket. Panels: spectrum waterfall (RTL-SDR/KiwiSDR/SSA), S-meter, rotator position, SWR, chamber temperature, PSU voltage/current, scope traces.
+
+**Why:** Remote monitoring without SSH/VNC into individual instrument UIs. Mobile-friendly for field operations.
+
+**Integration:** REST APIs to all `rf_bench.*` drivers + ESP32 SCPI controllers. WebSocket pushes for <1s update rates.
+
+#### Measurement database
+
+`lab-automation/timeseries-db/` — 💭 not started.
+
+Centralized time-series storage for all logged data. InfluxDB (time-series optimized) or PostgreSQL with TimescaleDB extension. Grafana dashboards for visualization. Projects write to DB via REST API instead of local CSV.
+
+**Schema:** Measurement name, timestamp, value, unit, tags (instrument, project, frequency, etc.). Retention policy: 1s resolution for 7 days, 1min avg for 1 year, 1hr avg forever.
+
+**Use cases:** Long-term drift tracking, anomaly detection, performance regression testing, scientific data publication.
+
+#### Calibration tracker
+
+`lab-automation/cal-tracker/` — 💭 not started.
+
+Knows when instruments were last calibrated (via manual entry or automatic logging from `projects/rf/calibration/`). Flags drift if cross-checks fail. Schedules re-cal. Generates cal certificates (PDF) per instrument.
+
+**Database:** SQLite or PostgreSQL. Tables: instruments, cal_events, drift_checks.
+
+**Alerts:** Email or Slack when cal due, drift detected, or cross-check fails. Integrates with traceability chain (see [Bench-internal traceability chain](#traceability-chain)).
+
+### Future-contest-field-day
+
+Ham radio contest automation and integration with contest logging software.
+
+#### N1MM+ bridge
+
+`projects/radio/n1mm-bridge/` — 💭 not started.
+
+Reads frequency from N1MM+ (via UDP broadcast or database polling), auto-tunes antenna via `esp32-combos/auto-tuner-ssa/`, logs SWR to N1MM+ contact notes. Use case: seamless QSY without manual tuner adjustment, SWR monitoring during contest.
+
+**Integration:** N1MM+ broadcasts frequency on UDP port 12060. Python listener triggers scpi-tuner when frequency changes. SWR from scpi-swr written back to N1MM+ via TCP port 12060.
+
+**Extension:** Add TX power measurement via `esp32-combos/mds-sweep/` (reverse mode: scpi-atten + SSA measure TX output).
+
+#### Propagation-aware band changes
+
+`projects/kiwisdr/auto-band-change/` — 💭 not started.
+
+KiwiSDR monitors all HF contest bands simultaneously (8-12 channels if multiple KiwiSDRs). Measures band noise + beacon S-meters. Tells N1MM+ or other logger when to QSY via UDP command. Use case: maximize QSO rate by following propagation.
+
+**Algorithm:** Compute "band goodness" = (beacon S-meter - noise floor) × activity level (CQ count from CW Skimmer). Recommend QSY if current band drops below threshold and another band improves.
+
+**Caveat:** Requires multiple KiwiSDRs or time-shared single KiwiSDR (monitor each band for 10s, rotate).
+
+#### Automatic SO2R switching
+
+`projects/radio/so2r/` — 💭 not started.
+
+Coordinates IC-7300 + SunSDR (or 2× IC-7300) for Single Operator Two Radio contesting. Handles antenna routing via `esp32-combos/rf-matrix/`, audio switching, PTT interlocks (no simultaneous TX), and frequency coordination (no same-band operation). Integrates with N1MM+ SO2R mode.
+
+**Why this combination:** IC-7300 (HF run radio) + SunSDR (HF mult radio). rf-matrix routes antennas. Python enforces interlock rules.
+
+**Complex because:** SO2R requires sub-100ms switching, interlock logic, and tight integration with logger. May need dedicated SO2R controller hardware (e.g., Microham or manual footswitch) rather than pure software.
+
+#### Field Day scorer
+
+`projects/radio/field-day-scorer/` — 💭 not started.
+
+Integrates GPS (distance to contacts), antenna patterns (gain toward contact azimuth from `esp32-combos/antenna-array-scanner/`), and QSO log to generate tactical reports. Use case: "best antenna for EU right now", "propagation forecast for next 2 hours", "which bands are dead".
+
+**Why:** Combines spatial (GPS + antenna) and temporal (propagation model) data for informed operating decisions. More sophisticated than simple N1MM+ statistics.
+
+### Future-dut-characterization
+
+Automated production test and hardware-in-the-loop characterization. High-throughput testing via relay/mux switching.
+
+#### RF amplifier production test
+
+`projects/rf/amp-production-test/` — 💭 not started.
+
+`esp32-combos/rf-matrix/` routes 4-8 DUT amplifiers sequentially. SSA3032X measures gain, P1dB, IP3 (with SDG two-tone source). `scpi-relay` bins pass/fail into physical trays. Use case: QC line for homebrew or small-run amplifiers.
+
+**Throughput:** ~30s per DUT (tune + gain sweep + P1dB + IP3) = 120 DUTs/hour.
+
+**Test sequence:** Connect DUT → measure S21 gain vs freq → measure P1dB → measure IP3 → write results to DB → actuate pass/fail relay.
+
+#### Filter QC line
+
+`projects/rf/filter-qc/` — 💭 not started.
+
+16-DUT fixture via `scpi-mux`. Automated S21 sweep per DUT via SSA + SDG. Export Touchstone .s2p files. Statistical binning (pass/fail based on insertion loss, passband ripple, stopband rejection). Use case: crystal filter QC, cavity filter tuning validation.
+
+**Why scpi-mux:** 16 filters measured without manual cable swaps. Mux on-resistance (<5Ω) acceptable for filters with Z0=50Ω and >1dB insertion loss.
+
+**Output:** CSV with per-DUT metrics + Touchstone files + bin assignments (A/B/C grade or pass/fail).
+
+#### Crystal aging chamber
+
+`projects/components/crystal-aging/` — 💭 not started.
+
+`esp32-combos/scpi-heater/` cycles temperature (-40°C to +85°C). `scpi-counter` logs crystal oscillator frequency vs temp/time (weeks or months). Use case: TCXO aging characterization, OCXO warm-up time, crystal pulling range vs temp.
+
+**Why this combination:** PID temp control + frequency counter + long-term logging (SQLite). Detects aging (ppm/year), tempco (ppm/°C), and hysteresis.
+
+**Chamber:** DIY insulated box with heater/fan, DS18B20 sensors, crystal oscillator under test powered inside chamber.
+
+#### Battery formation/QC
+
+`projects/power/battery-formation/` — 💭 not started.
+
+Multi-cell formation and QC via `esp32-combos/battery-discharge/` + `esp32-combos/battery-charger/` + `scpi-mux` (16 cells in parallel). Automated charge/discharge cycles, capacity binning, IR matching. Use case: lithium cell QC for pack building, lead-acid desulfation, NiMH break-in.
+
+**Why scpi-mux:** Test 16 cells in parallel with per-cell voltage sensing and per-cell temp monitoring (scpi-temp). `scpi-relay` power-gates cells to prevent thermal runaway propagation.
+
+**Safety:** Requires per-cell fusing, over-temp cutoff, and fireproof enclosure. Not a beginner project.
+
+### Future-propagation-science
+
+Serious ionospheric/tropospheric monitoring for scientific publication or advanced ham radio use.
+
+#### Multipath fading logger
+
+`projects/kiwisdr/multipath-fading/` — 💭 not started.
+
+KiwiSDR monitors known HF beacons (e.g., NCDXF/IARU). Logs selective fading (frequency-dependent S-meter variation). Generates delay-Doppler plots (delay vs Doppler shift). Use case: ionospheric research, propagation mode identification (F2, Es, TEP).
+
+**Method:** Receive beacon CW signal, FFT to extract Doppler shifts, correlate delays. Requires GPS-disciplined KiwiSDR for frequency/time accuracy.
+
+**Output:** 2D plot (delay vs Doppler), identifies single-hop vs multi-hop, auroral vs TEP propagation.
+
+#### Ionospheric sounder
+
+`projects/rf/ionosonde/` — 💭 not started.
+
+SDG1062X generates chirp (1-30 MHz over 100ms). RTL-SDR RX captures reflections. Plot ionogram (frequency vs time-of-flight → virtual height). Use case: real-time MUF estimation, ionospheric layer identification (E, F1, F2).
+
+**Why this combination:** SDG chirp source (arbitrary waveform), RTL-SDR captures echo, Python correlates TX/RX for time-of-flight.
+
+**License requirement:** Experimental or Part 5 operation (very low power, <100mW). High-power ionosondes require coordination.
+
+**Limitation:** Backscatter ionosonde (monostatic) limited to ~500km range. Oblique sounding (bistatic with remote RX) extends range but needs second station.
+
+#### Tropospheric ducting detector
+
+`projects/rf/tropo-ducting/` — 💭 not started.
+
+`scpi-relay` switches between 4 antennas at different heights (e.g., 1m, 3m, 10m, 30m). RTL-SDR measures VHF/UHF beacon signal strength at each height. Computes refractive index gradient (dn/dh). Use case: predict ducting conditions for 2m/70cm DX.
+
+**Method:** Refractivity depends on temperature, pressure, humidity (all measurable via `scpi-temp` + barometer + hygrometer). Height-dependent signal strength maps to refractive index profile. Negative gradient → ducting.
+
+**Beacon:** Distant VHF FM broadcast, NOAA weather radio, or coordinated amateur beacon.
+
+#### Meteor scatter event counter
+
+`projects/rtlsdr/meteor-scatter/` — 💭 not started.
+
+RTL-SDR monitors 6m beacon (50 MHz). Detects meteor reflections (sudden signal bursts 0.1-10s duration). Logs event time, duration, peak strength. Use case: meteor shower analysis, meteor scatter scheduling for QSOs.
+
+**Method:** Energy detection on beacon frequency. Threshold crossing → event. Correlate with known meteor showers (Perseids, Geminids) to validate detection.
+
+**Beacon:** NCDXF 50 MHz or coordinated 6m beacon. Requires quiet 6m band (no local QRM).
 
 ---
 ## Bench-internal traceability chain (calibration plan)
