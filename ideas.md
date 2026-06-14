@@ -61,6 +61,7 @@ the design intent and the cross-cutting context.
    - [Contest / Field Day automation](#future-contest-field-day)
    - [DUT characterization / production test](#future-dut-characterization)
    - [Propagation science](#future-propagation-science)
+   - [Virtual SCPI instruments](#future-virtual-instruments)
 8. [Bench-internal traceability chain (calibration plan)](#traceability-chain)
 9. [Cross-cutting bugs and quirks (one-stop reference)](#cross-cutting-bugs)
 
@@ -1706,6 +1707,459 @@ RTL-SDR monitors 6m beacon (50 MHz). Detects meteor reflections (sudden signal b
 **Beacon:** NCDXF 50 MHz or coordinated 6m beacon. Requires quiet 6m band (no local QRM).
 
 ---
+
+<a name="future-virtual-instruments"></a>
+### Future-virtual-instruments
+
+Virtual SCPI instruments with web and Android interfaces. Built using a universal instrument panel builder framework where users assemble custom control panels from reusable widgets.
+
+**Architecture:** Python backend exposes SCPI TCP server (port 5025) + HTTP/WebSocket server (port 8000/8001) + MQTT bridge. Web UI (React/Vue) and Android app (Kotlin/Jetpack Compose) render panels dynamically from JSON/YAML config files. Widgets subscribe to MQTT topics or poll SCPI commands for real-time updates.
+
+**Development phases:**
+1. **Phase 1:** Read-only monitoring widgets (analog meter, bar graph, LED, numeric display, line chart, XY plot, text LCD, waterfall, compass, gauge cluster). Web-only, SCPI polling only. Hand-edited JSON configs.
+2. **Phase 2:** Bidirectional controls (toggle, button, knob, slider, text input). MQTT pub/sub integration.
+3. **Phase 3:** SCPI→MQTT bridge (existing bench instruments publish to MQTT topics, widgets subscribe).
+4. **Phase 4:** Drag-and-drop web-based config builder (like Grafana editor).
+5. **Phase 5:** Android app with same widget library and config format.
+
+**Widget library (Phase 1 — 10 display-only widgets):**
+
+#### Analog Meter (virtual-analog-meter)
+
+`virtual/analog-meter/` — 💭 not started.
+
+**Visual:** Round gauge with needle, configurable colored zones (green/yellow/red).
+
+**Config:** `min`, `max`, `units`, `zones` (thresholds), `needle_color`.
+
+**Binding:** SCPI command (backend polls) or MQTT topic (subscribe).
+
+**Use cases:** S-meter, SWR, voltage, current, temperature, azimuth/elevation.
+
+**Example config:**
+```yaml
+type: analog_meter
+label: "S-Meter"
+binding:
+  scpi: {host: "10.1.1.60", port: 5025, command: ":CALC:MARK1:Y?"}
+  interval: 200ms
+config:
+  min: -120
+  max: -30
+  units: "dBm"
+  zones:
+    - {max: -90, color: red}
+    - {max: -60, color: yellow}
+    - {max: -30, color: green}
+```
+
+---
+
+#### Bar Graph (virtual-bar-graph)
+
+`virtual/bar-graph/` — 💭 not started.
+
+**Visual:** Horizontal or vertical filled bar with optional gradient, threshold lines.
+
+**Config:** `min`, `max`, `orientation` (horizontal/vertical), `color`, `thresholds`.
+
+**Binding:** SCPI or MQTT.
+
+**Use cases:** Signal strength, battery charge, power output, memory usage.
+
+**Example:** Battery voltage 0–15V, green <12V, yellow 12–14V, red >14V.
+
+---
+
+#### LED Indicator (virtual-led)
+
+`virtual/led/` — 💭 not started.
+
+**Visual:** Single circular LED, configurable on/off colors, optional blink.
+
+**Config:** `on_color`, `off_color`, `blink_rate` (optional).
+
+**Binding:** SCPI boolean (parse as 0/1) or MQTT boolean topic.
+
+**Use cases:** PTT active, relay state, alarm condition, instrument ready, GPS lock.
+
+**Example:** `bench/esp32/ptt/state` → red when transmitting, gray when idle.
+
+---
+
+#### Numeric Display (virtual-numeric-display)
+
+`virtual/numeric-display/` — 💭 not started.
+
+**Visual:** 7-segment LCD style or plain text digits, large font.
+
+**Config:** `precision` (decimal places), `units`, `font_size`, `color`.
+
+**Binding:** SCPI or MQTT.
+
+**Use cases:** Frequency readout, voltage, distance, GPS altitude, counter.
+
+**Example:** IC-7300 frequency in MHz with 3 decimal places (14.257 MHz).
+
+---
+
+#### Line Chart (virtual-line-chart)
+
+`virtual/line-chart/` — 💭 not started.
+
+**Visual:** Scrolling time-series graph, multiple traces supported, auto-scaling Y axis.
+
+**Config:** `history_seconds`, `y_min`, `y_max`, `traces` (list of bindings with colors).
+
+**Binding:** Multiple SCPI commands or MQTT topics (one per trace).
+
+**Use cases:** Voltage vs time, S-meter trends, temperature logging, power consumption.
+
+**Example:** 60-second S-meter history with green trace, auto-scroll.
+
+---
+
+#### XY Plot (virtual-xy-plot)
+
+`virtual/xy-plot/` — 💭 not started.
+
+**Visual:** Scatter or line plot, X and Y from separate sources, real-time updating.
+
+**Config:** `x_min`, `x_max`, `y_min`, `y_max`, `x_binding`, `y_binding`.
+
+**Binding:** Two SCPI commands or MQTT topics (X and Y independent).
+
+**Use cases:** I-V curves, constellation diagrams, antenna patterns, Lissajous figures.
+
+**Example:** Diode I-V curve: X = voltage (SDM), Y = current (SDM), sweep via SPD.
+
+---
+
+#### Text LCD (virtual-text-lcd)
+
+`virtual/text-lcd/` — 💭 not started.
+
+**Visual:** Monospace text display (16×2 character LCD emulation or larger).
+
+**Config:** `rows`, `cols`, `font`, `scroll_mode` (wrap, scroll, truncate).
+
+**Binding:** SCPI query (string) or MQTT topic (string payload).
+
+**Use cases:** GPS NMEA sentences, instrument status messages, log tail, terminal output.
+
+**Example:** 4-line LCD showing GPS fix status, lat/lon, altitude, speed.
+
+---
+
+#### Waterfall Display (virtual-waterfall)
+
+`virtual/waterfall/` — 💭 not started.
+
+**Visual:** Time vs frequency/parameter heatmap, vertical scrolling, configurable colormap.
+
+**Config:** `width_bins`, `history_rows`, `color_map` (viridis, plasma, jet), `z_min`, `z_max`.
+
+**Binding:** SCPI trace query (array) or MQTT topic (array payload).
+
+**Use cases:** Spectrum analyzer waterfall, RTL-SDR, temperature profile over time, audio spectrogram.
+
+**Example:** SSA spectrum trace (801 points) scrolling down at 10 FPS.
+
+---
+
+#### Compass (virtual-compass)
+
+`virtual/compass/` — 💭 not started.
+
+**Visual:** Circular compass rose with needle and cardinal labels (N/S/E/W).
+
+**Config:** `cardinal_labels` (bool), `needle_color`.
+
+**Binding:** SCPI or MQTT (degrees, 0–360).
+
+**Use cases:** Antenna rotator azimuth, GPS heading, wind direction, satellite azimuth.
+
+**Example:** Rotator azimuth from `bench/esp32/rotator/azimuth`, red needle.
+
+---
+
+#### Gauge Cluster (virtual-gauge-cluster)
+
+`virtual/gauge-cluster/` — 💭 not started.
+
+**Visual:** Multiple small gauges in a grid (car dashboard style).
+
+**Config:** Array of sub-gauges, each with own binding, range, label, color.
+
+**Binding:** Multiple SCPI commands or MQTT topics (one per gauge).
+
+**Use cases:** PSU voltage+current+power in one widget, GPS speed+alt+heading, multi-channel monitor.
+
+**Example:** SPD3303X CH1 showing 13.8V / 2.1A / 29W in three small gauges.
+
+---
+
+#### Multi-instrument panels (Phase 1 compound ideas)
+
+Once the 10 base widgets are built, users can compose them into full instrument clusters via JSON/YAML config. Examples:
+
+##### HF Station Monitor
+
+`virtual/panels/hf-station/` — 💭 not started.
+
+**Widgets:** Analog meter (S-meter), numeric display (frequency), LED (PTT), line chart (S-meter history 60s), bar graph (SWR).
+
+**Bindings:** IC-7300 via Hamlib rigctld SCPI bridge, ESP32 scpi-swr, ESP32 scpi-ptt.
+
+**Layout:** 3×3 grid, S-meter top-left, frequency top-center, PTT LED top-right, line chart middle (full width), SWR bottom-left.
+
+---
+
+##### VHF/UHF Satellite Tracker
+
+`virtual/panels/satellite-tracker/` — 💭 not started.
+
+**Widgets:** Compass (azimuth), analog meter (elevation 0–90°), numeric display (Doppler shift Hz), line chart (signal strength), text LCD (pass info: AOS/LOS/max el).
+
+**Bindings:** ESP32 scpi-rotator (az/el), IC-9700 Doppler offset via rigctld, IC-9700 S-meter, Python pass predictor publishing to MQTT.
+
+**Layout:** 2×3 grid, compass left, elevation meter center, Doppler right, S-meter chart bottom-left span 2, text LCD bottom-right.
+
+---
+
+##### Battery Characterization Lab
+
+`virtual/panels/battery-lab/` — 💭 not started.
+
+**Widgets:** Gauge cluster (voltage, current, power), line chart (V/I/T vs time), numeric display (capacity mAh), bar graph (state of charge %), LED (charge complete).
+
+**Bindings:** ESP32 scpi-adc (voltage), ESP32 scpi-power (INA219 current), ESP32 scpi-temp (battery temp), Python script integrating capacity.
+
+**Layout:** Gauge cluster top-left, line chart top-right span 2 rows, numeric display (capacity) middle-left, bar graph (SOC) bottom, LED bottom-right.
+
+---
+
+##### Spectrum Monitor Wall
+
+`virtual/panels/spectrum-wall/` — 💭 not started.
+
+**Widgets:** 4× waterfall displays (one per band: 20m, 15m, 10m, 6m).
+
+**Bindings:** 4× KiwiSDR channels via WebSocket → MQTT bridge, or RTL-SDR time-shared scanning.
+
+**Layout:** 2×2 grid, each waterfall full-size, labels top of each (20m / 15m / 10m / 6m).
+
+---
+
+##### RF Test Bench Dashboard
+
+`virtual/panels/rf-test-bench/` — 💭 not started.
+
+**Widgets:** Numeric display (frequency), analog meter (output power dBm), bar graph (harmonic distortion dBc), line chart (sweep trace), XY plot (AM/PM distortion).
+
+**Bindings:** SSA marker freq/level, SDG output freq, harmonic measurement script, sweep data logger.
+
+**Layout:** Numeric display top-left, power meter top-center, harmonic bar top-right, line chart middle full-width, XY plot bottom full-width.
+
+---
+
+#### Phase 2 widgets (bidirectional controls — future)
+
+##### Toggle Switch (virtual-toggle)
+
+`virtual/toggle/` — 💭 not started.
+
+**Visual:** SPDT-style toggle, on/off states with color change.
+
+**Config:** `on_label`, `off_label`, `on_color`, `off_color`.
+
+**Binding:** SCPI write command or MQTT publish. Read-after-write confirmation.
+
+**Use cases:** PSU output enable, relay control, PTT override, heater on/off.
+
+---
+
+##### Push Button (virtual-button)
+
+`virtual/button/` — 💭 not started.
+
+**Visual:** Momentary button, press animation.
+
+**Config:** `label`, `color`, `hold_duration` (optional for long-press actions).
+
+**Binding:** SCPI command or MQTT publish on press. Optional hold command.
+
+**Use cases:** SSA sweep trigger, SDG burst trigger, antenna tuner auto-tune, reset counter.
+
+---
+
+##### Rotary Knob (virtual-knob)
+
+`virtual/knob/` — 💭 not started.
+
+**Visual:** Continuous or stepped rotary knob with numeric readout.
+
+**Config:** `min`, `max`, `step`, `units`, `log_scale` (bool).
+
+**Binding:** SCPI write + read-back, or MQTT publish + subscribe for confirmation.
+
+**Use cases:** Frequency tuning, volume control, attenuation setting, gain adjust.
+
+---
+
+##### Slider (virtual-slider)
+
+`virtual/slider/` — 💭 not started.
+
+**Visual:** Horizontal or vertical slider with live value display.
+
+**Config:** `min`, `max`, `step`, `orientation`, `log_scale` (bool).
+
+**Binding:** SCPI write + read-back, or MQTT publish + subscribe.
+
+**Use cases:** PSU voltage setpoint, SDG amplitude, scope timebase, filter bandwidth.
+
+---
+
+##### Text Input (virtual-text-input)
+
+`virtual/text-input/` — 💭 not started.
+
+**Visual:** Single-line text box with submit button.
+
+**Config:** `placeholder`, `validation_regex` (optional).
+
+**Binding:** SCPI arbitrary command or MQTT publish on submit.
+
+**Use cases:** Send raw SCPI commands for debugging, set arbitrary frequency, input callsign.
+
+---
+
+#### Supporting infrastructure (drivers, backend, configs)
+
+##### Virtual instrument driver
+
+`drivers/virtual/` — 💭 not started.
+
+**Package:** `rf_bench.virtual` (if needed as a library).
+
+**Purpose:** Common Python backend code for all virtual instruments. SCPI server base class, MQTT client wrapper, WebSocket handler, config parser (JSON/YAML), widget state manager.
+
+**Alternatively:** Each virtual instrument is self-contained (FastAPI app + React frontend) in `virtual/<name>/`, no shared driver package. Decide based on code duplication after building 2-3 examples.
+
+---
+
+##### SCPI→MQTT bridge
+
+`virtual/scpi-bridge/` — 💭 not started (Phase 3).
+
+**Purpose:** Polls SCPI commands from existing bench instruments (SSA, SDG, IC-7300 via rigctld, etc.) at configured intervals, publishes results to MQTT topics. Widgets subscribe to MQTT, don't care if data came from SCPI or native MQTT instrument.
+
+**Config format:** YAML mapping SCPI commands to MQTT topics with interval, parse type, scaling.
+
+**Example:**
+```yaml
+instruments:
+  ssa3032x:
+    host: 10.1.1.60
+    port: 5025
+    mappings:
+      - scpi: ":CALC:MARK1:X?"
+        mqtt: "bench/ssa/marker1_freq"
+        interval: 500ms
+        parse: float
+        scale: 1e-6  # Hz → MHz
+```
+
+**Deliverable:** Python daemon, systemd service, example configs for SSA/SDG/SDM/SPD/IC-7300.
+
+---
+
+##### Panel config examples
+
+`virtual/configs/` — 💭 not started.
+
+**Purpose:** Example panel YAML files for common use cases. Users copy, edit, load into workbench UI.
+
+**Examples:**
+- `hf-station.yaml` — IC-7300 S-meter, frequency, SWR, PTT
+- `vhf-monitor.yaml` — IC-9700 satellite tracking with az/el compass
+- `battery-lab.yaml` — Multi-cell discharge test with V/I/T/capacity
+- `spectrum-wall.yaml` — 4× KiwiSDR waterfall displays
+- `rf-test-bench.yaml` — SSA/SDG/scope for amplifier characterization
+
+**Schema:** JSON Schema or YAML schema for validation (optional but recommended for Phase 4 GUI builder).
+
+---
+
+##### Web UI framework
+
+`virtual/workbench-ui/` — 💭 not started.
+
+**Tech stack:** React or Vue 3, TailwindCSS, Plotly.js or Chart.js, mqtt.js (WebSocket MQTT client).
+
+**Features:**
+- Load panel config (JSON/YAML) from URL parameter or file upload
+- Render widgets dynamically based on config
+- Subscribe to MQTT topics or poll backend WebSocket
+- Responsive layout (desktop, tablet, mobile)
+
+**Deliverable:** Single-page app, `npm run build` → static files served by Python backend.
+
+---
+
+##### Android app
+
+`virtual/workbench-android/` — 💭 not started (Phase 5).
+
+**Tech stack:** Kotlin, Jetpack Compose, Eclipse Paho MQTT client, MPAndroidChart or Vico.
+
+**Features:**
+- Load panel config from JSON/YAML (file picker or URL)
+- Native widget rendering (same visual style as web)
+- Direct MQTT connection (efficient, low latency)
+- Offline mode (last known values cached)
+- Notifications (threshold alerts, instrument errors)
+
+**Deliverable:** APK for sideloading, eventual Google Play release.
+
+---
+
+**Development priority (Phase 1, starting now):**
+1. Build 2-3 simple display widgets (analog meter, numeric display, LED) as standalone web apps
+2. Prove SCPI polling backend + React frontend architecture
+3. Add JSON config loading (single-widget panels first)
+4. Expand to 10-widget library
+5. Build first compound panel (HF Station Monitor with 5 widgets in grid layout)
+
+**Directory structure:**
+```
+virtual/
+├── analog-meter/          # Phase 1 — first widget
+│   ├── backend.py         # FastAPI SCPI server + HTTP/WebSocket
+│   ├── frontend/          # React app
+│   │   ├── src/
+│   │   │   └── AnalogMeter.tsx
+│   │   └── package.json
+│   ├── config.example.yaml
+│   └── README.md
+├── numeric-display/       # Phase 1
+├── led/                   # Phase 1
+├── bar-graph/             # Phase 1
+├── line-chart/            # Phase 1
+├── ...                    # Remaining 5 Phase 1 widgets
+├── workbench-ui/          # Phase 1 — unified multi-widget panel renderer
+│   ├── backend.py
+│   ├── frontend/
+│   └── configs/           # Example panel YAML files
+├── scpi-bridge/           # Phase 3
+└── workbench-android/     # Phase 5
+```
+
+**See also:** `~/Dropbox/build/rf-bench/workbench.md` for full architecture documentation, widget API specs, MQTT vs SCPI tradeoffs, and phased development plan.
+
+---
+
 ## Bench-internal traceability chain (calibration plan)
 
 A cross-cutting idea that ties several future projects together. The goal
