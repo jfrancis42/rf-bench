@@ -1,37 +1,38 @@
 #!/usr/bin/env python3
 """
-Virtual Analog Meter — SCPI TCP Server + WebSocket + MQTT bridge
+Virtual Bar Graph — SCPI TCP Server + WebSocket + MQTT bridge
 
 Exposes:
 - SCPI TCP server on port 5025 (IEEE 488.2 standard instrument port)
 - HTTP server on port 8000 (serves static frontend)
-- WebSocket server on port 8001 (real-time meter value updates)
+- WebSocket server on port 8001 (real-time bar updates)
 - MQTT subscriber (listens to configured topic for value updates)
 
 SCPI Commands:
-  *IDN?                    → "N0GQ,Virtual-Analog-Meter,1.0,2026"
+  *IDN?                    → "N0GQ,Virtual-Bar-Graph,1.0,2026"
   *RST                     → Reset to defaults
   SYST:ERR?                → Query error queue
   MEAS:VAL <float>         → Set displayed value
   MEAS:VAL?                → Query current value
-  CONF:MIN <float>         → Set scale minimum
-  CONF:MIN?                → Query scale minimum
-  CONF:MAX <float>         → Set scale maximum
-  CONF:MAX?                → Query scale maximum
-  CONF:UNIT <string>       → Set display units (e.g., "dBm", "V", "A")
+  CONF:MIN <float>         → Set minimum scale value (default 0)
+  CONF:MIN?                → Query minimum value
+  CONF:MAX <float>         → Set maximum scale value (default 100)
+  CONF:MAX?                → Query maximum value
+  CONF:ORIENT <HOR|VERT>   → Set orientation (default VERT)
+  CONF:ORIENT?             → Query orientation
+  CONF:UNIT <string>       → Set display units (e.g., "dB", "W", "%")
   CONF:UNIT?               → Query display units
-  CONF:ZONE <id>,<v0>,<v1>,<color>  → Define colored zone (id 1-5)
-  CONF:ZONE? <id>          → Query zone definition
+  CONF:COL <color>         → Set bar color (hex, e.g., "#00ff00")
+  CONF:COL?                → Query bar color
+  CONF:THRES <y>,<r>       → Set thresholds: yellow, red (e.g., "70,90")
+  CONF:THRES?              → Query thresholds
   MQTT:CONF <host>,<topic> → Configure MQTT broker and topic to subscribe
   MQTT:CONF?               → Query MQTT configuration
 
 Example usage:
   echo "*IDN?" | nc localhost 5025
-  echo "MEAS:VAL 42.5" | nc localhost 5025
-  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5025
-
-  # Then publish to MQTT:
-  mosquitto_pub -h 10.1.0.20 -t bench/meter/value -m "42.5"
+  echo "MEAS:VAL 75.5" | nc localhost 5025
+  echo "CONF:THRES 60,85" | nc localhost 5025
 """
 
 import asyncio
@@ -39,9 +40,8 @@ import json
 import socket
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
-# Try to import FastAPI/uvicorn; provide helpful error if missing
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.staticfiles import StaticFiles
@@ -52,7 +52,6 @@ except ImportError:
     print("Install with: pip install fastapi uvicorn websockets --break-system-packages", file=sys.stderr)
     sys.exit(1)
 
-# Try to import paho-mqtt; provide helpful error if missing
 try:
     import paho.mqtt.client as mqtt
 except ImportError:
@@ -61,20 +60,18 @@ except ImportError:
     sys.exit(1)
 
 
-class AnalogMeterState:
+class BarGraphState:
     """Instrument state and configuration"""
 
     def __init__(self):
         self.value: float = 0.0
-        self.min_val: float = 0.0
-        self.max_val: float = 100.0
+        self.min_value: float = 0.0
+        self.max_value: float = 100.0
+        self.orientation: str = "VERT"  # VERT or HOR
         self.units: str = ""
-        # Zones: {id: (v0, v1, color)}
-        self.zones: Dict[int, Tuple[float, float, str]] = {
-            1: (0.0, 33.0, '#226644'),   # Green: safe
-            2: (33.0, 66.0, '#886600'),  # Yellow: caution
-            3: (66.0, 100.0, '#882222'), # Red: danger
-        }
+        self.color: str = "#00ff00"
+        self.threshold_yellow: float = 70.0
+        self.threshold_red: float = 90.0
         self.error_queue: List[str] = []
         # MQTT configuration
         self.mqtt_host: Optional[str] = None
@@ -84,24 +81,24 @@ class AnalogMeterState:
         """Serialize state for WebSocket broadcast"""
         return {
             'value': self.value,
-            'min': self.min_val,
-            'max': self.max_val,
+            'min': self.min_value,
+            'max': self.max_value,
+            'orientation': self.orientation,
             'units': self.units,
-            'zones': [
-                {'id': k, 'v0': v[0], 'v1': v[1], 'color': v[2]}
-                for k, v in sorted(self.zones.items())
-            ]
+            'color': self.color,
+            'thresholdYellow': self.threshold_yellow,
+            'thresholdRed': self.threshold_red
         }
 
 
 # Global state
-state = AnalogMeterState()
+state = BarGraphState()
 websocket_clients: List[WebSocket] = []
 mqtt_client: Optional[mqtt.Client] = None
 event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 # FastAPI app
-app = FastAPI(title="Virtual Analog Meter")
+app = FastAPI(title="Virtual Bar Graph")
 
 
 # ==============================================================================
@@ -157,15 +154,9 @@ async def get_index():
         return HTMLResponse(content=frontend_path.read_text())
     else:
         return HTMLResponse(
-            content="<html><body><h1>Virtual Analog Meter</h1>"
-                    "<p>Frontend not built. See README.md</p></body></html>"
+            content="<html><body><h1>Virtual Bar Graph</h1>"
+                    "<p>Frontend not found. See README.md</p></body></html>"
         )
-
-
-# Mount static files if frontend build exists
-frontend_build = Path(__file__).parent.parent / "frontend" / "build"
-if frontend_build.exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_build)), name="static")
 
 
 # ==============================================================================
@@ -213,7 +204,7 @@ def start_mqtt_client(host: str, topic: str):
     try:
         mqtt_client.connect(host, 1883, 60)
         mqtt_client.loop_start()
-        print(f"MQTT client started for {host}:{1883}")
+        print(f"MQTT client started for {host}:1883")
     except Exception as e:
         print(f"MQTT connection failed: {e}")
         state.error_queue.append(f"-221,MQTT connection failed: {e}")
@@ -226,7 +217,7 @@ def start_mqtt_client(host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5027):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5026):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -271,27 +262,27 @@ class SCPIServer:
     def process_command(self, cmd: str) -> Optional[str]:
         """Process a single SCPI command, return response string or None"""
         cmd_original = cmd.strip()
-        cmd = cmd.upper().strip()
+        cmd_upper = cmd.upper().strip()
 
         # IEEE 488.2 common commands
-        if cmd == "*IDN?":
-            return "N0GQ,Virtual-Analog-Meter,1.0,2026"
+        if cmd_upper == "*IDN?":
+            return "N0GQ,Virtual-Bar-Graph,1.0,2026"
 
-        if cmd == "*RST":
+        if cmd_upper == "*RST":
             global state
-            state = AnalogMeterState()
+            state = BarGraphState()
             asyncio.create_task(broadcast_state())
             return None
 
-        if cmd == "SYST:ERR?":
+        if cmd_upper == "SYST:ERR?":
             if state.error_queue:
                 return state.error_queue.pop(0)
             else:
                 return "0,No error"
 
         # Measurement value
-        if cmd.startswith("MEAS:VAL"):
-            if "?" in cmd:
+        if cmd_upper.startswith("MEAS:VAL"):
+            if "?" in cmd_upper:
                 return str(state.value)
             else:
                 try:
@@ -304,32 +295,49 @@ class SCPIServer:
                     return None
 
         # Configuration commands
-        if cmd.startswith("CONF:MIN"):
-            if "?" in cmd:
-                return str(state.min_val)
+        if cmd_upper.startswith("CONF:MIN"):
+            if "?" in cmd_upper:
+                return str(state.min_value)
             else:
                 try:
-                    state.min_val = float(cmd.split()[1])
+                    state.min_value = float(cmd.split()[1])
                     asyncio.create_task(broadcast_state())
                     return None
                 except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-222,Data out of range: {e}")
+                    state.error_queue.append(f"-222,Invalid min: {e}")
                     return None
 
-        if cmd.startswith("CONF:MAX"):
-            if "?" in cmd:
-                return str(state.max_val)
+        if cmd_upper.startswith("CONF:MAX"):
+            if "?" in cmd_upper:
+                return str(state.max_value)
             else:
                 try:
-                    state.max_val = float(cmd.split()[1])
+                    state.max_value = float(cmd.split()[1])
                     asyncio.create_task(broadcast_state())
                     return None
                 except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-222,Data out of range: {e}")
+                    state.error_queue.append(f"-222,Invalid max: {e}")
                     return None
 
-        if cmd.startswith("CONF:UNIT"):
-            if "?" in cmd:
+        if cmd_upper.startswith("CONF:ORIENT"):
+            if "?" in cmd_upper:
+                return state.orientation
+            else:
+                try:
+                    orient = cmd.split()[1].strip('"').upper()
+                    if orient in ["HOR", "VERT"]:
+                        state.orientation = orient
+                        asyncio.create_task(broadcast_state())
+                        return None
+                    else:
+                        state.error_queue.append("-222,Orientation must be HOR or VERT")
+                        return None
+                except IndexError:
+                    state.error_queue.append("-222,Missing parameter")
+                    return None
+
+        if cmd_upper.startswith("CONF:UNIT"):
+            if "?" in cmd_upper:
                 return state.units
             else:
                 try:
@@ -340,48 +348,52 @@ class SCPIServer:
                     state.error_queue.append("-222,Missing parameter")
                     return None
 
-        if cmd.startswith("CONF:ZONE"):
-            parts = cmd.split(maxsplit=1)
-            if "?" in cmd:
-                try:
-                    zone_id = int(parts[1].strip("?"))
-                    if zone_id in state.zones:
-                        v0, v1, color = state.zones[zone_id]
-                        return f"{v0},{v1},{color}"
-                    else:
-                        return "-220,Parameter error"
-                except (IndexError, ValueError):
-                    return "-220,Parameter error"
+        if cmd_upper.startswith("CONF:COL"):
+            if "?" in cmd_upper:
+                return state.color
             else:
                 try:
-                    # Format: CONF:ZONE 1,0,50,#226644
-                    params = parts[1].split(',')
-                    zone_id = int(params[0])
-                    v0 = float(params[1])
-                    v1 = float(params[2])
-                    color = params[3].strip()
-                    state.zones[zone_id] = (v0, v1, color)
+                    color = cmd.split(maxsplit=1)[1].strip('"')
+                    if color.startswith('#') and len(color) in [4, 7]:
+                        state.color = color
+                        asyncio.create_task(broadcast_state())
+                        return None
+                    else:
+                        state.error_queue.append("-222,Invalid color format (use #RGB or #RRGGBB)")
+                        return None
+                except IndexError:
+                    state.error_queue.append("-222,Missing parameter")
+                    return None
+
+        if cmd_upper.startswith("CONF:THRES"):
+            if "?" in cmd_upper:
+                return f"{state.threshold_yellow},{state.threshold_red}"
+            else:
+                try:
+                    params = cmd_original.split(maxsplit=1)[1].split(',')
+                    yellow = float(params[0].strip())
+                    red = float(params[1].strip())
+                    state.threshold_yellow = yellow
+                    state.threshold_red = red
                     asyncio.create_task(broadcast_state())
                     return None
                 except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-220,Parameter error: {e}")
+                    state.error_queue.append(f"-222,Invalid thresholds: {e}")
                     return None
 
         # MQTT configuration
-        if cmd.startswith("MQTT:CONF"):
-            if "?" in cmd:
+        if cmd_upper.startswith("MQTT:CONF"):
+            if "?" in cmd_upper:
                 if state.mqtt_host and state.mqtt_topic:
                     return f"{state.mqtt_host},{state.mqtt_topic}"
                 else:
                     return "Not configured"
             else:
                 try:
-                    # Use original command to preserve case of parameters
                     params = cmd_original.split(maxsplit=1)[1].split(',')
                     mqtt_host = params[0].strip()
                     mqtt_topic = params[1].strip()
 
-                    # Configure and start MQTT client
                     state.mqtt_host = mqtt_host
                     state.mqtt_topic = mqtt_topic
                     start_mqtt_client(mqtt_host, mqtt_topic)
@@ -412,20 +424,16 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=9004,
+        port=8102,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
-    print("Virtual Analog Meter ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5025")
-    print("  - HTTP:      http://0.0.0.0:8000")
-    print("  - WebSocket: ws://0.0.0.0:8000/ws")
+    print("Virtual Bar Graph ready:")
+    print("  - SCPI:      tcp://0.0.0.0:5026")
+    print("  - HTTP:      http://0.0.0.0:8102")
+    print("  - WebSocket: ws://0.0.0.0:8102/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
-    print("")
-    print("Example MQTT setup:")
-    print('  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5025')
-    print('  mosquitto_pub -h 10.1.0.20 -t bench/meter/value -m "75.5"')
 
     await server.serve()
 

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Compass</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #compass-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #6c9bd1;
+    }
+    #canvas-container {
+      position: relative;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 50%;
+      padding: 20px;
+    }
+    #compass-canvas {
+      display: block;
+    }
+    #heading-display {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 20px;
+      color: #ff0000;
+      text-align: center;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual Compass</h1>
+  <div id="container">
+    <div id="compass-title">Compass</div>
+    <div id="canvas-container">
+      <canvas id="compass-canvas" width="350" height="350"></canvas>
+    </div>
+    <div id="heading-display">0° N</div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5033<br>
+    Commands: MEAS:HEAD, CONF:SIZE, CONF:COL, CONF:LABEL, CONF:ROSE
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+    const canvas = document.getElementById('compass-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Physics constants (same as analog-meter)
+    const SPRING = 355;
+    const DAMPING = 23;
+
+    let compassState = {
+      targetHeading: 0,      // Target from SCPI
+      displayHeading: 0,     // Current animated heading
+      velocity: 0,           // Angular velocity
+      size: 350,
+      needleColor: '#ff0000',
+      showLabels: true,
+      showRose: true,
+      title: 'Compass'
+    };
+
+    let lastFrameTime = 0;
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Set target heading (physics will animate to it)
+          let newHeading = data.heading || 0;
+
+          // Handle wraparound: choose shortest rotation path
+          const diff = newHeading - compassState.displayHeading;
+          if (diff > 180) {
+            newHeading -= 360;
+          } else if (diff < -180) {
+            newHeading += 360;
+          }
+
+          compassState.targetHeading = newHeading;
+          compassState.size = data.size || 350;
+          compassState.needleColor = data.needleColor || '#ff0000';
+          compassState.showLabels = data.showLabels !== undefined ? data.showLabels : true;
+          compassState.showRose = data.showRose !== undefined ? data.showRose : true;
+          compassState.title = data.title || 'Compass';
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function headingToCardinal(heading) {
+      const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                          'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      const index = Math.round(heading / 22.5) % 16;
+      return directions[index];
+    }
+
+    function animate(timestamp) {
+      // Calculate delta time
+      const dt = lastFrameTime ? (timestamp - lastFrameTime) / 1000 : 0;
+      lastFrameTime = timestamp;
+
+      // Update needle physics (spring-damper)
+      if (dt > 0 && dt < 0.1) {  // Sanity check on dt
+        const error = compassState.targetHeading - compassState.displayHeading;
+        const accel = error * SPRING - compassState.velocity * DAMPING;
+        compassState.velocity += accel * dt;
+        compassState.displayHeading += compassState.velocity * dt;
+
+        // Keep target and display in same wraparound space
+        // If display crosses a boundary, shift target by same amount
+        if (compassState.displayHeading >= compassState.targetHeading + 180) {
+          compassState.targetHeading += 360;
+        } else if (compassState.displayHeading <= compassState.targetHeading - 180) {
+          compassState.targetHeading -= 360;
+        }
+      } else if (dt === 0) {
+        // First frame: snap to target
+        compassState.displayHeading = compassState.targetHeading;
+        compassState.velocity = 0;
+      }
+
+      updateDisplay();
+      requestAnimationFrame(animate);
+    }
+
+    function updateDisplay() {
+      document.getElementById('compass-title').textContent = compassState.title;
+
+      // Update canvas size if changed
+      if (canvas.width !== compassState.size || canvas.height !== compassState.size) {
+        canvas.width = compassState.size;
+        canvas.height = compassState.size;
+      }
+
+      // Update heading display
+      const cardinal = headingToCardinal(compassState.displayHeading);
+      document.getElementById('heading-display').textContent =
+        `${compassState.displayHeading.toFixed(1)}° ${cardinal}`;
+      document.getElementById('heading-display').style.color = compassState.needleColor;
+
+      drawCompass();
+    }
+
+    function drawCompass() {
+      const size = compassState.size;
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size * 0.4;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, size, size);
+
+      // Draw outer circle
+      ctx.strokeStyle = '#2a2a40';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Draw compass rose if enabled
+      if (compassState.showRose) {
+        ctx.strokeStyle = '#1a1a2a';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 360; i += 30) {
+          const angle = (i - 90) * Math.PI / 180;
+          const x1 = centerX + Math.cos(angle) * radius * 0.85;
+          const y1 = centerY + Math.sin(angle) * radius * 0.85;
+          const x2 = centerX + Math.cos(angle) * radius;
+          const y2 = centerY + Math.sin(angle) * radius;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+      }
+
+      // Draw tick marks
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 360; i += 10) {
+        const angle = (i - 90) * Math.PI / 180;
+        const tickLength = (i % 30 === 0) ? radius * 0.15 : radius * 0.08;
+        const x1 = centerX + Math.cos(angle) * (radius - tickLength);
+        const y1 = centerY + Math.sin(angle) * (radius - tickLength);
+        const x2 = centerX + Math.cos(angle) * radius;
+        const y2 = centerY + Math.sin(angle) * radius;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      // Draw cardinal direction labels if enabled
+      if (compassState.showLabels) {
+        ctx.fillStyle = '#6c9bd1';
+        ctx.font = 'bold 20px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const labels = [
+          {text: 'N', angle: 0},
+          {text: 'E', angle: 90},
+          {text: 'S', angle: 180},
+          {text: 'W', angle: 270}
+        ];
+
+        for (const label of labels) {
+          const angle = (label.angle - 90) * Math.PI / 180;
+          const x = centerX + Math.cos(angle) * radius * 0.7;
+          const y = centerY + Math.sin(angle) * radius * 0.7;
+          ctx.fillText(label.text, x, y);
+        }
+      }
+
+      // Draw needle
+      const needleAngle = (compassState.displayHeading - 90) * Math.PI / 180;
+      const needleLength = radius * 0.6;
+      const needleWidth = 8;
+
+      // Needle shadow
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+
+      // North-pointing part (colored)
+      ctx.fillStyle = compassState.needleColor;
+      ctx.beginPath();
+      ctx.moveTo(
+        centerX + Math.cos(needleAngle) * needleLength,
+        centerY + Math.sin(needleAngle) * needleLength
+      );
+      ctx.lineTo(
+        centerX + Math.cos(needleAngle + Math.PI / 2) * needleWidth,
+        centerY + Math.sin(needleAngle + Math.PI / 2) * needleWidth
+      );
+      ctx.lineTo(
+        centerX + Math.cos(needleAngle - Math.PI / 2) * needleWidth,
+        centerY + Math.sin(needleAngle - Math.PI / 2) * needleWidth
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // South-pointing part (white)
+      const backAngle = needleAngle + Math.PI;
+      const backLength = needleLength * 0.4;
+      ctx.fillStyle = '#cccccc';
+      ctx.beginPath();
+      ctx.moveTo(
+        centerX + Math.cos(backAngle) * backLength,
+        centerY + Math.sin(backAngle) * backLength
+      );
+      ctx.lineTo(
+        centerX + Math.cos(needleAngle + Math.PI / 2) * needleWidth,
+        centerY + Math.sin(needleAngle + Math.PI / 2) * needleWidth
+      );
+      ctx.lineTo(
+        centerX + Math.cos(needleAngle - Math.PI / 2) * needleWidth,
+        centerY + Math.sin(needleAngle - Math.PI / 2) * needleWidth
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+
+      // Center pivot
+      ctx.fillStyle = '#2a2a40';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, needleWidth * 1.5, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.fillStyle = '#888';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, needleWidth, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    connectWebSocket();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

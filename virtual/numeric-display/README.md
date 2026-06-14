@@ -1,5 +1,7 @@
 # Virtual Numeric Display
 
+✅ **Status: Tested 2026-06-14** — SCPI commands, WebSocket updates, all three styles (7SEG/LED/NIXIE), precision/units/color/size verified
+
 SCPI-controlled numeric display with configurable precision, units, font size, color, and style. Web-based display with 7-segment LCD or plain text rendering.
 
 ## Features

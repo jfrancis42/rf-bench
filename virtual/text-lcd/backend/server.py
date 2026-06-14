@@ -1,58 +1,58 @@
 #!/usr/bin/env python3
 """
-Virtual Analog Meter — SCPI TCP Server + WebSocket + MQTT bridge
+Virtual Text LCD — SCPI TCP Server + WebSocket + MQTT bridge
+
+Streaming text terminal display with configurable scrollback buffer, color,
+and terminal-style formatting.
 
 Exposes:
-- SCPI TCP server on port 5025 (IEEE 488.2 standard instrument port)
-- HTTP server on port 8000 (serves static frontend)
-- WebSocket server on port 8001 (real-time meter value updates)
-- MQTT subscriber (listens to configured topic for value updates)
+- SCPI TCP server on port 5031 (IEEE 488.2 standard instrument port)
+- HTTP server on port 8007 (serves static frontend)
+- WebSocket server on port 8007/ws (real-time text updates)
+- MQTT subscriber (listens to configured topic for text messages)
 
 SCPI Commands:
-  *IDN?                    → "N0GQ,Virtual-Analog-Meter,1.0,2026"
-  *RST                     → Reset to defaults
+  *IDN?                    → "N0GQ,Virtual-Text-LCD,1.0,2026"
+  *RST                     → Reset to defaults, clear buffer
   SYST:ERR?                → Query error queue
-  MEAS:VAL <float>         → Set displayed value
-  MEAS:VAL?                → Query current value
-  CONF:MIN <float>         → Set scale minimum
-  CONF:MIN?                → Query scale minimum
-  CONF:MAX <float>         → Set scale maximum
-  CONF:MAX?                → Query scale maximum
-  CONF:UNIT <string>       → Set display units (e.g., "dBm", "V", "A")
-  CONF:UNIT?               → Query display units
-  CONF:ZONE <id>,<v0>,<v1>,<color>  → Define colored zone (id 1-5)
-  CONF:ZONE? <id>          → Query zone definition
-  MQTT:CONF <host>,<topic> → Configure MQTT broker and topic to subscribe
+  DISP:TEXT <string>       → Append text line to display
+  DISP:TEXT?               → Query number of lines in buffer
+  DISP:CLEAR               → Clear all text
+  CONF:LINES <int>         → Set scrollback buffer (10-1000, default 50)
+  CONF:LINES?              → Query scrollback lines
+  CONF:SIZE <int>          → Set font size (10-24, default 14)
+  CONF:SIZE?               → Query font size
+  CONF:COL <color>         → Set text color (hex, e.g., "#00ff00")
+  CONF:COL?                → Query text color
+  CONF:TITLE <string>      → Set terminal title
+  CONF:TITLE?              → Query title
+  MQTT:CONF <host>,<topic> → Configure MQTT broker and topic
   MQTT:CONF?               → Query MQTT configuration
 
 Example usage:
-  echo "*IDN?" | nc localhost 5025
-  echo "MEAS:VAL 42.5" | nc localhost 5025
-  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5025
-
-  # Then publish to MQTT:
-  mosquitto_pub -h 10.1.0.20 -t bench/meter/value -m "42.5"
+  echo "DISP:TEXT System initialized" | nc localhost 5031
+  echo "DISP:TEXT Temperature: 25.3°C" | nc localhost 5031
+  echo "DISP:CLEAR" | nc localhost 5031
 """
 
 import asyncio
 import json
-import socket
 import sys
+import time
+from collections import deque
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
-# Try to import FastAPI/uvicorn; provide helpful error if missing
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import HTMLResponse, FileResponse
     import uvicorn
 except ImportError:
     print("ERROR: FastAPI and uvicorn are required.", file=sys.stderr)
     print("Install with: pip install fastapi uvicorn websockets --break-system-packages", file=sys.stderr)
     sys.exit(1)
 
-# Try to import paho-mqtt; provide helpful error if missing
 try:
     import paho.mqtt.client as mqtt
 except ImportError:
@@ -61,51 +61,62 @@ except ImportError:
     sys.exit(1)
 
 
-class AnalogMeterState:
+class TextLCDState:
     """Instrument state and configuration"""
 
     def __init__(self):
-        self.value: float = 0.0
-        self.min_val: float = 0.0
-        self.max_val: float = 100.0
-        self.units: str = ""
-        # Zones: {id: (v0, v1, color)}
-        self.zones: Dict[int, Tuple[float, float, str]] = {
-            1: (0.0, 33.0, '#226644'),   # Green: safe
-            2: (33.0, 66.0, '#886600'),  # Yellow: caution
-            3: (66.0, 100.0, '#882222'), # Red: danger
-        }
+        self.max_lines: int = 50
+        self.text_lines: deque = deque(maxlen=50)
+        self.font_size: int = 14
+        self.color: str = "#000000"
+        self.title: str = "Terminal"
         self.error_queue: List[str] = []
         # MQTT configuration
         self.mqtt_host: Optional[str] = None
         self.mqtt_topic: Optional[str] = None
 
+    def add_line(self, text: str):
+        """Add a text line with timestamp"""
+        timestamp = time.strftime("%H:%M:%S")
+        self.text_lines.append(f"[{timestamp}] {text}")
+
+    def set_max_lines(self, lines: int):
+        """Change scrollback buffer size"""
+        self.max_lines = lines
+        new_lines = deque(self.text_lines, maxlen=lines)
+        self.text_lines = new_lines
+
+    def clear_lines(self):
+        """Clear all text"""
+        self.text_lines.clear()
+
     def to_dict(self) -> dict:
         """Serialize state for WebSocket broadcast"""
         return {
-            'value': self.value,
-            'min': self.min_val,
-            'max': self.max_val,
-            'units': self.units,
-            'zones': [
-                {'id': k, 'v0': v[0], 'v1': v[1], 'color': v[2]}
-                for k, v in sorted(self.zones.items())
-            ]
+            'lines': list(self.text_lines),
+            'maxLines': self.max_lines,
+            'fontSize': self.font_size,
+            'color': self.color,
+            'title': self.title
         }
 
 
 # Global state
-state = AnalogMeterState()
+state = TextLCDState()
 websocket_clients: List[WebSocket] = []
 mqtt_client: Optional[mqtt.Client] = None
 event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 # FastAPI app
-app = FastAPI(title="Virtual Analog Meter")
+app = FastAPI(title="Virtual Text LCD")
+
+# Mount frontend directory for static files (font)
+frontend_dir = Path(__file__).parent.parent / "frontend"
+app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
 
 # ==============================================================================
-# WebSocket endpoint for real-time updates
+# WebSocket endpoint
 # ==============================================================================
 
 @app.websocket("/ws")
@@ -114,12 +125,10 @@ async def websocket_endpoint(websocket: WebSocket):
     websocket_clients.append(websocket)
     print(f"WebSocket client connected. Total clients: {len(websocket_clients)}")
 
-    # Send initial state
     await websocket.send_json(state.to_dict())
 
     try:
         while True:
-            # Keep connection alive; updates are pushed via broadcast
             await websocket.receive_text()
     except WebSocketDisconnect:
         websocket_clients.remove(websocket)
@@ -140,13 +149,12 @@ async def broadcast_state():
         except Exception:
             dead_clients.append(client)
 
-    # Clean up dead connections
     for client in dead_clients:
         websocket_clients.remove(client)
 
 
 # ==============================================================================
-# HTTP endpoint for simple web interface
+# HTTP endpoint
 # ==============================================================================
 
 @app.get("/")
@@ -157,15 +165,27 @@ async def get_index():
         return HTMLResponse(content=frontend_path.read_text())
     else:
         return HTMLResponse(
-            content="<html><body><h1>Virtual Analog Meter</h1>"
-                    "<p>Frontend not built. See README.md</p></body></html>"
+            content="<html><body><h1>Virtual Text LCD</h1>"
+                    "<p>Frontend not found. See README.md</p></body></html>"
         )
 
 
-# Mount static files if frontend build exists
-frontend_build = Path(__file__).parent.parent / "frontend" / "build"
-if frontend_build.exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_build)), name="static")
+@app.get("/test")
+async def test_route():
+    """Test route"""
+    return {"message": "test works"}
+
+
+@app.get("/DotMatrix.TTF")
+async def get_font():
+    """Serve the Dot Matrix font"""
+    font_path = Path(__file__).parent.parent / "frontend" / "DotMatrix.TTF"
+    print(f"Font requested. Path: {font_path}, Exists: {font_path.exists()}")
+    if font_path.exists():
+        return FileResponse(font_path, media_type="font/ttf")
+    else:
+        print(f"Font NOT FOUND at {font_path}")
+        return HTMLResponse(content=f"Font not found at {font_path}", status_code=404)
 
 
 # ==============================================================================
@@ -183,21 +203,19 @@ def on_mqtt_connect(client, userdata, flags, reason_code, properties):
 def on_mqtt_message(client, userdata, msg):
     """Callback when MQTT message received"""
     try:
-        value = float(msg.payload.decode())
-        state.value = value
-        print(f"MQTT received: {msg.topic} = {value}")
-        # Broadcast to WebSocket clients - schedule in main event loop
+        text = msg.payload.decode()
+        state.add_line(text)
+        print(f"MQTT received: {msg.topic} = {text}")
         if event_loop:
             asyncio.run_coroutine_threadsafe(broadcast_state(), event_loop)
-    except ValueError as e:
+    except Exception as e:
         print(f"MQTT parse error on {msg.topic}: {e}")
 
 
 def start_mqtt_client(host: str, topic: str):
-    """Start MQTT client in background (synchronous)"""
+    """Start MQTT client in background"""
     global mqtt_client
 
-    # Stop existing client if any
     if mqtt_client:
         try:
             mqtt_client.disconnect()
@@ -205,7 +223,6 @@ def start_mqtt_client(host: str, topic: str):
         except:
             pass
 
-    # Create new client (paho-mqtt v2.x API)
     mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     mqtt_client.on_connect = on_mqtt_connect
     mqtt_client.on_message = on_mqtt_message
@@ -213,7 +230,7 @@ def start_mqtt_client(host: str, topic: str):
     try:
         mqtt_client.connect(host, 1883, 60)
         mqtt_client.loop_start()
-        print(f"MQTT client started for {host}:{1883}")
+        print(f"MQTT client started for {host}:1883")
     except Exception as e:
         print(f"MQTT connection failed: {e}")
         state.error_queue.append(f"-221,MQTT connection failed: {e}")
@@ -226,7 +243,7 @@ def start_mqtt_client(host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5027):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5031):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -269,119 +286,121 @@ class SCPIServer:
             print(f"SCPI client disconnected: {addr}")
 
     def process_command(self, cmd: str) -> Optional[str]:
-        """Process a single SCPI command, return response string or None"""
+        """Process a single SCPI command"""
         cmd_original = cmd.strip()
-        cmd = cmd.upper().strip()
+        cmd_upper = cmd.upper().strip()
 
         # IEEE 488.2 common commands
-        if cmd == "*IDN?":
-            return "N0GQ,Virtual-Analog-Meter,1.0,2026"
+        if cmd_upper == "*IDN?":
+            return "N0GQ,Virtual-Text-LCD,1.0,2026"
 
-        if cmd == "*RST":
+        if cmd_upper == "*RST":
             global state
-            state = AnalogMeterState()
+            state = TextLCDState()
             asyncio.create_task(broadcast_state())
             return None
 
-        if cmd == "SYST:ERR?":
+        if cmd_upper == "SYST:ERR?":
             if state.error_queue:
                 return state.error_queue.pop(0)
             else:
                 return "0,No error"
 
-        # Measurement value
-        if cmd.startswith("MEAS:VAL"):
-            if "?" in cmd:
-                return str(state.value)
+        # Display commands
+        if cmd_upper.startswith("DISP:TEXT"):
+            if "?" in cmd_upper:
+                return str(len(state.text_lines))
             else:
                 try:
-                    val = float(cmd.split()[1])
-                    state.value = val
-                    asyncio.create_task(broadcast_state())
-                    return None
-                except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-222,Data out of range: {e}")
-                    return None
-
-        # Configuration commands
-        if cmd.startswith("CONF:MIN"):
-            if "?" in cmd:
-                return str(state.min_val)
-            else:
-                try:
-                    state.min_val = float(cmd.split()[1])
-                    asyncio.create_task(broadcast_state())
-                    return None
-                except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-222,Data out of range: {e}")
-                    return None
-
-        if cmd.startswith("CONF:MAX"):
-            if "?" in cmd:
-                return str(state.max_val)
-            else:
-                try:
-                    state.max_val = float(cmd.split()[1])
-                    asyncio.create_task(broadcast_state())
-                    return None
-                except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-222,Data out of range: {e}")
-                    return None
-
-        if cmd.startswith("CONF:UNIT"):
-            if "?" in cmd:
-                return state.units
-            else:
-                try:
-                    state.units = cmd.split(maxsplit=1)[1].strip('"')
+                    text = cmd_original.split(maxsplit=1)[1].strip('"')
+                    state.add_line(text)
                     asyncio.create_task(broadcast_state())
                     return None
                 except IndexError:
                     state.error_queue.append("-222,Missing parameter")
                     return None
 
-        if cmd.startswith("CONF:ZONE"):
-            parts = cmd.split(maxsplit=1)
-            if "?" in cmd:
-                try:
-                    zone_id = int(parts[1].strip("?"))
-                    if zone_id in state.zones:
-                        v0, v1, color = state.zones[zone_id]
-                        return f"{v0},{v1},{color}"
-                    else:
-                        return "-220,Parameter error"
-                except (IndexError, ValueError):
-                    return "-220,Parameter error"
+        if cmd_upper == "DISP:CLEAR":
+            state.clear_lines()
+            asyncio.create_task(broadcast_state())
+            return None
+
+        # Configuration commands
+        if cmd_upper.startswith("CONF:LINES"):
+            if "?" in cmd_upper:
+                return str(state.max_lines)
             else:
                 try:
-                    # Format: CONF:ZONE 1,0,50,#226644
-                    params = parts[1].split(',')
-                    zone_id = int(params[0])
-                    v0 = float(params[1])
-                    v1 = float(params[2])
-                    color = params[3].strip()
-                    state.zones[zone_id] = (v0, v1, color)
+                    lines = int(cmd.split()[1])
+                    if 10 <= lines <= 1000:
+                        state.set_max_lines(lines)
+                        asyncio.create_task(broadcast_state())
+                        return None
+                    else:
+                        state.error_queue.append("-222,Lines must be 10-1000")
+                        return None
+                except (IndexError, ValueError) as e:
+                    state.error_queue.append(f"-222,Invalid lines: {e}")
+                    return None
+
+        if cmd_upper.startswith("CONF:SIZE"):
+            if "?" in cmd_upper:
+                return str(state.font_size)
+            else:
+                try:
+                    size = int(cmd.split()[1])
+                    if 10 <= size <= 24:
+                        state.font_size = size
+                        asyncio.create_task(broadcast_state())
+                        return None
+                    else:
+                        state.error_queue.append("-222,Size must be 10-24")
+                        return None
+                except (IndexError, ValueError) as e:
+                    state.error_queue.append(f"-222,Invalid size: {e}")
+                    return None
+
+        if cmd_upper.startswith("CONF:COL"):
+            if "?" in cmd_upper:
+                return state.color
+            else:
+                try:
+                    color = cmd.split(maxsplit=1)[1].strip('"')
+                    if color.startswith('#') and len(color) in [4, 7]:
+                        state.color = color
+                        asyncio.create_task(broadcast_state())
+                        return None
+                    else:
+                        state.error_queue.append("-222,Invalid color format")
+                        return None
+                except IndexError:
+                    state.error_queue.append("-222,Missing parameter")
+                    return None
+
+        if cmd_upper.startswith("CONF:TITLE"):
+            if "?" in cmd_upper:
+                return state.title
+            else:
+                try:
+                    state.title = cmd.split(maxsplit=1)[1].strip('"')
                     asyncio.create_task(broadcast_state())
                     return None
-                except (IndexError, ValueError) as e:
-                    state.error_queue.append(f"-220,Parameter error: {e}")
+                except IndexError:
+                    state.error_queue.append("-222,Missing parameter")
                     return None
 
         # MQTT configuration
-        if cmd.startswith("MQTT:CONF"):
-            if "?" in cmd:
+        if cmd_upper.startswith("MQTT:CONF"):
+            if "?" in cmd_upper:
                 if state.mqtt_host and state.mqtt_topic:
                     return f"{state.mqtt_host},{state.mqtt_topic}"
                 else:
                     return "Not configured"
             else:
                 try:
-                    # Use original command to preserve case of parameters
                     params = cmd_original.split(maxsplit=1)[1].split(',')
                     mqtt_host = params[0].strip()
                     mqtt_topic = params[1].strip()
-
-                    # Configure and start MQTT client
                     state.mqtt_host = mqtt_host
                     state.mqtt_topic = mqtt_topic
                     start_mqtt_client(mqtt_host, mqtt_topic)
@@ -390,7 +409,6 @@ class SCPIServer:
                     state.error_queue.append(f"-220,MQTT config error: {e}")
                     return None
 
-        # Unknown command
         state.error_queue.append(f"-113,Undefined header: {cmd}")
         return None
 
@@ -404,28 +422,22 @@ async def main():
     global event_loop
     event_loop = asyncio.get_running_loop()
 
-    # Start SCPI server
     scpi_server = SCPIServer()
     await scpi_server.start()
 
-    # Start FastAPI server in background
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=9004,
+        port=9000,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
-    print("Virtual Analog Meter ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5025")
-    print("  - HTTP:      http://0.0.0.0:8000")
-    print("  - WebSocket: ws://0.0.0.0:8000/ws")
+    print("Virtual Text LCD ready:")
+    print("  - SCPI:      tcp://0.0.0.0:5031")
+    print("  - HTTP:      http://0.0.0.0:9000")
+    print("  - WebSocket: ws://0.0.0.0:9000/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
-    print("")
-    print("Example MQTT setup:")
-    print('  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5025')
-    print('  mosquitto_pub -h 10.1.0.20 -t bench/meter/value -m "75.5"')
 
     await server.serve()
 

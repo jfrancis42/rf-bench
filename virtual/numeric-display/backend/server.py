@@ -450,15 +450,15 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=8000,
+        port=8100,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Numeric Display ready:")
     print("  - SCPI:      tcp://0.0.0.0:5025")
-    print("  - HTTP:      http://0.0.0.0:8000")
-    print("  - WebSocket: ws://0.0.0.0:8000/ws")
+    print("  - HTTP:      http://0.0.0.0:8100")
+    print("  - WebSocket: ws://0.0.0.0:8100/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Line Chart</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #chart-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #6c9bd1;
+      text-align: center;
+    }
+    #canvas-container {
+      position: relative;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    #chart-canvas {
+      display: block;
+      background: #0a0a0f;
+    }
+    #stats {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 20px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 700px;
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .stat-label {
+      color: #888;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual Line Chart</h1>
+  <div id="container">
+    <div id="chart-title">Time Series</div>
+    <div id="canvas-container">
+      <canvas id="chart-canvas" width="700" height="400"></canvas>
+    </div>
+    <div id="stats">
+      <div class="stat">
+        <div class="stat-label">Current</div>
+        <div class="stat-value" id="stat-current">--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Min</div>
+        <div class="stat-value" id="stat-min">--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Max</div>
+        <div class="stat-value" id="stat-max">--</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Average</div>
+        <div class="stat-value" id="stat-avg">--</div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5029<br>
+    Commands: MEAS:VAL, CONF:HIST, CONF:MIN/MAX, CONF:AUTO, CONF:TITLE
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+    const canvas = document.getElementById('chart-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let chartState = {
+      dataPoints: [],
+      timestamps: [],
+      historyLength: 100,
+      min: null,
+      max: null,
+      autoScale: true,
+      units: '',
+      color: '#00ff00',
+      title: 'Time Series'
+    };
+
+    let wsConnected = false;
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        wsConnected = true;
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          chartState.dataPoints = data.dataPoints || [];
+          chartState.timestamps = data.timestamps || [];
+          chartState.historyLength = data.historyLength || 100;
+          chartState.min = data.min;
+          chartState.max = data.max;
+          chartState.autoScale = data.autoScale;
+          chartState.units = data.units || '';
+          chartState.color = data.color || '#00ff00';
+          chartState.title = data.title || 'Time Series';
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        wsConnected = false;
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function updateDisplay() {
+      // Update title
+      document.getElementById('chart-title').textContent = chartState.title;
+
+      // Update stats
+      if (chartState.dataPoints.length > 0) {
+        const current = chartState.dataPoints[chartState.dataPoints.length - 1];
+        const min = Math.min(...chartState.dataPoints);
+        const max = Math.max(...chartState.dataPoints);
+        const avg = chartState.dataPoints.reduce((a, b) => a + b, 0) / chartState.dataPoints.length;
+
+        document.getElementById('stat-current').textContent = current.toFixed(2) + ' ' + chartState.units;
+        document.getElementById('stat-min').textContent = min.toFixed(2) + ' ' + chartState.units;
+        document.getElementById('stat-max').textContent = max.toFixed(2) + ' ' + chartState.units;
+        document.getElementById('stat-avg').textContent = avg.toFixed(2) + ' ' + chartState.units;
+      }
+
+      // Draw chart
+      drawChart();
+    }
+
+    function drawChart() {
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 40;
+      const plotWidth = width - 2 * padding;
+      const plotHeight = height - 2 * padding;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, width, height);
+
+      if (chartState.dataPoints.length === 0) {
+        // Draw "No Data" message
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No Data', width / 2, height / 2);
+        return;
+      }
+
+      // Determine Y-axis range
+      let yMin, yMax;
+      if (chartState.autoScale || (chartState.min === null && chartState.max === null)) {
+        yMin = Math.min(...chartState.dataPoints);
+        yMax = Math.max(...chartState.dataPoints);
+        // Add 10% padding
+        const range = yMax - yMin;
+        yMin -= range * 0.1;
+        yMax += range * 0.1;
+        if (range === 0) {
+          yMin -= 1;
+          yMax += 1;
+        }
+      } else {
+        yMin = chartState.min !== null ? chartState.min : Math.min(...chartState.dataPoints);
+        yMax = chartState.max !== null ? chartState.max : Math.max(...chartState.dataPoints);
+      }
+
+      // Draw grid
+      ctx.strokeStyle = '#1a1a2a';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = padding + (plotHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(padding + plotWidth, y);
+        ctx.stroke();
+      }
+
+      // Draw axes
+      ctx.strokeStyle = '#2a2a40';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, padding + plotHeight);
+      ctx.lineTo(padding + plotWidth, padding + plotHeight);
+      ctx.stroke();
+
+      // Draw Y-axis labels
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i <= 5; i++) {
+        const y = padding + (plotHeight / 5) * i;
+        const value = yMax - (yMax - yMin) * (i / 5);
+        ctx.fillText(value.toFixed(1), padding - 10, y);
+      }
+
+      // Draw line
+      if (chartState.dataPoints.length > 1) {
+        ctx.strokeStyle = chartState.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        for (let i = 0; i < chartState.dataPoints.length; i++) {
+          const x = padding + (plotWidth / Math.max(chartState.historyLength - 1, 1)) * i;
+          const normalizedY = (chartState.dataPoints[i] - yMin) / (yMax - yMin);
+          const y = padding + plotHeight - (normalizedY * plotHeight);
+
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.stroke();
+
+        // Draw glow effect
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = chartState.color;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Draw points
+        ctx.fillStyle = chartState.color;
+        for (let i = 0; i < chartState.dataPoints.length; i++) {
+          const x = padding + (plotWidth / Math.max(chartState.historyLength - 1, 1)) * i;
+          const normalizedY = (chartState.dataPoints[i] - yMin) / (yMax - yMin);
+          const y = padding + plotHeight - (normalizedY * plotHeight);
+
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+      }
+
+      // Draw units label
+      if (chartState.units) {
+        ctx.fillStyle = '#888';
+        ctx.font = '12px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(chartState.units, padding / 2, padding);
+      }
+
+      // Draw time axis label
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('← Time (newer)', width / 2, height - padding + 10);
+    }
+
+    connectWebSocket();
+    updateDisplay();
+  </script>
+</body>
+</html>

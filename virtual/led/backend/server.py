@@ -174,15 +174,40 @@ def on_mqtt_connect(client, userdata, flags, reason_code, properties):
 def on_mqtt_message(client, userdata, msg):
     """Callback when MQTT message received"""
     try:
-        payload = msg.payload.decode().upper()
-        if payload in ["1", "ON", "TRUE"]:
+        payload = msg.payload.decode()
+        payload_upper = payload.upper()
+
+        # Handle state commands
+        if payload_upper in ["1", "ON", "TRUE"]:
             state.state = True
-        elif payload in ["0", "OFF", "FALSE"]:
+            print(f"MQTT received: {msg.topic} = ON")
+        elif payload_upper in ["0", "OFF", "FALSE"]:
             state.state = False
+            print(f"MQTT received: {msg.topic} = OFF")
+        # Handle color commands (hex format)
+        elif payload.startswith('#') and len(payload) in [4, 7]:
+            state.on_color = payload
+            print(f"MQTT received: {msg.topic} = color {payload}")
+        # Handle named colors
+        elif payload_upper == "RED":
+            state.on_color = "#ff0000"
+            print(f"MQTT received: {msg.topic} = RED")
+        elif payload_upper == "GREEN":
+            state.on_color = "#00ff00"
+            print(f"MQTT received: {msg.topic} = GREEN")
+        elif payload_upper == "BLUE":
+            state.on_color = "#0000ff"
+            print(f"MQTT received: {msg.topic} = BLUE")
+        elif payload_upper == "YELLOW":
+            state.on_color = "#ffff00"
+            print(f"MQTT received: {msg.topic} = YELLOW")
+        elif payload_upper == "WHITE":
+            state.on_color = "#ffffff"
+            print(f"MQTT received: {msg.topic} = WHITE")
         else:
-            print(f"MQTT invalid state value: {payload}")
+            print(f"MQTT invalid value: {payload}")
             return
-        print(f"MQTT received: {msg.topic} = {state.state}")
+
         # Broadcast to WebSocket clients - schedule in main event loop
         if event_loop:
             asyncio.run_coroutine_threadsafe(broadcast_state(), event_loop)
@@ -223,7 +248,7 @@ def start_mqtt_client(host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5025):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5028):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -436,15 +461,15 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=8000,
+        port=8104,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual LED Indicator ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5025")
-    print("  - HTTP:      http://0.0.0.0:8000")
-    print("  - WebSocket: ws://0.0.0.0:8000/ws")
+    print("  - SCPI:      tcp://0.0.0.0:5028")
+    print("  - HTTP:      http://0.0.0.0:8104")
+    print("  - WebSocket: ws://0.0.0.0:8104/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()

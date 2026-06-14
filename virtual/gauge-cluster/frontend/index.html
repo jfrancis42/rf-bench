@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Gauge Cluster</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #gauges-grid {
+      display: grid;
+      gap: 20px;
+    }
+    #gauges-grid.layout-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    #gauges-grid.layout-4 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .gauge-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .gauge-canvas {
+      display: block;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+    }
+    .gauge-label {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 10px;
+      color: #6c9bd1;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual Gauge Cluster</h1>
+  <div id="container">
+    <div id="gauges-grid" class="layout-4">
+      <div class="gauge-container">
+        <canvas class="gauge-canvas" id="gauge-1" width="200" height="200"></canvas>
+        <div class="gauge-label" id="label-1">Gauge 1</div>
+      </div>
+      <div class="gauge-container">
+        <canvas class="gauge-canvas" id="gauge-2" width="200" height="200"></canvas>
+        <div class="gauge-label" id="label-2">Gauge 2</div>
+      </div>
+      <div class="gauge-container">
+        <canvas class="gauge-canvas" id="gauge-3" width="200" height="200"></canvas>
+        <div class="gauge-label" id="label-3">Gauge 3</div>
+      </div>
+      <div class="gauge-container">
+        <canvas class="gauge-canvas" id="gauge-4" width="200" height="200"></canvas>
+        <div class="gauge-label" id="label-4">Gauge 4</div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5034<br>
+    Commands: MEAS<n>:VAL, CONF<n>:MIN/MAX/UNIT/LABEL/COL, CONF:LAYOUT
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    // Physics constants (same as analog-meter)
+    const SPRING = 355;
+    const DAMPING = 23;
+
+    let clusterState = {
+      gauges: {
+        1: {targetValue: 0, displayValue: 0, velocity: 0, min: 0, max: 100, units: '', label: 'Gauge 1', color: '#00ff00'},
+        2: {targetValue: 0, displayValue: 0, velocity: 0, min: 0, max: 100, units: '', label: 'Gauge 2', color: '#00ff00'},
+        3: {targetValue: 0, displayValue: 0, velocity: 0, min: 0, max: 100, units: '', label: 'Gauge 3', color: '#00ff00'},
+        4: {targetValue: 0, displayValue: 0, velocity: 0, min: 0, max: 100, units: '', label: 'Gauge 4', color: '#00ff00'}
+      },
+      layout: 4
+    };
+
+    let lastFrameTime = 0;
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Update target values and config, preserve physics state
+          if (data.gauges) {
+            for (let i = 1; i <= 4; i++) {
+              if (data.gauges[i]) {
+                clusterState.gauges[i].targetValue = data.gauges[i].value;
+                clusterState.gauges[i].min = data.gauges[i].min;
+                clusterState.gauges[i].max = data.gauges[i].max;
+                clusterState.gauges[i].units = data.gauges[i].units;
+                clusterState.gauges[i].label = data.gauges[i].label;
+                clusterState.gauges[i].color = data.gauges[i].color;
+              }
+            }
+          }
+
+          clusterState.layout = data.layout || 4;
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function animate(timestamp) {
+      // Calculate delta time
+      const dt = lastFrameTime ? (timestamp - lastFrameTime) / 1000 : 0;
+      lastFrameTime = timestamp;
+
+      // Update physics for each gauge
+      for (let i = 1; i <= 4; i++) {
+        const gauge = clusterState.gauges[i];
+        if (dt > 0 && dt < 0.1) {
+          const error = gauge.targetValue - gauge.displayValue;
+          const accel = error * SPRING - gauge.velocity * DAMPING;
+          gauge.velocity += accel * dt;
+          gauge.displayValue += gauge.velocity * dt;
+        } else if (dt === 0) {
+          // First frame: snap to target
+          gauge.displayValue = gauge.targetValue;
+          gauge.velocity = 0;
+        }
+      }
+
+      updateDisplay();
+      requestAnimationFrame(animate);
+    }
+
+    function updateDisplay() {
+      // Update layout
+      const grid = document.getElementById('gauges-grid');
+      grid.className = `layout-${clusterState.layout}`;
+
+      // Hide gauges 3 and 4 if layout is 2
+      for (let i = 3; i <= 4; i++) {
+        const container = document.getElementById(`gauge-${i}`).parentElement;
+        container.style.display = (clusterState.layout === 2) ? 'none' : 'flex';
+      }
+
+      // Draw each gauge
+      for (let i = 1; i <= 4; i++) {
+        if (i <= clusterState.layout) {
+          const gauge = clusterState.gauges[i];
+          document.getElementById(`label-${i}`).textContent = gauge.label;
+          drawGauge(i, gauge);
+        }
+      }
+    }
+
+    function drawGauge(index, gauge) {
+      const canvas = document.getElementById(`gauge-${index}`);
+      const ctx = canvas.getContext('2d');
+      const size = 200;
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size * 0.35;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, size, size);
+
+      // Draw outer ring
+      ctx.strokeStyle = '#2a2a40';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Draw tick marks and scale
+      const range = gauge.max - gauge.min;
+      const startAngle = Math.PI * 0.75;  // 135°
+      const endAngle = Math.PI * 2.25;    // 405° (270° sweep)
+      const sweepAngle = endAngle - startAngle;
+
+      ctx.strokeStyle = '#888';
+      ctx.fillStyle = '#888';
+      ctx.font = '10px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      for (let i = 0; i <= 10; i++) {
+        const angle = startAngle + (sweepAngle * i / 10);
+        const value = gauge.min + (range * i / 10);
+
+        // Tick mark
+        ctx.lineWidth = (i % 5 === 0) ? 2 : 1;
+        const tickLength = (i % 5 === 0) ? radius * 0.15 : radius * 0.08;
+        const x1 = centerX + Math.cos(angle) * (radius - tickLength);
+        const y1 = centerY + Math.sin(angle) * (radius - tickLength);
+        const x2 = centerX + Math.cos(angle) * radius;
+        const y2 = centerY + Math.sin(angle) * radius;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        // Label every other tick
+        if (i % 2 === 0) {
+          const labelRadius = radius - (radius * 0.25);
+          const labelX = centerX + Math.cos(angle) * labelRadius;
+          const labelY = centerY + Math.sin(angle) * labelRadius;
+          ctx.fillText(value.toFixed(0), labelX, labelY);
+        }
+      }
+
+      // Draw needle
+      const normalizedValue = (gauge.displayValue - gauge.min) / range;
+      const clampedValue = Math.max(0, Math.min(1, normalizedValue));
+      const needleAngle = startAngle + (sweepAngle * clampedValue);
+      const needleLength = radius * 0.7;
+
+      ctx.strokeStyle = gauge.color;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = gauge.color;
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(
+        centerX + Math.cos(needleAngle) * needleLength,
+        centerY + Math.sin(needleAngle) * needleLength
+      );
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+
+      // Center pivot
+      ctx.fillStyle = '#2a2a40';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 8, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.fillStyle = '#888';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw value and units
+      ctx.fillStyle = gauge.color;
+      ctx.font = 'bold 18px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(gauge.displayValue.toFixed(1), centerX, centerY + radius * 0.3);
+
+      if (gauge.units) {
+        ctx.fillStyle = '#888';
+        ctx.font = '12px Courier New';
+        ctx.fillText(gauge.units, centerX, centerY + radius * 0.5);
+      }
+    }
+
+    connectWebSocket();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

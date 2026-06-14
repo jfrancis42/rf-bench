@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Waterfall</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #waterfall-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #6c9bd1;
+    }
+    #canvas-container {
+      position: relative;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    #waterfall-canvas {
+      display: block;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual Waterfall</h1>
+  <div id="container">
+    <div id="waterfall-title">Waterfall</div>
+    <div id="canvas-container">
+      <canvas id="waterfall-canvas" width="700" height="400"></canvas>
+    </div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5032<br>
+    Commands: MEAS:SPEC, CONF:FSTART/FSTOP, CONF:PMIN/PMAX, CONF:HIST
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+    const canvas = document.getElementById('waterfall-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let waterfallState = {
+      traces: [],
+      historyDepth: 100,
+      freqStart: 0,
+      freqStop: 100,
+      powerMin: -100,
+      powerMax: -20,
+      title: 'Waterfall'
+    };
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          waterfallState.traces = data.traces || [];
+          waterfallState.historyDepth = data.historyDepth || 100;
+          waterfallState.freqStart = data.freqStart || 0;
+          waterfallState.freqStop = data.freqStop || 100;
+          waterfallState.powerMin = data.powerMin || -100;
+          waterfallState.powerMax = data.powerMax || -20;
+          waterfallState.title = data.title || 'Waterfall';
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function powerToColor(power) {
+      // Map power (dBm) to color: blue (cold) → green → yellow → red (hot)
+      const normalized = (power - waterfallState.powerMin) / (waterfallState.powerMax - waterfallState.powerMin);
+      const clamped = Math.max(0, Math.min(1, normalized));
+
+      let r, g, b;
+      if (clamped < 0.25) {
+        // Blue to cyan
+        const t = clamped / 0.25;
+        r = 0;
+        g = Math.floor(t * 255);
+        b = 255;
+      } else if (clamped < 0.5) {
+        // Cyan to green
+        const t = (clamped - 0.25) / 0.25;
+        r = 0;
+        g = 255;
+        b = Math.floor((1 - t) * 255);
+      } else if (clamped < 0.75) {
+        // Green to yellow
+        const t = (clamped - 0.5) / 0.25;
+        r = Math.floor(t * 255);
+        g = 255;
+        b = 0;
+      } else {
+        // Yellow to red
+        const t = (clamped - 0.75) / 0.25;
+        r = 255;
+        g = Math.floor((1 - t) * 255);
+        b = 0;
+      }
+
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function updateDisplay() {
+      document.getElementById('waterfall-title').textContent = waterfallState.title;
+      drawWaterfall();
+    }
+
+    function drawWaterfall() {
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 50;
+      const plotWidth = width - 2 * padding;
+      const plotHeight = height - 2 * padding;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, width, height);
+
+      if (waterfallState.traces.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No Data', width / 2, height / 2);
+        return;
+      }
+
+      // Find max bins across all traces
+      const maxBins = Math.max(...waterfallState.traces.map(t => t.length));
+
+      // Draw waterfall
+      const pixelsPerTrace = plotHeight / waterfallState.historyDepth;
+
+      for (let traceIdx = 0; traceIdx < waterfallState.traces.length; traceIdx++) {
+        const trace = waterfallState.traces[traceIdx];
+        const y = padding + traceIdx * pixelsPerTrace;
+        const pixelsPerBin = plotWidth / maxBins;
+
+        for (let binIdx = 0; binIdx < trace.length; binIdx++) {
+          const power = trace[binIdx];
+          const x = padding + binIdx * pixelsPerBin;
+          const color = powerToColor(power);
+
+          ctx.fillStyle = color;
+          ctx.fillRect(x, y, Math.ceil(pixelsPerBin), Math.ceil(pixelsPerTrace));
+        }
+      }
+
+      // Draw axes
+      ctx.strokeStyle = '#2a2a40';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(padding, padding, plotWidth, plotHeight);
+      ctx.stroke();
+
+      // Draw frequency labels
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i <= 5; i++) {
+        const freq = waterfallState.freqStart + (waterfallState.freqStop - waterfallState.freqStart) * (i / 5);
+        const x = padding + (plotWidth / 5) * i;
+        ctx.fillText(freq.toFixed(1) + ' MHz', x, height - padding + 10);
+      }
+
+      // Draw power scale
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i <= 5; i++) {
+        const power = waterfallState.powerMax - (waterfallState.powerMax - waterfallState.powerMin) * (i / 5);
+        const y = padding + (plotHeight / 5) * i;
+        ctx.fillText(power.toFixed(0) + ' dBm', padding - 10, y);
+      }
+
+      // Draw labels
+      ctx.fillStyle = '#6c9bd1';
+      ctx.font = '14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Frequency', width / 2, height - padding + 30);
+
+      ctx.save();
+      ctx.translate(padding - 35, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText('Time →', 0, 0);
+      ctx.restore();
+    }
+
+    connectWebSocket();
+    updateDisplay();
+  </script>
+</body>
+</html>

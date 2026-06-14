@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Bar Graph</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #bar-container {
+      position: relative;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #bar-container.horizontal {
+      width: 500px;
+      height: 60px;
+    }
+    #bar-container.vertical {
+      width: 80px;
+      height: 400px;
+    }
+    #bar-fill {
+      position: absolute;
+      transition: all 0.3s ease-out;
+      border-radius: 6px;
+    }
+    #bar-container.horizontal #bar-fill {
+      bottom: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+    }
+    #bar-container.vertical #bar-fill {
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 0%;
+    }
+    #value-display {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 20px 0;
+      text-align: center;
+      min-width: 150px;
+    }
+    #units-display {
+      font-size: 18px;
+      color: #888;
+      text-align: center;
+      margin-top: 10px;
+    }
+    #scale-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #888;
+    }
+    #scale-labels.horizontal {
+      width: 500px;
+    }
+    #scale-labels.vertical {
+      flex-direction: column;
+      height: 400px;
+      margin-left: 10px;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual Bar Graph</h1>
+  <div id="container">
+    <div id="value-display">0.0</div>
+    <div style="display: flex; align-items: flex-start;">
+      <div id="bar-container" class="vertical">
+        <div id="bar-fill"></div>
+      </div>
+      <div id="scale-labels" class="vertical">
+        <span id="scale-max">100</span>
+        <span id="scale-mid">50</span>
+        <span id="scale-min">0</span>
+      </div>
+    </div>
+    <div id="units-display"></div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5026<br>
+    Commands: MEAS:VAL, CONF:MIN/MAX, CONF:ORIENT, CONF:THRES
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let barState = {
+      value: 0.0,
+      min: 0.0,
+      max: 100.0,
+      orientation: 'VERT',
+      units: '',
+      color: '#00ff00',
+      thresholdYellow: 70.0,
+      thresholdRed: 90.0
+    };
+
+    let wsConnected = false;
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        wsConnected = true;
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          barState.value = data.value;
+          barState.min = data.min;
+          barState.max = data.max;
+          barState.orientation = data.orientation;
+          barState.units = data.units || '';
+          barState.color = data.color || '#00ff00';
+          barState.thresholdYellow = data.thresholdYellow;
+          barState.thresholdRed = data.thresholdRed;
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        wsConnected = false;
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function updateDisplay() {
+      const valueElement = document.getElementById('value-display');
+      const barContainer = document.getElementById('bar-container');
+      const barFill = document.getElementById('bar-fill');
+      const unitsElement = document.getElementById('units-display');
+      const scaleLabels = document.getElementById('scale-labels');
+      const scaleMin = document.getElementById('scale-min');
+      const scaleMid = document.getElementById('scale-mid');
+      const scaleMax = document.getElementById('scale-max');
+
+      // Update value display
+      valueElement.textContent = barState.value.toFixed(1);
+      unitsElement.textContent = barState.units;
+
+      // Update orientation
+      if (barState.orientation === 'HOR') {
+        barContainer.className = 'horizontal';
+        scaleLabels.className = 'horizontal';
+      } else {
+        barContainer.className = 'vertical';
+        scaleLabels.className = 'vertical';
+      }
+
+      // Update scale labels
+      scaleMin.textContent = barState.min.toFixed(0);
+      scaleMid.textContent = ((barState.min + barState.max) / 2).toFixed(0);
+      scaleMax.textContent = barState.max.toFixed(0);
+
+      // Calculate percentage
+      const range = barState.max - barState.min;
+      const normalizedValue = Math.max(0, Math.min(range, barState.value - barState.min));
+      const percentage = (normalizedValue / range) * 100;
+
+      // Update bar fill
+      if (barState.orientation === 'HOR') {
+        barFill.style.width = `${percentage}%`;
+        barFill.style.height = '100%';
+      } else {
+        barFill.style.height = `${percentage}%`;
+        barFill.style.width = '100%';
+      }
+
+      // Determine color based on thresholds
+      let color = barState.color;
+      const normalizedThresholdYellow = ((barState.thresholdYellow - barState.min) / range) * 100;
+      const normalizedThresholdRed = ((barState.thresholdRed - barState.min) / range) * 100;
+
+      if (percentage >= normalizedThresholdRed) {
+        color = '#ff3333';  // Red
+      } else if (percentage >= normalizedThresholdYellow) {
+        color = '#ffaa00';  // Yellow/Orange
+      }
+
+      barFill.style.backgroundColor = color;
+      barFill.style.boxShadow = `0 0 20px ${color}`;
+      valueElement.style.color = color;
+    }
+
+    connectWebSocket();
+    updateDisplay();
+  </script>
+</body>
+</html>

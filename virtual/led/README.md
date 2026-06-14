@@ -1,5 +1,7 @@
 # Virtual LED Indicator
 
+✅ **Status: Tested 2026-06-14** — SCPI commands, WebSocket updates, ON/OFF states, color changes, blink patterns (fast/slow), size adjustment, labels verified
+
 SCPI-controlled LED indicator with configurable colors, blink rate, size, and label. Web-based display with realistic LED rendering including glow effects and specular highlights.
 
 ## Features

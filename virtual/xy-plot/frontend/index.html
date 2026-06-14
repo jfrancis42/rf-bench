@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual XY Plot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 30px 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #plot-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #6c9bd1;
+    }
+    #canvas-container {
+      position: relative;
+      background: #0a0a0f;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    #plot-canvas {
+      display: block;
+    }
+    .info {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #6c9bd1;
+    }
+    .status.connected { color: #4c9b4c; }
+    .status.disconnected { color: #9b4c4c; }
+  </style>
+</head>
+<body>
+  <h1>Virtual XY Plot</h1>
+  <div id="container">
+    <div id="plot-title">XY Plot</div>
+    <div id="canvas-container">
+      <canvas id="plot-canvas" width="600" height="500"></canvas>
+    </div>
+  </div>
+  <div class="info">
+    SCPI: tcp://localhost:5030<br>
+    Commands: MEAS:XY, MEAS:CLEAR, CONF:XMIN/XMAX/YMIN/YMAX, CONF:STYLE
+  </div>
+  <div class="status" id="status">Connecting...</div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+    const canvas = document.getElementById('plot-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let plotState = {
+      dataPoints: [],
+      xMin: null,
+      xMax: null,
+      yMin: null,
+      yMax: null,
+      xLabel: 'X',
+      yLabel: 'Y',
+      title: 'XY Plot',
+      style: 'SCATTER',
+      color: '#00ff00'
+    };
+
+    function connectWebSocket() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        document.getElementById('status').textContent = 'Connected';
+        document.getElementById('status').className = 'status connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          plotState.dataPoints = data.dataPoints || [];
+          plotState.xMin = data.xMin;
+          plotState.xMax = data.xMax;
+          plotState.yMin = data.yMin;
+          plotState.yMax = data.yMax;
+          plotState.xLabel = data.xLabel || 'X';
+          plotState.yLabel = data.yLabel || 'Y';
+          plotState.title = data.title || 'XY Plot';
+          plotState.style = data.style || 'SCATTER';
+          plotState.color = data.color || '#00ff00';
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
+        document.getElementById('status').className = 'status disconnected';
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function updateDisplay() {
+      document.getElementById('plot-title').textContent = plotState.title;
+      drawPlot();
+    }
+
+    function drawPlot() {
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 60;
+      const plotWidth = width - 2 * padding;
+      const plotHeight = height - 2 * padding;
+
+      // Clear canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, width, height);
+
+      if (plotState.dataPoints.length === 0) {
+        ctx.fillStyle = '#888';
+        ctx.font = '16px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No Data', width / 2, height / 2);
+        return;
+      }
+
+      // Determine axis ranges
+      const xs = plotState.dataPoints.map(p => p[0]);
+      const ys = plotState.dataPoints.map(p => p[1]);
+      let xMin = plotState.xMin !== null ? plotState.xMin : Math.min(...xs);
+      let xMax = plotState.xMax !== null ? plotState.xMax : Math.max(...xs);
+      let yMin = plotState.yMin !== null ? plotState.yMin : Math.min(...ys);
+      let yMax = plotState.yMax !== null ? plotState.yMax : Math.max(...ys);
+
+      // Add padding if auto-scaled
+      if (plotState.xMin === null || plotState.xMax === null) {
+        const xRange = xMax - xMin;
+        xMin -= xRange * 0.1;
+        xMax += xRange * 0.1;
+      }
+      if (plotState.yMin === null || plotState.yMax === null) {
+        const yRange = yMax - yMin;
+        yMin -= yRange * 0.1;
+        yMax += yRange * 0.1;
+      }
+
+      // Draw grid
+      ctx.strokeStyle = '#1a1a2a';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        // Vertical grid lines
+        const x = padding + (plotWidth / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, padding + plotHeight);
+        ctx.stroke();
+
+        // Horizontal grid lines
+        const y = padding + (plotHeight / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(padding + plotWidth, y);
+        ctx.stroke();
+      }
+
+      // Draw axes
+      ctx.strokeStyle = '#2a2a40';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, padding + plotHeight);
+      ctx.lineTo(padding + plotWidth, padding + plotHeight);
+      ctx.stroke();
+
+      // Draw X-axis labels
+      ctx.fillStyle = '#888';
+      ctx.font = '12px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i <= 5; i++) {
+        const x = padding + (plotWidth / 5) * i;
+        const value = xMin + (xMax - xMin) * (i / 5);
+        ctx.fillText(value.toFixed(1), x, padding + plotHeight + 10);
+      }
+
+      // Draw Y-axis labels
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i <= 5; i++) {
+        const y = padding + (plotHeight / 5) * i;
+        const value = yMax - (yMax - yMin) * (i / 5);
+        ctx.fillText(value.toFixed(1), padding - 10, y);
+      }
+
+      // Draw axis labels
+      ctx.fillStyle = '#6c9bd1';
+      ctx.font = '14px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(plotState.xLabel, width / 2, height - padding + 30);
+
+      ctx.save();
+      ctx.translate(padding - 40, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(plotState.yLabel, 0, 0);
+      ctx.restore();
+
+      // Plot data
+      ctx.strokeStyle = plotState.color;
+      ctx.fillStyle = plotState.color;
+      ctx.lineWidth = 2;
+
+      if (plotState.style === 'LINE' && plotState.dataPoints.length > 1) {
+        // Draw line
+        ctx.beginPath();
+        for (let i = 0; i < plotState.dataPoints.length; i++) {
+          const [x, y] = plotState.dataPoints[i];
+          const plotX = padding + ((x - xMin) / (xMax - xMin)) * plotWidth;
+          const plotY = padding + plotHeight - ((y - yMin) / (yMax - yMin)) * plotHeight;
+
+          if (i === 0) {
+            ctx.moveTo(plotX, plotY);
+          } else {
+            ctx.lineTo(plotX, plotY);
+          }
+        }
+        ctx.stroke();
+
+        // Glow effect
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = plotState.color;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw points
+      for (const [x, y] of plotState.dataPoints) {
+        const plotX = padding + ((x - xMin) / (xMax - xMin)) * plotWidth;
+        const plotY = padding + plotHeight - ((y - yMin) / (yMax - yMin)) * plotHeight;
+
+        ctx.beginPath();
+        ctx.arc(plotX, plotY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+
+    connectWebSocket();
+    updateDisplay();
+  </script>
+</body>
+</html>
