@@ -1726,7 +1726,7 @@ Virtual SCPI instruments with web and Android interfaces. Built using a universa
 
 #### Analog Meter (virtual-analog-meter)
 
-`virtual/analog-meter/` — 💭 not started.
+`virtual/analog-meter/` — 🔨 built to documentation, untested.
 
 **Visual:** Round gauge with needle, configurable colored zones (green/yellow/red).
 
@@ -1773,7 +1773,7 @@ config:
 
 #### LED Indicator (virtual-led)
 
-`virtual/led/` — 💭 not started.
+`virtual/led/` — 🔨 built to documentation, untested.
 
 **Visual:** Single circular LED, configurable on/off colors, optional blink.
 
@@ -1789,7 +1789,7 @@ config:
 
 #### Numeric Display (virtual-numeric-display)
 
-`virtual/numeric-display/` — 💭 not started.
+`virtual/numeric-display/` — 🔨 built to documentation, untested.
 
 **Visual:** 7-segment LCD style or plain text digits, large font.
 
