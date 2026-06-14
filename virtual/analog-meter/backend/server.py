@@ -226,7 +226,7 @@ def start_mqtt_client(host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5027):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5002):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -412,19 +412,19 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=9004,
+        port=8002,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Analog Meter ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5025")
-    print("  - HTTP:      http://0.0.0.0:8000")
-    print("  - WebSocket: ws://0.0.0.0:8000/ws")
+    print("  - SCPI:      tcp://0.0.0.0:5002")
+    print("  - HTTP:      http://0.0.0.0:8002")
+    print("  - WebSocket: ws://0.0.0.0:8002/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
     print("")
     print("Example MQTT setup:")
-    print('  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5025')
+    print('  echo "MQTT:CONF 10.1.0.20,bench/meter/value" | nc localhost 5002')
     print('  mosquitto_pub -h 10.1.0.20 -t bench/meter/value -m "75.5"')
 
     await server.serve()

@@ -2,16 +2,16 @@
 
 ## Phase 1: Panel Indicators - COMPLETE (10/10) ✅ ALL TESTED
 
-✅ **numeric-display** - SCPI 5025, HTTP 8100 - Three styles (7SEG/LED/NIXIE), DSEG7 font — **TESTED 2026-06-14**
-✅ **bar-graph** - SCPI 5026, HTTP 8102 - Horizontal/vertical bar with thresholds — **TESTED 2026-06-14**
-✅ **analog-meter** - SCPI 5027, HTTP 8003 - Needle gauge with zones — **TESTED 2026-06-14**
-✅ **led** - SCPI 5028, HTTP 8104 - Status indicator with colors/patterns — **TESTED 2026-06-14**
-✅ **line-chart** - SCPI 5029, HTTP 8005 - Time-series scrolling chart — **TESTED 2026-06-14**
-✅ **xy-plot** - SCPI 5030, HTTP 8006 - Scatter/line plot with axes — **TESTED 2026-06-14**
-✅ **text-lcd** - SCPI 5031, HTTP 9000 - Terminal display with Dot Matrix font, LCD styling — **TESTED 2026-06-14**
-✅ **waterfall** - SCPI 5032, HTTP 9002 - Spectrum/time waterfall display — **TESTED 2026-06-14**
-✅ **compass** - SCPI 5033, HTTP 9001 - Directional indicator — **TESTED 2026-06-14**
-✅ **gauge-cluster** - SCPI 5034, HTTP 8010 - Multi-meter composite (2 or 4 gauges) — **TESTED 2026-06-14**
+✅ **numeric-display** - SCPI 5000, HTTP 8000 - Three styles (7SEG/LED/NIXIE), DSEG7 font — **TESTED 2026-06-14**
+✅ **bar-graph** - SCPI 5001, HTTP 8001 - Horizontal/vertical bar with thresholds — **TESTED 2026-06-14**
+✅ **analog-meter** - SCPI 5002, HTTP 8002 - Needle gauge with zones — **TESTED 2026-06-14**
+✅ **led** - SCPI 5003, HTTP 8003 - Status indicator with colors/patterns — **TESTED 2026-06-14**
+✅ **line-chart** - SCPI 5004, HTTP 8004 - Time-series scrolling chart — **TESTED 2026-06-14**
+✅ **xy-plot** - SCPI 5005, HTTP 8005 - Scatter/line plot with axes — **TESTED 2026-06-14**
+✅ **text-lcd** - SCPI 5006, HTTP 8006 - Terminal display with Dot Matrix font, LCD styling — **TESTED 2026-06-14**
+✅ **waterfall** - SCPI 5007, HTTP 8007 - Spectrum/time waterfall display — **TESTED 2026-06-14**
+✅ **compass** - SCPI 5008, HTTP 8008 - Directional indicator — **TESTED 2026-06-14**
+✅ **gauge-cluster** - SCPI 5009, HTTP 8009 - Multi-meter composite (2 or 4 gauges) — **TESTED 2026-06-14**
 
 ## Implementation Notes
 

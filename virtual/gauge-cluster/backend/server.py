@@ -230,7 +230,7 @@ def start_mqtt_client(gauge_index: int, host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5034):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5009):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -453,15 +453,15 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=9003,
+        port=8009,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Gauge Cluster ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5034")
-    print("  - HTTP:      http://0.0.0.0:8010")
-    print("  - WebSocket: ws://0.0.0.0:8010/ws")
+    print("  - SCPI:      tcp://0.0.0.0:5009")
+    print("  - HTTP:      http://0.0.0.0:8009")
+    print("  - WebSocket: ws://0.0.0.0:8009/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()

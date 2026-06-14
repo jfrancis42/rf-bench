@@ -217,7 +217,7 @@ def start_mqtt_client(host: str, topic: str):
 class SCPIServer:
     """IEEE 488.2 SCPI command parser and TCP server"""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 5026):
+    def __init__(self, host: str = "0.0.0.0", port: int = 5001):
         self.host = host
         self.port = port
         self.server: Optional[asyncio.Server] = None
@@ -424,15 +424,15 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=8102,
+        port=8001,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Bar Graph ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5026")
-    print("  - HTTP:      http://0.0.0.0:8102")
-    print("  - WebSocket: ws://0.0.0.0:8102/ws")
+    print("  - SCPI:      tcp://0.0.0.0:5001")
+    print("  - HTTP:      http://0.0.0.0:8001")
+    print("  - WebSocket: ws://0.0.0.0:8001/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()
