@@ -396,33 +396,39 @@ class SCPIServer:
 # Main
 # ==============================================================================
 
-async def main():
+async def main(scpi_port: int = 5008, http_port: int = 8008):
     """Start both SCPI TCP server and FastAPI HTTP/WebSocket server"""
     global event_loop
     event_loop = asyncio.get_running_loop()
 
-    scpi_server = SCPIServer()
+    scpi_server = SCPIServer(port=scpi_port)
     await scpi_server.start()
 
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=8008,
+        port=http_port,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Compass ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5008")
-    print("  - HTTP:      http://0.0.0.0:8008")
-    print("  - WebSocket: ws://0.0.0.0:8008/ws")
+    print(f"  - SCPI:      tcp://0.0.0.0:{scpi_port}")
+    print(f"  - HTTP:      http://0.0.0.0:{http_port}")
+    print(f"  - WebSocket: ws://0.0.0.0:{http_port}/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Virtual Compass SCPI Server")
+    parser.add_argument('--scpi-port', type=int, default=5008, help="SCPI TCP port (default: 5008)")
+    parser.add_argument('--http-port', type=int, default=8008, help="HTTP/WebSocket port (default: 8008)")
+    args = parser.parse_args()
+
     try:
-        asyncio.run(main())
+        asyncio.run(main(scpi_port=args.scpi_port, http_port=args.http_port))
     except KeyboardInterrupt:
         print("\nShutdown.")

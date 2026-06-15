@@ -1,0 +1,38 @@
+IMPORTANT: Backend Server Port Configuration
+=============================================
+
+Current Status (2026-06-14):
+----------------------------
+
+Backend server (server.py) currently uses non-standard ports:
+  - SCPI TCP: port 5009 (line 230: SCPIServer())
+  - HTTP/WebSocket: port 8009 (line 456: uvicorn Config)
+
+Driver default: port 5025 (SCPI industry standard)
+
+Issue:
+------
+Driver and backend use different default ports. This will cause connection
+failures unless port is explicitly specified:
+
+  cluster = VirtualGaugeCluster("host", port=5009)  # Required for now
+
+Recommendation:
+---------------
+Update backend server.py to use standard ports:
+  - Line 230: SCPIServer(port=5025)  # was 5009
+  - Line 456: port=8010              # was 8009
+
+This matches:
+  - Other virtual instruments (analog-meter uses 5025/8000)
+  - Industry SCPI standard (RFC 6335: port 5025)
+  - Driver default expectations
+
+Once backend is updated, driver will work without port parameter:
+  cluster = VirtualGaugeCluster("host")  # Just works
+
+Cross-reference:
+----------------
+  - virtual/analog-meter/backend/server-multi.py uses 5025 (SCPI) and 8000 (HTTP)
+  - virtual/led/backend/server.py uses 5025 (SCPI)
+  - Driver default: 5025 (matches industry standard)

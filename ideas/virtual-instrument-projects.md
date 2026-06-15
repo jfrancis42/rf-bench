@@ -1,8 +1,8 @@
 # Virtual Instrument Integration Projects
 
-**Virtual Instruments Status:** 15 built, 8 with complete Python drivers
+**Virtual Instruments Status:** 15 built, all with complete Python drivers ✅
 
-**COMPLETE (backend + frontend + Python driver):** 8 instruments
+**COMPLETE (backend + frontend + Python driver):** 15 instruments
 1. ✅ Analog meter (270° arc, spring-damper physics)
 2. ✅ LED indicator (on/off/blink, custom colors)
 3. ✅ 7-segment numeric display (DSEG7 font)
@@ -11,15 +11,13 @@
 6. ✅ Linear slider control
 7. ✅ Momentary push button
 8. ✅ Toggle switch
-
-**BUILT (backend + frontend, need Python drivers):** 7 instruments
-9. 🔧 Line chart (time-series data, multiple traces, auto-scaling)
-10. 🔧 XY plot (2D scatter, parametric curves, zoom/pan)
-11. 🔧 Waterfall display (spectrum history, frequency vs time)
-12. 🔧 Text LCD (multi-line text display, scrolling)
-13. 🔧 Text input (interactive parameter entry)
-14. 🔧 Gauge cluster (multi-meter dashboard layout)
-15. 🔧 Compass (directional indicator, 0-360°)
+9. ✅ Line chart (time-series data, auto-scaling, MQTT integration)
+10. ✅ XY plot (2D scatter, parametric curves, zoom/pan)
+11. ✅ Waterfall display (spectrum history, frequency vs time)
+12. ✅ Text LCD (multi-line text display, scrolling)
+13. ✅ Text input (interactive parameter entry)
+14. ✅ Gauge cluster (multi-meter dashboard layout)
+15. ✅ Compass (directional indicator, 0-360°)
 
 **NOT YET BUILT (mentioned in project ideas below):**
 - 💭 Map widget (GPS track overlay with maps.n0gq.org integration)
@@ -28,8 +26,8 @@
 
 **Infrastructure:**
 - ✅ BenchView: Multi-instrument panel manager with iframe grid, HTTP/WebSocket proxy, dynamic port assignment
-- ✅ Python drivers: Complete SCPI-over-TCP libraries for all 8 built instruments (`rf_bench.virtual` namespace)
-- ✅ Backend pattern: FastAPI + SCPI TCP (port 5025) + WebSocket, multi-instance (1-4 sub-instruments, 1-based indexing)
+- ✅ Python drivers: Complete SCPI-over-TCP libraries for all 15 built instruments (`rf_bench.virtual` namespace, ready for PyPI)
+- ✅ Backend pattern: FastAPI + SCPI TCP (port 5025) + WebSocket, multi-instance (1-4 sub-instruments for basic widgets, 1-based indexing)
 - ✅ Frontend pattern: HTML5 Canvas + WebSocket, real-time updates, no build step required
 
 ---

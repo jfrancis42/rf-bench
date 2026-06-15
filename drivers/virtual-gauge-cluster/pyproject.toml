@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-virtual-gauge-cluster"
+version = "0.1.0"
+description = "Virtual Gauge Cluster SCPI driver for RF Bench"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Jeff Francis (N0GQ)", email = "gjfrancis@protonmail.com"}
+]
+keywords = ["rf", "bench", "scpi", "virtual", "gauge", "cluster", "dashboard", "instrumentation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.7"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+Issues = "https://github.com/jfrancis42/rf-bench/issues"
+
+[tool.setuptools]
+packages = ["rf_bench", "rf_bench.virtual"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+rf_bench = ["py.typed"]

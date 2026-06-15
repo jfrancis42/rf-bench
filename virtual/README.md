@@ -2,9 +2,9 @@
 
 Web-based virtual instruments with SCPI-over-TCP backends for RF bench automation. All instruments feature HTML5 Canvas frontends, FastAPI/WebSocket backends, and complete Python driver libraries.
 
-## Status: 15 Instruments Built, 8 with Complete Drivers
+## Status: 15 Instruments Built, All with Complete Drivers ✅
 
-**COMPLETE (backend + frontend + Python driver):** 8 instruments
+**COMPLETE (backend + frontend + Python driver):** 15 instruments
 1. ✅ **Analog Meter** — 270° arc sweep, spring-damper needle physics, colored zones
 2. ✅ **LED Indicator** — On/off/blink states, customizable colors, CSS glow effects
 3. ✅ **7-Segment Display** — DSEG7 LED font, configurable precision and units
@@ -13,19 +13,17 @@ Web-based virtual instruments with SCPI-over-TCP backends for RF bench automatio
 6. ✅ **Linear Slider** — Smooth motion with value display and units
 7. ✅ **Push Button** — Momentary press animation with label
 8. ✅ **Toggle Switch** — Flip animation with on/off states
-
-**BUILT (backend + frontend, need Python drivers):** 7 instruments
-9. 🔧 **Line Chart** — Time-series scrolling chart, multiple traces, auto-scaling, threshold zones
-10. 🔧 **XY Plot** — 2D scatter plot, parametric curves, zoom/pan, grid overlay
-11. 🔧 **Waterfall** — Spectrum history display, frequency vs time heatmap
-12. 🔧 **Text LCD** — Multi-line text display with scrolling and word wrap
-13. 🔧 **Text Input** — Interactive parameter entry with validation
-14. 🔧 **Gauge Cluster** — Multi-meter dashboard (V/I/P triplets, battery cells)
-15. 🔧 **Compass** — Directional indicator (0-360°) for satellite/antenna tracking
+9. ✅ **Line Chart** — Time-series scrolling chart, auto-scaling, threshold zones, MQTT integration
+10. ✅ **XY Plot** — 2D scatter plot, parametric curves, zoom/pan, grid overlay
+11. ✅ **Waterfall** — Spectrum history display, frequency vs time heatmap
+12. ✅ **Text LCD** — Multi-line text display with scrolling and word wrap
+13. ✅ **Text Input** — Interactive parameter entry with validation
+14. ✅ **Gauge Cluster** — Multi-meter dashboard (V/I/P triplets, battery cells)
+15. ✅ **Compass** — Directional indicator (0-360°) for satellite/antenna tracking
 
 **Infrastructure:**
 - ✅ **BenchView** — Multi-instrument panel manager with YAML config, iframe grid, HTTP/WebSocket proxy
-- ✅ **Python drivers** — Complete for 8 instruments, need to create for 7 more
+- ✅ **Python drivers** — Complete for all 15 instruments, ready for PyPI publication
 
 **Still needed (from integration project requirements):**
 - 💭 Map widget (GPS track overlay with maps.n0gq.org integration)
@@ -295,7 +293,7 @@ panel:
 
 ## Python Driver API
 
-All 8 drivers share a common interface:
+All 15 drivers share a common interface:
 
 ```python
 from rf_bench.virtual import (
@@ -306,7 +304,14 @@ from rf_bench.virtual import (
     VirtualKnob,
     VirtualSlider,
     VirtualButton,
-    VirtualToggle
+    VirtualToggle,
+    VirtualLineChart,
+    VirtualXYPlot,
+    VirtualWaterfall,
+    VirtualTextLCD,
+    VirtualTextInput,
+    VirtualGaugeCluster,
+    VirtualCompass
 )
 
 # Connection
@@ -480,7 +485,7 @@ while True:
 
 ### Phase 1: Read-Only Displays — ✅ COMPLETE
 
-All 8 instruments built, tested, and documented:
+All 15 instruments built, tested, and documented:
 - [x] Analog meter
 - [x] LED indicator
 - [x] 7-segment numeric display
@@ -489,6 +494,13 @@ All 8 instruments built, tested, and documented:
 - [x] Linear slider
 - [x] Push button
 - [x] Toggle switch
+- [x] Line chart
+- [x] XY plot
+- [x] Waterfall
+- [x] Text LCD
+- [x] Text input
+- [x] Gauge cluster
+- [x] Compass
 - [x] BenchView panel manager
 - [x] Python drivers for all instruments
 

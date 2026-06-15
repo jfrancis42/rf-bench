@@ -26,24 +26,31 @@ All panels accept `--demo` (no hardware required) for UI testing and `--interval
 
 HTML5 Canvas instruments with SCPI-over-TCP backends. Multi-instrument panels managed by BenchView.
 
-| Instrument | Backend | Frontend | Status |
-|------------|---------|----------|--------|
-| Analog meter | `virtual/analog-meter/backend/server-multi.py` | HTML5 Canvas, 270° arc, spring-damper physics | ✅ |
-| LED indicator | `virtual/led/backend/server-multi.py` | HTML5 Canvas, on/off/blink, custom colors | ✅ |
-| 7-segment display | `virtual/numeric-display/backend/server-multi.py` | HTML5 Canvas, DSEG7 font | ✅ |
-| Bar graph | `virtual/bar-graph/backend/server-multi.py` | HTML5 Canvas, colored zones | ✅ |
-| Rotary knob | `virtual/knob/backend/server-multi.py` | HTML5 Canvas, rotation animation | ✅ |
-| Linear slider | `virtual/slider/backend/server-multi.py` | HTML5 Canvas, smooth motion | ✅ |
-| Push button | `virtual/button/backend/server-multi.py` | HTML5 Canvas, press animation | ✅ |
-| Toggle switch | `virtual/toggle/backend/server-multi.py` | HTML5 Canvas, flip animation | ✅ |
-| **BenchView** | `virtual/benchview/backend/benchview.py` | Multi-instrument panel manager, YAML config | ✅ |
+| Instrument | Backend | Frontend | Driver | Status |
+|------------|---------|----------|--------|--------|
+| Analog meter | `virtual/analog-meter/backend/server-multi.py` | HTML5 Canvas, 270° arc, spring-damper physics | `rf_bench.virtual.VirtualAnalogMeter` | ✅ |
+| LED indicator | `virtual/led/backend/server-multi.py` | HTML5 Canvas, on/off/blink, custom colors | `rf_bench.virtual.VirtualLED` | ✅ |
+| 7-segment display | `virtual/numeric-display/backend/server-multi.py` | HTML5 Canvas, DSEG7 font | `rf_bench.virtual.VirtualNumericDisplay` | ✅ |
+| Bar graph | `virtual/bar-graph/backend/server-multi.py` | HTML5 Canvas, colored zones | `rf_bench.virtual.VirtualBarGraph` | ✅ |
+| Rotary knob | `virtual/knob/backend/server-multi.py` | HTML5 Canvas, rotation animation | `rf_bench.virtual.VirtualKnob` | ✅ |
+| Linear slider | `virtual/slider/backend/server-multi.py` | HTML5 Canvas, smooth motion | `rf_bench.virtual.VirtualSlider` | ✅ |
+| Push button | `virtual/button/backend/server-multi.py` | HTML5 Canvas, press animation | `rf_bench.virtual.VirtualButton` | ✅ |
+| Toggle switch | `virtual/toggle/backend/server-multi.py` | HTML5 Canvas, flip animation | `rf_bench.virtual.VirtualToggle` | ✅ |
+| Line chart | `virtual/line-chart/backend/server.py` | HTML5 Canvas, scrolling time-series | `rf_bench.virtual.VirtualLineChart` | ✅ |
+| XY plot | `virtual/xy-plot/backend/server.py` | HTML5 Canvas, 2D scatter, zoom/pan | `rf_bench.virtual.VirtualXYPlot` | ✅ |
+| Waterfall | `virtual/waterfall/backend/server.py` | HTML5 Canvas, spectrum history heatmap | `rf_bench.virtual.VirtualWaterfall` | ✅ |
+| Text LCD | `virtual/text-lcd/backend/server.py` | HTML5 Canvas, multi-line text | `rf_bench.virtual.VirtualTextLCD` | ✅ |
+| Text input | `virtual/text-input/backend/server.py` | HTML5 Canvas, parameter entry | `rf_bench.virtual.VirtualTextInput` | ✅ |
+| Gauge cluster | `virtual/gauge-cluster/backend/server.py` | HTML5 Canvas, multi-meter dashboard | `rf_bench.virtual.VirtualGaugeCluster` | ✅ |
+| Compass | `virtual/compass/backend/server.py` | HTML5 Canvas, directional indicator | `rf_bench.virtual.VirtualCompass` | ✅ |
+| **BenchView** | `virtual/benchview/backend/benchview.py` | Multi-instrument panel manager, YAML config | — | ✅ |
 
 **Architecture:**
-- **SCPI:** Port 5025 (default), 1-based indexing (MEAS1, MEAS2, etc.), IEEE 488.2 commands
+- **SCPI:** Port 5025 (default), 1-based indexing (MEAS1, MEAS2, etc.), IEEE 488.2 commands, `--scpi-port` and `--http-port` CLI args
 - **WebSocket:** Real-time bidirectional updates, auto-reconnect
-- **Multi-instance:** 1-4 sub-instruments per backend (e.g., 2 meters on one server)
-- **Layouts:** ROW, COL, 2X2 grid arrangements
-- **Python drivers:** Complete `rf_bench.virtual` packages for automation (353-472 lines each)
+- **Multi-instance:** 1-4 sub-instruments per backend for basic widgets (e.g., 2 meters on one server)
+- **Layouts:** ROW, COL, 2X2 grid arrangements (multi-instance backends only)
+- **Python drivers:** Complete `rf_bench.virtual` packages for all 15 instruments (267-451 lines each, comprehensive READMEs)
 
 **Usage:**
 ```bash

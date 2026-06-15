@@ -431,33 +431,39 @@ async def websocket_endpoint(websocket: WebSocket):
 # Main Entry Point
 # ============================================================================
 
-async def main():
+async def main(scpi_port: int = 5104, http_port: int = 8104):
     """Start all servers"""
     # Start SCPI server
-    scpi_server = SCPIServer()
+    scpi_server = SCPIServer(port=scpi_port)
     await scpi_server.start()
 
     # Start FastAPI server in background
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=8104,
+        port=http_port,
         log_level="info"
     )
     server = uvicorn.Server(config)
 
     print("Virtual Text Input ready:")
-    print("  - SCPI:      tcp://0.0.0.0:5104")
-    print("  - HTTP:      http://0.0.0.0:8104")
-    print("  - WebSocket: ws://0.0.0.0:8104/ws")
+    print(f"  - SCPI:      tcp://0.0.0.0:{scpi_port}")
+    print(f"  - HTTP:      http://0.0.0.0:{http_port}")
+    print(f"  - WebSocket: ws://0.0.0.0:{http_port}/ws")
     print("  - MQTT:      Use MQTT:CONF command to configure")
 
     await server.serve()
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Virtual Text Input SCPI Server")
+    parser.add_argument('--scpi-port', type=int, default=5104, help="SCPI TCP port (default: 5104)")
+    parser.add_argument('--http-port', type=int, default=8104, help="HTTP/WebSocket port (default: 8104)")
+    args = parser.parse_args()
+
     try:
-        asyncio.run(main())
+        asyncio.run(main(scpi_port=args.scpi_port, http_port=args.http_port))
     except KeyboardInterrupt:
         print("\nShutting down...")
         if mqtt_client:
