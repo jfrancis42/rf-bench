@@ -37,6 +37,7 @@ import numpy as np
 from rf_bench.siglent import SDM3000X
 from rf_bench.buspirate import BusPirate
 from rf_bench.relay import XL9535
+from rf_bench import connect
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 

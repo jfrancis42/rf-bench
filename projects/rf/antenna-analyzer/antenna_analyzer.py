@@ -40,6 +40,7 @@ import numpy as np
 from rf_bench.siglent import SSA3000X                                      # noqa: E402
 from rf_bench.siglent.ssa3000x import DEFAULT_TG_LEVEL as DEFAULT_TG_LEVEL_DBM  # noqa: E402
 from rf_bench.utils import (                                               # noqa: E402
+from rf_bench import connect
     rl_to_vswr, rl_to_vswr_v, format_freq, nearest_rbw,
 )
 
@@ -786,7 +787,7 @@ Examples:
         if not args.yes:
             input("Press Enter when ready...")
 
-    ssa = SSA3000X(args.host, args.port)
+    ssa = connect(args.host or 'ssa')
 
     try:
         ssa.connect()

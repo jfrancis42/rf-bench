@@ -25,12 +25,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SDM3000X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_DMM_HOST   = "10.1.1.63"
+DEFAULT_DMM_HOST   = None  # Now uses inventory
 DEFAULT_THRESHOLD  = 100.0   # mΩ fail threshold
 STABLE_COUNT       = 3
 STABLE_PCT         = 0.001   # 0.1% stability window
@@ -223,10 +224,10 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDM3045X @ {args.dmm} ...")
+    print(f"Connecting to SDM3045X via inventory'} ...")
     dmm = None
     try:
-        dmm = SDM3000X(args.dmm)
+        dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")
         run_contact(dmm, args)
     except ConnectionRefusedError as exc:

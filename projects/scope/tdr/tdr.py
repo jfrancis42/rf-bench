@@ -39,13 +39,14 @@ import numpy as np
 
 from rf_bench.siglent import SDG1000X, SDS2000X          # noqa: E402
 from rf_bench.utils import format_freq_short              # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants / defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SDG_HOST    = "10.1.1.55"
-DEFAULT_SCOPE_HOST  = "10.1.1.58"
+DEFAULT_SDG_HOST    = None  # Now uses inventory
+DEFAULT_SCOPE_HOST  = None  # Now uses inventory
 DEFAULT_VF          = 0.66   # RG-58 / RG-8 / RG-213
 DEFAULT_MAX_LENGTH  = 100.0  # metres
 DEFAULT_FREQ_SDG    = 10_000_000   # 10 MHz
@@ -382,13 +383,13 @@ Examples:
     sdg   = None
 
     try:
-        print(f"Connecting to scope @ {args.scope_host} ...", end=" ", flush=True)
-        scope = SDS2000X(args.scope_host)
+        print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+        scope = connect(args.scope_host or 'sds')
         print(f"OK  [{scope.identify().split(',')[1].strip()}]")
 
         if args.source == "sdg":
-            print(f"Connecting to SDG @ {args.sdg_host} ...", end=" ", flush=True)
-            sdg = SDG1000X(args.sdg_host)
+            print(f"Connecting to SDG via inventory'} ...", end=" ", flush=True)
+            sdg = connect(args.sdg_host or 'sdg')
             print(f"OK  [{sdg.identify().split(',')[1].strip()}]")
             sdg.set_sine(1, freq_hz, level_dbm=13.0)   # ~13 dBm ≈ 1 Vpp into 50 Ω
             # Reconfigure as square wave via BSWV

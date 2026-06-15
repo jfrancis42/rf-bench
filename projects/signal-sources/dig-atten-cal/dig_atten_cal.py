@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 from rf_bench.buspirate import BusPirate
 from rf_bench.siglent   import SSA3000X
 from rf_bench.utils     import format_freq, format_freq_short, nearest_rbw
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Chip definitions

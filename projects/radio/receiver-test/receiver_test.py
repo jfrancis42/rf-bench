@@ -38,6 +38,7 @@ from rf_bench.siglent import SDG1000X, SDS2000X, DBM_MIN as SDG_DBM_MIN, DBM_MAX
 from rf_bench.icom    import IC7300                                                               # noqa: E402
 from rf_bench.yaesu   import FT891                                                                # noqa: E402
 from rf_bench.utils   import (                                                                    # noqa: E402
+from rf_bench import connect
     noise_figure_from_mds, thermal_noise_floor, ip3_from_imd,
 )
 
@@ -899,7 +900,7 @@ def main():
     # Connect to instruments
     print(f"Connecting to SDG1000X at {args.sdg}...", end=" ", flush=True)
     try:
-        sdg = SDG1000X(args.sdg)
+        sdg = connect(args.sdg or 'sdg')
         print(f"OK  [{sdg.identify()[:40]}]")
     except Exception as e:
         print(f"FAILED: {e}")
@@ -909,7 +910,7 @@ def main():
     if not args.no_scope and "imd" in args.test:
         print(f"Connecting to SDS2000X Plus at {args.scope}...", end=" ", flush=True)
         try:
-            scope = SDS2000X(args.scope)
+            scope = connect(args.scope or 'sds')
             print(f"OK  [{scope.identify()[:40]}]")
         except Exception as e:
             print(f"FAILED: {e}")

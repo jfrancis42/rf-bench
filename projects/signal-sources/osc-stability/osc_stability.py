@@ -36,6 +36,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X          # noqa: E402
 from rf_bench.utils import (                              # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, nearest_rbw, adev_multi_tau,
 )
 
@@ -43,8 +44,8 @@ from rf_bench.utils import (                              # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SSA_HOST         = "10.1.1.60"
-DEFAULT_SDG_HOST         = "10.1.1.55"
+DEFAULT_SSA_HOST         = None  # Now uses inventory
+DEFAULT_SDG_HOST         = None  # Now uses inventory
 DEFAULT_FREQ_KHZ         = 10_000      # 10 MHz
 DEFAULT_DURATION_S       = 300         # 5 minutes
 DEFAULT_INTERVAL_S       = 1.0         # 1 sample per second
@@ -401,13 +402,13 @@ Examples:
 
     ssa = sdg = None
     try:
-        print(f"\nConnecting to SSA @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        print(f"\nConnecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 
         if args.source == 'sdg':
-            print(f"Connecting to SDG @ {args.sdg} ...")
-            sdg = SDG1000X(args.sdg)
+            print(f"Connecting to SDG via inventory'} ...")
+            sdg = connect(args.sdg or 'sdg')
             print(f"  {sdg.identify()}")
             sdg.set_sine(1, freq_hz, args.carrier_level)
             sdg.output_on(1)

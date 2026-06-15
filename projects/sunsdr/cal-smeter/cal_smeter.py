@@ -34,6 +34,7 @@ import numpy as np
 from rf_bench.icom import IC7300
 from rf_bench.siglent import SDG1000X
 from rf_bench.sunsdr import SunSDR, SunSDRError
+from rf_bench import connect
 
 
 # ── Default calibration sweep ─────────────────────────────────────────────────
@@ -241,7 +242,7 @@ def run(args: argparse.Namespace) -> None:
     if args.sdg_host:
         print(f"  Connecting to SDG1062X at {args.sdg_host}...")
         try:
-            sdg = SDG1000X(args.sdg_host)
+            sdg = connect(args.sdg_host or 'sdg')
             print(f"  SDG connected: {sdg.identify()}")
         except Exception as e:
             print(f"  WARNING: SDG connection failed ({e})")

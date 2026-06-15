@@ -40,6 +40,7 @@ from pathlib import Path
 try:
     from rf_bench.siglent.spd3303x import SPD3303X
     from rf_bench.siglent.sdm3045x import SDM3045X
+from rf_bench import connect
 except ImportError:
     print("ERROR: rf-bench Siglent drivers not found.", file=sys.stderr)
     print("Install: pip install rf-bench-drivers-siglent", file=sys.stderr)
@@ -237,7 +238,7 @@ Hardware setup:
     try:
         mux = ScpiMux(args.esp_mux)
         relay = ScpiRelay(args.esp_relay)
-        psu = SPD3303X(args.psu)
+        psu = connect(args.psu or 'spd')
         dmm = SDM3045X(args.dmm)
     except Exception as e:
         print(f"ERROR: Failed to connect to instruments: {e}", file=sys.stderr)

@@ -47,12 +47,13 @@ import numpy as np
 
 from rf_bench.siglent import SDS2000X                    # noqa: E402
 from rf_bench.utils import gain_phase_from_fft, format_freq, format_freq_short  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SCOPE_HOST  = "10.1.1.58"
+DEFAULT_SCOPE_HOST  = None  # Now uses inventory
 DEFAULT_START_HZ    = 100
 DEFAULT_STOP_HZ     = 1_000_000
 DEFAULT_POINTS      = 80
@@ -370,8 +371,8 @@ Examples:
     scope = None
 
     try:
-        print(f"Connecting to scope @ {args.scope_host} ...", end=" ", flush=True)
-        scope = SDS2000X(args.scope_host)
+        print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+        scope = connect(args.scope_host or 'sds')
         print(f"OK  [{scope.identify().split(',')[1].strip()}]")
 
         scope.stop()

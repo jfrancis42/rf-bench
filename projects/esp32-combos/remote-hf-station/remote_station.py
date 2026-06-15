@@ -34,6 +34,7 @@ from flask_sock import Sock
 import pyvisa
 
 from rf_bench.icom import IC7300
+from rf_bench import connect
 
 
 app = Flask(__name__)

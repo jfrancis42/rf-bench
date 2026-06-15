@@ -16,6 +16,7 @@ from typing import Dict, Tuple, Optional
 # For now, placeholder imports
 try:
     from rf_bench.relay import XL9535
+from rf_bench import connect
     RELAY_AVAILABLE = True
 except ImportError:
     RELAY_AVAILABLE = False

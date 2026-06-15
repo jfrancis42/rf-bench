@@ -140,6 +140,7 @@ def run(args):
     if args.gps:
         try:
             from rf_bench.gpsd import GPSD
+from rf_bench import connect
             gps = GPSD()
             print("GPS connected.")
         except Exception as e:

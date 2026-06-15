@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from rf_bench.icom import IC7300, IC9700
 from rf_bench.yaesu import FT891
 from rf_bench.gpsd import GPSD, GPSDNoFixError
+from rf_bench import connect
 
 _running = True
 _C = 299_792_458.0  # m/s

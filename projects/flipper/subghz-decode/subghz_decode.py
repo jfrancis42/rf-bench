@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 from rf_bench.flipper import FlipperZero
 try:
     from rf_bench.siglent import SSA3000X
+from rf_bench import connect
     _SSA_AVAILABLE = True
 except ImportError:
     _SSA_AVAILABLE = False
@@ -40,7 +41,7 @@ DEFAULT_FREQ_MHZ  = 433.92
 DEFAULT_DURATION  = 300      # seconds; 0 = forever
 DEFAULT_DB        = "subghz_packets.db"
 DEFAULT_SERIAL    = "/dev/ttyACM0"
-DEFAULT_SSA_HOST  = "10.1.1.60"
+DEFAULT_SSA_HOST  = None  # Now uses inventory
 SSA_SPAN_HZ       = 500_000  # narrow span around carrier for RF characterization
 
 _running = True
@@ -216,7 +217,7 @@ Examples:
             print("Warning: rf-bench-drivers-siglent not installed, --ssa ignored")
         else:
             try:
-                ssa = SSA3000X(args.ssa)
+                ssa = connect(args.ssa or 'ssa')
                 print(f"SSA: {ssa.identify()}")
             except Exception as exc:
                 print(f"Warning: cannot connect to SSA ({exc}), continuing without it")
@@ -226,7 +227,7 @@ Examples:
     print(f"Database: {args.db}")
 
     try:
-        print(f"Connecting to Flipper @ {args.serial} ...")
+        print(f"Connecting to Flipper via inventory'} ...")
         fz = FlipperZero(args.serial)
         print(f"  {fz.identify()}")
 

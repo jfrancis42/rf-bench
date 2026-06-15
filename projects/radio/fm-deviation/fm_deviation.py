@@ -55,7 +55,7 @@ from rf_bench.siglent import SSA3000X
 from rf_bench.icom    import IC9700
 from rf_bench.utils   import format_freq
 
-DEFAULT_SSA_HOST  = "10.1.1.60"
+DEFAULT_SSA_HOST  = None  # Now uses inventory
 DEFAULT_RIG_HOST  = "localhost"
 DEFAULT_RIG_PORT  = 4532
 DEFAULT_ATTEN     = 30.0
@@ -180,7 +180,8 @@ def sweep(radio: IC9700, ssa: SSA3000X, freq_hz: float,
     # If SDG is available, use it; otherwise just do repeated measurements
     try:
         from rf_bench.siglent import SDG1000X
-        sdg = SDG1000X("10.1.1.55")
+from rf_bench import connect
+        sdg = connect('sdg')
         sdg.set_waveform(1, "SINE")
         sdg.set_frequency(1, audio_hz)
         sdg.set_output(1, True)
@@ -241,7 +242,7 @@ def main():
     print()
 
     radio = IC9700(host=args.rig_host, port=args.rig_port)
-    ssa   = SSA3000X(args.ssa_host)
+    ssa   = connect(args.ssa_host or 'ssa')
 
     if args.sweep:
         print("── Level Sweep ──")

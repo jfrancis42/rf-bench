@@ -49,13 +49,14 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 from rf_bench.siglent import SPD3303X, SDM3000X                            # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SPD_HOST  = "10.1.1.56"
-DEFAULT_DMM_HOST  = "10.1.1.63"
+DEFAULT_SPD_HOST  = None  # Now uses inventory
+DEFAULT_DMM_HOST  = None  # Now uses inventory
 
 # Per-device default sweep limits
 DEVICE_DEFAULTS = {
@@ -671,13 +672,13 @@ Examples:
     dmm: SDM3000X | None = None
 
     try:
-        print(f"\nConnecting to SPD3303X @ {args.spd_host} ...", end=" ", flush=True)
-        psu = SPD3303X(args.spd_host)
+        print(f"\nConnecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+        psu = connect(args.spd_host or 'spd')
         print(f"OK  ({psu.identify().strip()})")
 
         if args.use_dmm:
-            print(f"Connecting to SDM3045X @ {args.dmm_host} ...", end=" ", flush=True)
-            dmm = SDM3000X(args.dmm_host)
+            print(f"Connecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+            dmm = connect(args.dmm_host or 'sdm')
             print(f"OK  ({dmm.identify().strip()})")
             dmm.configure_idc()
 

@@ -44,6 +44,7 @@ import numpy as np
 
 from rf_bench.siglent import SPD3303X, SDG1000X, SDS2000X        # noqa: E402
 from rf_bench.utils import (                                       # noqa: E402
+from rf_bench import connect
     complex_impedance_series, format_freq, format_freq_short,
     dbm_to_vpp,
 )
@@ -52,9 +53,9 @@ from rf_bench.utils import (                                       # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_PSU_HOST   = "10.1.1.56"
-DEFAULT_SDG_HOST   = "10.1.1.55"
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_PSU_HOST   = None  # Now uses inventory
+DEFAULT_SDG_HOST   = None  # Now uses inventory
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 
 DEFAULT_FREQ_KHZ   = 14_000      # 14 MHz (20 m)
 DEFAULT_VMIN       = 1.0         # minimum bias voltage (V)
@@ -446,16 +447,16 @@ Examples:
     # Connect instruments
     psu = sdg = scope = None
     try:
-        print(f"Connecting to SPD3303X @ {args.psu} ...")
-        psu = SPD3303X(args.psu)
+        print(f"Connecting to SPD3303X via inventory'} ...")
+        psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
-        print(f"Connecting to SDG1000X @ {args.sdg} ...")
-        sdg = SDG1000X(args.sdg)
+        print(f"Connecting to SDG1000X via inventory'} ...")
+        sdg = connect(args.sdg or 'sdg')
         print(f"  {sdg.identify()}")
 
-        print(f"Connecting to SDS2000X @ {args.scope} ...")
-        scope = SDS2000X(args.scope)
+        print(f"Connecting to SDS2000X via inventory'} ...")
+        scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
 
         # Run the sweep; PSU is disabled in the finally block

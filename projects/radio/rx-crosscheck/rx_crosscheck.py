@@ -48,7 +48,7 @@ from rf_bench.icom   import IC9700
 from rf_bench.rtlsdr import RTLSDR
 from rf_bench.utils  import format_freq
 
-DEFAULT_SSA_HOST     = "10.1.1.60"
+DEFAULT_SSA_HOST     = None  # Now uses inventory
 DEFAULT_RIG_HOST     = "localhost"
 DEFAULT_RIG_PORT     = 4532
 DEFAULT_FREQ_KHZ     = 144_200.0
@@ -204,7 +204,8 @@ def main():
 
     if args.source == "ssa":
         from rf_bench.siglent import SSA3000X
-        ssa = SSA3000X(args.ssa_host)
+from rf_bench import connect
+        ssa = connect(args.ssa_host or 'ssa')
         rows = run_sweep(radio, sdr, ssa, freq_hz,
                          args.atten_ic9700, args.atten_rtlsdr)
     else:

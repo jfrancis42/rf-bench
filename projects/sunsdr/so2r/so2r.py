@@ -37,6 +37,7 @@ import numpy as np
 
 from rf_bench.icom import IC7300
 from rf_bench.sunsdr import SunSDR, SunSDRError
+from rf_bench import connect
 
 
 # ── ANSI colours ─────────────────────────────────────────────────────────────

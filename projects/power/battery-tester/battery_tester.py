@@ -43,13 +43,14 @@ from rf_bench.siglent import SDM3000X, SPD3303X                            # noq
 # ---------------------------------------------------------------------------
 
 from rf_bench.yertai import ET5406A, ET5406AError
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_DMM_HOST  = "10.1.1.63"
-DEFAULT_SPD_HOST  = "10.1.1.56"
+DEFAULT_DMM_HOST  = None  # Now uses inventory
+DEFAULT_SPD_HOST  = None  # Now uses inventory
 DEFAULT_LOAD_PORT = "/dev/ttyUSB0"
 
 # ---------------------------------------------------------------------------
@@ -558,20 +559,20 @@ Examples:
 
     try:
         # Connect DMM (always required for voltage)
-        print(f"\nConnecting to SDM3045X @ {args.dmm_host} ...", end=" ", flush=True)
-        dmm = SDM3000X(args.dmm_host)
+        print(f"\nConnecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+        dmm = connect(args.dmm_host or 'sdm')
         print(f"OK  ({dmm.identify().strip()})")
 
         # Connect ET54 load (required for all current tests)
-        print(f"Connecting to ET5406A+ @ {args.load_port} ...", end=" ", flush=True)
+        print(f"Connecting to ET5406A+ via inventory'} ...", end=" ", flush=True)
         load = _connect_load(args.load_port)
         load.off()
         print("OK")
 
         # Connect SPD (required for cycle mode)
         if args.mode == "cycle":
-            print(f"Connecting to SPD3303X @ {args.spd_host} ...", end=" ", flush=True)
-            psu = SPD3303X(args.spd_host)
+            print(f"Connecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+            psu = connect(args.spd_host or 'spd')
             print(f"OK  ({psu.identify().strip()})")
             psu.disable_all()
 

@@ -38,6 +38,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 from rf_bench.siglent import SDS2000X                                         # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -916,7 +917,7 @@ Examples:
     scope = None
     try:
         print(f"Connecting to oscilloscope at {args.scope_host} ...")
-        scope = SDS2000X(args.scope_host)
+        scope = connect(args.scope_host or 'sds')
         idn   = scope.identify()
         print(f"Instrument: {idn}")
 

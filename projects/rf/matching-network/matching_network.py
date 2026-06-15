@@ -49,8 +49,8 @@ from rf_bench.utils import (                              # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SCOPE_HOST    = "10.1.1.58"
-DEFAULT_SDG_HOST      = "10.1.1.55"
+DEFAULT_SCOPE_HOST    = None  # Now uses inventory
+DEFAULT_SDG_HOST      = None  # Now uses inventory
 DEFAULT_FREQ_KHZ      = 14_200
 DEFAULT_Z_SOURCE      = 50.0
 DEFAULT_Z_REF_OHM     = 50.0
@@ -196,6 +196,7 @@ def measure_impedance(scope: SDS2000X, sdg: SDG1000X,
     Returns complex Z in ohms.
     """
     from rf_bench.utils import vpp_to_dbm
+from rf_bench import connect
 
     level_vpp = DEFAULT_MEAS_LEVEL_VPP
     level_dbm = vpp_to_dbm(level_vpp)
@@ -626,17 +627,17 @@ Examples:
     needs_instruments = args.measure or args.verify
 
     if needs_instruments:
-        print(f"\nConnecting to scope @ {args.scope} ...")
+        print(f"\nConnecting to scope via inventory'} ...")
         try:
-            scope = SDS2000X(args.scope)
+            scope = connect(args.scope or 'sds')
             print(f"  {scope.identify()}")
         except (ConnectionRefusedError, OSError) as exc:
             print(f"Cannot connect to scope: {exc}")
             sys.exit(1)
 
-        print(f"Connecting to SDG @ {args.sdg} ...")
+        print(f"Connecting to SDG via inventory'} ...")
         try:
-            sdg = SDG1000X(args.sdg)
+            sdg = connect(args.sdg or 'sdg')
             print(f"  {sdg.identify()}")
         except (ConnectionRefusedError, OSError) as exc:
             print(f"Cannot connect to SDG: {exc}")

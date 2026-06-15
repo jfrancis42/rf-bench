@@ -59,6 +59,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDS2000X                              # noqa: E402
 from rf_bench.utils import format_freq, format_freq_short                    # noqa: E402
+from rf_bench import connect
 
 # scipy optional — used for spectrum peak finding and Gaussian fit
 try:
@@ -667,7 +668,7 @@ Examples:
     try:
         # --- SSA sweep ---
         if not args.mso_only:
-            ssa = SSA3000X(args.ssa_host)
+            ssa = connect(args.ssa_host or 'ssa')
             idn = ssa.identify()
             print(f"\nSSA IDN: {idn.strip()}")
             if "SSA" not in idn.upper() and "SIGLENT" not in idn.upper():
@@ -680,7 +681,7 @@ Examples:
 
         # --- MSO clock capture ---
         if not args.ssa_only:
-            scope = SDS2000X(args.scope_host)
+            scope = connect(args.scope_host or 'sds')
             idn   = scope.identify()
             print(f"\nScope IDN: {idn.strip()}")
             if "SDS" not in idn.upper() and "SIGLENT" not in idn.upper():

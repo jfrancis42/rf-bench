@@ -32,12 +32,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SDM3000X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_DMM_HOST = "10.1.1.63"
+DEFAULT_DMM_HOST = None  # Now uses inventory
 DEFAULT_INTERVAL = 2.0     # seconds between sample pairs
 DEFAULT_DURATION = 3600    # total measurement time in seconds
 
@@ -309,10 +310,10 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDM3045X @ {args.dmm} ...")
+    print(f"Connecting to SDM3045X via inventory'} ...")
     dmm = None
     try:
-        dmm = SDM3000X(args.dmm)
+        dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")
         run_tcr(dmm, args)
     except ConnectionRefusedError as exc:

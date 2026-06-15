@@ -35,6 +35,7 @@ except ImportError:
 
 from rf_bench.siglent import SDG1000X
 from rf_bench.icom import IC7300, IC9700
+from rf_bench import connect
 
 DEFAULT_SDG    = "10.1.1.55"
 DEFAULT_RIG    = "localhost"

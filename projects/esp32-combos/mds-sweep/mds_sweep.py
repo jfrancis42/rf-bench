@@ -27,6 +27,7 @@ except ImportError:
 
 try:
     from rf_bench.icom.rigctl import RigCtl, RadioModel
+from rf_bench import connect
 except ImportError:
     print("ERROR: rf-bench-drivers-icom not installed")
     print("Install: pip install rf-bench-drivers-icom")
@@ -188,7 +189,7 @@ Hardware setup:
     # Initialize hardware
     print("Initializing hardware...")
     atten = ScpiAtten(args.esp_atten)
-    ssa = SSA3000X(args.ssa)
+    ssa = connect(args.ssa or 'ssa')
 
     radio_model = RadioModel.IC7300 if args.radio == 'IC7300' else RadioModel.IC9700
     rig = RigCtl(host=args.rigctld_host, port=args.rigctld_port, model=radio_model)

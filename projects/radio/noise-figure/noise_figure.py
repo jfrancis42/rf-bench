@@ -34,6 +34,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X                     # noqa: E402
 from rf_bench.utils import (                               # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, thermal_noise_floor,
     cascaded_noise_figure,
 )
@@ -42,7 +43,7 @@ from rf_bench.utils import (                               # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SSA_HOST    = "10.1.1.60"
+DEFAULT_SSA_HOST    = None  # Now uses inventory
 DEFAULT_FREQ_KHZ    = 14_000      # 14 MHz (40 m)
 DEFAULT_BANDWIDTH   = 100_000     # 100 kHz RBW for noise measurement
 DEFAULT_GAIN        = 20.0        # dB; assumed DUT gain for de-embedding
@@ -596,8 +597,8 @@ Examples:
 
     ssa = None
     try:
-        print(f"Connecting to SSA @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        print(f"Connecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 
         # --- Baseline calibration mode ---

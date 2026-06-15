@@ -431,6 +431,7 @@ Examples:
                   f"(6 Vpp into high-Z, less into 50 Ω). Continuing.")
     else:
         from rf_bench.siglent.sdg1000x import DBM_MIN, DBM_MAX
+from rf_bench import connect
         if not (DBM_MIN <= args.level <= DBM_MAX):
             print(f"Error: --level {args.level:.1f} dBm outside SDG range "
                   f"[{DBM_MIN:.0f}, {DBM_MAX:.0f}] dBm")
@@ -451,7 +452,7 @@ Examples:
     # Connect instruments
     print("Connecting to scope ...", end=" ", flush=True)
     try:
-        scope = SDS2000X(args.scope_host)
+        scope = connect(args.scope_host or 'sds')
     except (ConnectionRefusedError, OSError) as exc:
         print(f"\nCannot connect to scope at {args.scope_host}: {exc}")
         sys.exit(1)
@@ -461,7 +462,7 @@ Examples:
     if args.source == "sdg":
         print("Connecting to SDG ...", end=" ", flush=True)
         try:
-            sdg = SDG1000X(args.sdg_host)
+            sdg = connect(args.sdg_host or 'sdg')
         except (ConnectionRefusedError, OSError) as exc:
             print(f"\nCannot connect to SDG at {args.sdg_host}: {exc}")
             scope.close()

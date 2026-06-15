@@ -44,6 +44,7 @@ import numpy as np
 
 from rf_bench.siglent import SDS2000X                                        # noqa: E402
 from rf_bench.utils import format_freq                                        # noqa: E402
+from rf_bench import connect
 
 # scipy is optional — Gaussian fit is skipped if unavailable
 try:
@@ -627,7 +628,7 @@ Output files (pll-lock mode):
     print(f"  Output : {args.output}_*")
 
     try:
-        scope = SDS2000X(args.scope_host)
+        scope = connect(args.scope_host or 'sds')
         idn   = scope.identify()
         print(f"  IDN    : {idn.strip()}")
         if "SDS" not in idn.upper() and "SIGLENT" not in idn.upper():

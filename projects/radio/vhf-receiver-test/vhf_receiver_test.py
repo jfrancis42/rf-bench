@@ -46,10 +46,11 @@ import numpy as np
 from rf_bench.siglent import SSA3000X
 from rf_bench.icom    import IC9700
 from rf_bench.utils   import noise_figure_from_mds, thermal_noise_floor, format_freq
+from rf_bench import connect
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-DEFAULT_SSA_HOST  = "10.1.1.60"
+DEFAULT_SSA_HOST  = None  # Now uses inventory
 DEFAULT_RIG_HOST  = "localhost"
 DEFAULT_RIG_PORT  = 4532
 DEFAULT_ATTEN     = 110.0       # dB
@@ -267,7 +268,7 @@ def main():
         tests_to_run = [t if t != "nf" else "mds" for t in tests_to_run]
 
     radio = IC9700(host=args.rig_host, port=args.rig_port)
-    ssa   = SSA3000X(args.ssa_host)
+    ssa   = connect(args.ssa_host or 'ssa')
 
     all_results = []
     for test in tests_to_run:

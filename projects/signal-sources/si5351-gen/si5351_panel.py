@@ -44,6 +44,7 @@ except ImportError:
 
 try:
     from rf_bench.siglent import SSA3000X
+from rf_bench import connect
     _SSA_OK = True
 except ImportError:
     _SSA_OK = False

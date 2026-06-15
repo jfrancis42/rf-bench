@@ -60,7 +60,7 @@ from rf_bench.hp import HP8712B
 # ---------------------------------------------------------------------------
 
 DEFAULT_VNA_HOST    = "10.1.1.70"
-DEFAULT_SPD_HOST    = "10.1.1.56"
+DEFAULT_SPD_HOST    = None  # Now uses inventory
 DEFAULT_START_KHZ   = 300
 DEFAULT_STOP_KHZ    = 1_300_000
 DEFAULT_POINTS      = 401
@@ -80,6 +80,7 @@ Z0 = 50.0
 
 def setup_bias(spd_host, vcc_ch, bias_ch, vcc_v, vbias_v, i_limit_a):
     from rf_bench.siglent import SPD3303X
+from rf_bench import connect
     psu = SPD3303X(spd_host)
     psu.set_voltage(vcc_ch,  0.0)
     psu.set_voltage(bias_ch, 0.0)

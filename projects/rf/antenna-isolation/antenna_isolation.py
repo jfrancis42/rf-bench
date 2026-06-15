@@ -25,6 +25,7 @@ import numpy as np
 
 from rf_bench.icom import IC7300, IC9700
 from rf_bench.utils import watts_to_dbm, format_freq
+from rf_bench import connect
 
 BANDS = {
     "160m": 1_850_000, "80m": 3_700_000, "60m": 5_358_500,

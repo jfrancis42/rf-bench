@@ -31,12 +31,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SPD3303X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_PSU_HOST = "10.1.1.56"
+DEFAULT_PSU_HOST = None  # Now uses inventory
 DEFAULT_CYCLES   = 1
 DEFAULT_DWELL    = 1.0    # seconds between cycles
 
@@ -208,10 +209,10 @@ Examples:
     if args.abort_ma:
         print(f"Abort limit : {args.abort_ma} mA")
 
-    print(f"\nConnecting to SPD3303X @ {args.psu} ...")
+    print(f"\nConnecting to SPD3303X via inventory'} ...")
     psu = None
     try:
-        psu = SPD3303X(args.psu)
+        psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
         # Initial state — all off

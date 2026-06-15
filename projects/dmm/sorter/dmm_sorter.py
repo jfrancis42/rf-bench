@@ -29,12 +29,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 from rf_bench.siglent import SDM3000X              # noqa: E402
 from rf_bench.utils import E12_SERIES, E24_SERIES  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_DMM_HOST  = "10.1.1.63"
+DEFAULT_DMM_HOST  = None  # Now uses inventory
 STABLE_COUNT      = 3      # consecutive readings within STABLE_PCT to declare stable
 STABLE_PCT        = 0.001  # 0.1% stability window
 CHANGE_PCT        = 0.05   # 5% change triggers component-change reset
@@ -242,9 +243,9 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDM3045X @ {args.dmm} ...")
+    print(f"Connecting to SDM3045X via inventory'} ...")
     try:
-        dmm = SDM3000X(args.dmm)
+        dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")
         run_sorter(dmm, args)
     except ConnectionRefusedError as exc:

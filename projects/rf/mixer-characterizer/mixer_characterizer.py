@@ -34,6 +34,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X                             # noqa: E402
 from rf_bench.utils import (                                                  # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, dbm_to_vpp, vpp_to_dbm,
     nearest_rbw, intermod_products,
 )
@@ -42,8 +43,8 @@ from rf_bench.utils import (                                                  # 
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SDG_HOST    = "10.1.1.55"
-DEFAULT_SSA_HOST    = "10.1.1.60"
+DEFAULT_SDG_HOST    = None  # Now uses inventory
+DEFAULT_SSA_HOST    = None  # Now uses inventory
 
 DEFAULT_LO_FREQ_KHZ = 10_000      # 10 MHz
 DEFAULT_LO_LEVEL    = 7.0         # dBm — typical double-balanced mixer drive
@@ -740,12 +741,12 @@ Examples:
     rf_freqs_hz = np.linspace(rf_start_hz, rf_stop_hz, args.rf_points)
 
     # Connect to instruments
-    print(f"Connecting to SDG @ {args.sdg_host} ...", end=" ", flush=True)
-    sdg = SDG1000X(args.sdg_host)
+    print(f"Connecting to SDG via inventory'} ...", end=" ", flush=True)
+    sdg = connect(args.sdg_host or 'sdg')
     print(sdg.identify().split(",")[1] if "," in sdg.identify() else "OK")
 
-    print(f"Connecting to SSA @ {args.ssa_host} ...", end=" ", flush=True)
-    ssa = SSA3000X(args.ssa_host)
+    print(f"Connecting to SSA via inventory'} ...", end=" ", flush=True)
+    ssa = connect(args.ssa_host or 'ssa')
     print(ssa.identify().split(",")[1] if "," in ssa.identify() else "OK")
 
     conversion_results = []

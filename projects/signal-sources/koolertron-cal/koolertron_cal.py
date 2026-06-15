@@ -60,8 +60,8 @@ from rf_bench.siglent import SDS2000X
 # Bench defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SCOPE_HOST   = "10.1.1.58"
-DEFAULT_SDG_HOST     = "10.1.1.51"   # current bench address
+DEFAULT_SCOPE_HOST   = None  # Now uses inventory
+DEFAULT_SDG_HOST     = None  # Now uses inventory   # current bench address
 
 DEFAULT_LEVELS_DBM   = "0.0"           # target level in dBm into 50 Ω
 DEFAULT_FREQ_START   = 1_000.0          # 1 kHz — the scope works fine down here
@@ -178,7 +178,7 @@ def cmd_amp_cal(args) -> int:
     # Open MHS with calibration disabled so we measure the bare instrument
     print("\nOpening instruments...")
     mhs = MHS5200A(port=args.mhs_port, calibration=False)
-    scope = SDS2000X(args.scope_host)
+    scope = connect(args.scope_host or 'sds')
     print(f"  MHS  : {mhs.identify()}")
     print(f"  scope: {scope.identify()}")
     setup_scope_for_amp_cal(scope)
@@ -289,10 +289,11 @@ def cmd_freq_cal(args) -> int:
     scope = None
     if args.method == "sdg":
         from rf_bench.siglent import SDG1000X
-        sdg = SDG1000X(args.sdg_host)
+from rf_bench import connect
+        sdg = connect(args.sdg_host or 'sdg')
         print(f"  SDG at {args.sdg_host}")
     elif args.method == "scope":
-        scope = SDS2000X(args.scope_host)
+        scope = connect(args.scope_host or 'sds')
         print(f"  scope: {scope.identify()}")
         scope.set_awg_load(50)
 

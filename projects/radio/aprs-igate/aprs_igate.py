@@ -244,6 +244,7 @@ def main():
     if args.set_freq:
         try:
             from rf_bench.icom import IC9700
+from rf_bench import connect
             radio = IC9700(host=args.rig_host, port=args.rig_port)
             radio.set_frequency(args.freq * 1000.0)
             radio.set_mode("fm")

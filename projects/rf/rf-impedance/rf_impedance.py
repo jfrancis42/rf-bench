@@ -45,6 +45,7 @@ import numpy as np
 
 from rf_bench.siglent import SDG1000X, SDS2000X          # noqa: E402
 from rf_bench.utils import (                             # noqa: E402
+from rf_bench import connect
     complex_impedance_series, format_freq, format_freq_short,
 )
 
@@ -52,8 +53,8 @@ from rf_bench.utils import (                             # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SDG_HOST   = "10.1.1.55"
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_SDG_HOST   = None  # Now uses inventory
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 DEFAULT_START_KHZ  = 100
 DEFAULT_STOP_KHZ   = 30_000
 DEFAULT_POINTS     = 200
@@ -434,13 +435,13 @@ Examples:
     sdg   = None
 
     try:
-        print(f"Connecting to scope @ {args.scope_host} ...", end=" ", flush=True)
-        scope = SDS2000X(args.scope_host)
+        print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+        scope = connect(args.scope_host or 'sds')
         print(f"OK  [{scope.identify().split(',')[1].strip()}]")
 
         if args.source == "sdg":
-            print(f"Connecting to SDG @ {args.sdg_host} ...", end=" ", flush=True)
-            sdg = SDG1000X(args.sdg_host)
+            print(f"Connecting to SDG via inventory'} ...", end=" ", flush=True)
+            sdg = connect(args.sdg_host or 'sdg')
             print(f"OK  [{sdg.identify().split(',')[1].strip()}]")
 
         print()

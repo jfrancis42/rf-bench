@@ -28,6 +28,7 @@ import numpy as np
 from rf_bench.icom import IC9700
 from rf_bench.siglent import SSA3000X
 from rf_bench.sunsdr import SunSDR, SunSDRError
+from rf_bench import connect
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@ def run(args: argparse.Namespace) -> None:
     print(f"  Connecting to SSA3032X...")
     ssa = None
     try:
-        ssa = SSA3000X(args.ssa_host)
+        ssa = connect(args.ssa_host or 'ssa')
         ssa.connect()
         print(f"  SSA connected: {ssa.identify()}")
     except Exception as e:

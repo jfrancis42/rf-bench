@@ -28,6 +28,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X                     # noqa: E402
 from rf_bench.utils import format_freq, format_freq_short  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Band definitions  (Hz)
@@ -55,7 +56,7 @@ SWEEP_POINTS       = 751     # resolution points per sweep
 DEFAULT_THRESHOLD  = -80.0   # dBm; signals above this count as "active"
 DEFAULT_DWELL      = 60      # seconds per band in multi-band cycling
 SAVE_INTERVAL      = 100     # sweeps between .npz saves
-DEFAULT_SSA_HOST   = "10.1.1.60"
+DEFAULT_SSA_HOST   = None  # Now uses inventory
 
 # Global flag set by SIGINT handler so loops can exit cleanly
 _running = True
@@ -449,8 +450,8 @@ Examples:
     # -----------------------------------------------------------------------
     ssa = None
     try:
-        print(f"Connecting to SSA @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        print(f"Connecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 
         t_run_start = time.time()

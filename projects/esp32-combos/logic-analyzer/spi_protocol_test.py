@@ -40,6 +40,7 @@ from typing import List, Dict, Tuple, Optional
 
 try:
     from rf_bench.siglent import SDS2000X
+from rf_bench import connect
 except ImportError:
     print("ERROR: rf_bench.siglent not found. Install with:", file=sys.stderr)
     print("  pip install rf-bench-drivers-siglent", file=sys.stderr)

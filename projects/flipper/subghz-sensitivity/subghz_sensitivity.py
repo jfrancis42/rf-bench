@@ -29,11 +29,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 from rf_bench.flipper import FlipperZero
 from rf_bench.siglent import SSA3000X
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-DEFAULT_SSA_HOST  = "10.1.1.60"
+DEFAULT_SSA_HOST  = None  # Now uses inventory
 DEFAULT_SERIAL    = "/dev/ttyACM0"
 DEFAULT_FREQS_MHZ = [315.0, 433.92, 868.0, 915.0]
 LEVEL_START_DBM   = -20.0
@@ -187,12 +188,12 @@ Examples:
     fz  = None
     ssa = None
     try:
-        print(f"Connecting to Flipper @ {args.serial} ...")
+        print(f"Connecting to Flipper via inventory'} ...")
         fz = FlipperZero(args.serial)
         print(f"  {fz.identify()}")
 
-        print(f"Connecting to SSA @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        print(f"Connecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 
         all_results: dict[float, list] = {}

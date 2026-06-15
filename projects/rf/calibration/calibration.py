@@ -51,6 +51,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X, SDS2000X, SDM3000X        # noqa: E402
 from rf_bench.utils import (                                                  # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, dbm_to_vpp, vpp_to_dbm, vrms_to_dbm,
     nearest_rbw,
 )
@@ -59,10 +60,10 @@ from rf_bench.utils import (                                                  # 
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SDG_HOST   = "10.1.1.55"
-DEFAULT_SSA_HOST   = "10.1.1.60"
-DEFAULT_SCOPE_HOST = "10.1.1.58"
-DEFAULT_DMM_HOST   = "10.1.1.63"
+DEFAULT_SDG_HOST   = None  # Now uses inventory
+DEFAULT_SSA_HOST   = None  # Now uses inventory
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
+DEFAULT_DMM_HOST   = None  # Now uses inventory
 
 DEFAULT_LEVEL_DBM  = -10.0        # dBm
 DEFAULT_AVERAGES   = 3
@@ -596,22 +597,22 @@ Examples:
     print()
 
     # Connect to instruments
-    print(f"Connecting to SDG   @ {args.sdg_host}   ...", end=" ", flush=True)
-    sdg = SDG1000X(args.sdg_host)
+    print(f"Connecting to SDG   via inventory'}   ...", end=" ", flush=True)
+    sdg = connect(args.sdg_host or 'sdg')
     print("OK")
 
-    print(f"Connecting to SSA   @ {args.ssa_host}   ...", end=" ", flush=True)
-    ssa = SSA3000X(args.ssa_host)
+    print(f"Connecting to SSA   via inventory'}   ...", end=" ", flush=True)
+    ssa = connect(args.ssa_host or 'ssa')
     print("OK")
 
-    print(f"Connecting to scope @ {args.scope_host} ...", end=" ", flush=True)
-    scope = SDS2000X(args.scope_host)
+    print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+    scope = connect(args.scope_host or 'sds')
     print("OK")
 
     dmm = None
     if not args.skip_dmm:
-        print(f"Connecting to DMM   @ {args.dmm_host}   ...", end=" ", flush=True)
-        dmm = SDM3000X(args.dmm_host)
+        print(f"Connecting to DMM   via inventory'}   ...", end=" ", flush=True)
+        dmm = connect(args.dmm_host or 'sdm')
         print("OK")
     else:
         print("DMM: skipped (--skip-dmm)")

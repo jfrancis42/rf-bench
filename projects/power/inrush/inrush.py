@@ -28,13 +28,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SDS2000X, SPD3303X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_PSU_HOST   = "10.1.1.56"
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_PSU_HOST   = None  # Now uses inventory
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 DEFAULT_CHANNEL    = 1
 DEFAULT_SENSE_OHM  = 0.1
 DEFAULT_CAPTURES   = 1
@@ -170,12 +171,12 @@ Examples:
 
     psu = scope = None
     try:
-        print(f"Connecting to SPD3303X @ {args.psu} ...")
-        psu = SPD3303X(args.psu)
+        print(f"Connecting to SPD3303X via inventory'} ...")
+        psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
-        print(f"Connecting to SDS2000X @ {args.scope} ...")
-        scope = SDS2000X(args.scope)
+        print(f"Connecting to SDS2000X via inventory'} ...")
+        scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
 
         psu.output_off(PSU_CH)

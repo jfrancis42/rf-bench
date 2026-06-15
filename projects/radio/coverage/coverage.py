@@ -40,6 +40,7 @@ from rf_bench.yaesu import FT891
 
 try:
     from rf_bench.gpsd import GPSD, GPSDNoFixError
+from rf_bench import connect
     _HAS_GPSD = True
 except ImportError:
     _HAS_GPSD = False

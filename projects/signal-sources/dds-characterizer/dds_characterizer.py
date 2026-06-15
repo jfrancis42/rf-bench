@@ -41,6 +41,7 @@ for _rel in ('..', '../rf-bench-drivers-buspirate',
 from rf_bench.buspirate import BusPirate
 from rf_bench.siglent   import SSA3000X
 from rf_bench.utils     import format_freq, format_freq_short, nearest_rbw
+from rf_bench import connect
 
 import numpy as np
 import matplotlib

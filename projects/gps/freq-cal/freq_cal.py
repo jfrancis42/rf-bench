@@ -35,6 +35,7 @@ from pathlib import Path
 
 from rf_bench.siglent import SSA3000X, SDG1000X
 from rf_bench.gpsd import GPSD, GPSDNoFixError
+from rf_bench import connect
 
 _running = True
 
@@ -181,7 +182,7 @@ def main() -> None:
             print(f"\nNo GPS fix: {exc}", file=sys.stderr)
             sys.exit(1)
 
-        ssa = SSA3000X(args.ssa_host)
+        ssa = connect(args.ssa_host or 'ssa')
         sdg = None if args.no_sdg else SDG1000X(args.sdg_host)
 
         if sdg:

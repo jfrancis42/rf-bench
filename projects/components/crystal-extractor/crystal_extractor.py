@@ -56,6 +56,7 @@ import numpy as np
 
 from rf_bench.siglent import SDG1000X, SDS2000X                 # noqa: E402
 from rf_bench.utils import (                                      # noqa: E402
+from rf_bench import connect
     complex_impedance_series,
     format_freq, format_freq_short, dbm_to_vpp, vpp_to_dbm,
 )
@@ -593,7 +594,7 @@ Examples:
     # Connect scope
     print("Connecting to scope ...", end=" ", flush=True)
     try:
-        scope = SDS2000X(args.scope_host)
+        scope = connect(args.scope_host or 'sds')
     except (ConnectionRefusedError, OSError) as exc:
         print(f"\nCannot connect to scope at {args.scope_host}: {exc}")
         sys.exit(1)
@@ -603,7 +604,7 @@ Examples:
     if args.source == "sdg":
         print("Connecting to SDG ...", end=" ", flush=True)
         try:
-            sdg = SDG1000X(args.sdg_host)
+            sdg = connect(args.sdg_host or 'sdg')
         except (ConnectionRefusedError, OSError) as exc:
             print(f"\nCannot connect to SDG at {args.sdg_host}: {exc}")
             scope.close()

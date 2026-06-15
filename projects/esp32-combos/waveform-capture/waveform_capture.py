@@ -13,6 +13,7 @@ from pathlib import Path
 
 try:
     from rf_bench.siglent import SDG1000X
+from rf_bench import connect
 except ImportError:
     print("ERROR: rf_bench.siglent not found. Install with: pip install rf-bench-drivers-siglent")
     sys.exit(1)

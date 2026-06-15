@@ -33,13 +33,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SDM3000X, SPD3303X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_PSU_HOST   = "10.1.1.56"
-DEFAULT_DMM_HOST   = "10.1.1.63"
+DEFAULT_PSU_HOST   = None  # Now uses inventory
+DEFAULT_DMM_HOST   = None  # Now uses inventory
 DEFAULT_PSU_CH     = 1
 EQUIL_RATE_C_MIN   = 0.1    # equilibrium threshold: < 0.1 °C/min
 EQUIL_POLL_S       = 15     # seconds between temperature checks
@@ -316,12 +317,12 @@ Examples:
 
     psu = dmm = None
     try:
-        print(f"Connecting to SPD3303X @ {args.psu} ...")
-        psu = SPD3303X(args.psu)
+        print(f"Connecting to SPD3303X via inventory'} ...")
+        psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
-        print(f"Connecting to SDM3045X @ {args.dmm} ...")
-        dmm = SDM3000X(args.dmm)
+        print(f"Connecting to SDM3045X via inventory'} ...")
+        dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")
 
         run_rth(psu, dmm, args)

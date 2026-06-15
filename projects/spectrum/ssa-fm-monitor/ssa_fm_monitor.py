@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 from rf_bench.siglent import SSA3000X              # noqa: E402
 from rf_bench.utils import format_freq, watts_to_dbm  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -41,7 +42,7 @@ FM_START_HZ       = 87_500_000
 FM_STOP_HZ        = 108_000_000
 FM_SPAN_MHZ       = (FM_STOP_HZ - FM_START_HZ) / 1e6
 SWEEP_POINTS      = 751
-DEFAULT_SSA_HOST  = "10.1.1.60"
+DEFAULT_SSA_HOST  = None  # Now uses inventory
 DEFAULT_THRESHOLD = -70.0   # dBm — below this is "empty"
 DEFAULT_INTERVAL  = 5.0     # seconds between sweeps
 DEFAULT_DURATION  = 3600    # total run time in seconds
@@ -327,10 +328,10 @@ Examples:
         print(f"  Waterfall → {png}")
         return
 
-    print(f"Connecting to SSA @ {args.ssa} ...")
+    print(f"Connecting to SSA via inventory'} ...")
     ssa = None
     try:
-        ssa = SSA3000X(args.ssa)
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
         run_monitor(ssa, args)
     except ConnectionRefusedError as exc:

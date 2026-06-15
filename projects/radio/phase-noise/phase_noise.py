@@ -38,6 +38,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X                            # noqa: E402
 from rf_bench.utils import (                                                # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, nearest_rbw, phase_noise_dbchz,
 )
 
@@ -45,8 +46,8 @@ from rf_bench.utils import (                                                # no
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SSA_HOST   = "10.1.1.60"
-DEFAULT_SDG_HOST   = "10.1.1.55"
+DEFAULT_SSA_HOST   = None  # Now uses inventory
+DEFAULT_SDG_HOST   = None  # Now uses inventory
 DEFAULT_INSTRUMENT_PORT = 5025
 DEFAULT_FREQ_KHZ   = 10_000.0     # kHz → 10 MHz
 DEFAULT_CARRIER_DBM = -10.0       # SDG output level for source=sdg
@@ -478,14 +479,14 @@ Examples:
     sdg = None
 
     try:
-        print(f"Connecting to SSA @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        print(f"Connecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
         ssa.disable_tracking_generator()
 
         if args.source == 'sdg':
-            print(f"Connecting to SDG @ {args.sdg} ...")
-            sdg = SDG1000X(args.sdg)
+            print(f"Connecting to SDG via inventory'} ...")
+            sdg = connect(args.sdg or 'sdg')
             print(f"  {sdg.identify()}")
 
         print(f"\nSetup:")

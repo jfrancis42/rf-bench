@@ -53,14 +53,15 @@ from rf_bench.siglent import SPD3303X, SDM3000X, SDS2000X                 # noqa
 # ---------------------------------------------------------------------------
 
 from rf_bench.yertai import ET5406A, ET5406AError
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SPD_HOST   = "10.1.1.56"
-DEFAULT_DMM_HOST   = "10.1.1.63"
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_SPD_HOST   = None  # Now uses inventory
+DEFAULT_DMM_HOST   = None  # Now uses inventory
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 DEFAULT_LOAD_PORT  = "/dev/ttyUSB0"
 
 # ---------------------------------------------------------------------------
@@ -605,18 +606,18 @@ Examples:
 
     try:
         # Connect PSU
-        print(f"\nConnecting to SPD3303X @ {args.spd_host} ...", end=" ", flush=True)
-        psu = SPD3303X(args.spd_host)
+        print(f"\nConnecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+        psu = connect(args.spd_host or 'spd')
         print(f"OK  ({psu.identify().strip()})")
         psu.disable_all()
 
         # Connect DMM
-        print(f"Connecting to SDM3045X @ {args.dmm_host} ...", end=" ", flush=True)
-        dmm = SDM3000X(args.dmm_host)
+        print(f"Connecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+        dmm = connect(args.dmm_host or 'sdm')
         print(f"OK  ({dmm.identify().strip()})")
 
         # Connect ET5406A+ load
-        print(f"Connecting to ET5406A+ @ {args.load_port} ...", end=" ", flush=True)
+        print(f"Connecting to ET5406A+ via inventory'} ...", end=" ", flush=True)
         try:
             load = _connect_load(args.load_port)
             load.off()
@@ -628,9 +629,9 @@ Examples:
 
         # Connect scope for ripple/transient
         if do_scope_tests:
-            print(f"Connecting to SDS2504X Plus @ {args.scope_host} ...", end=" ", flush=True)
+            print(f"Connecting to SDS2504X Plus via inventory'} ...", end=" ", flush=True)
             try:
-                scope = SDS2000X(args.scope_host)
+                scope = connect(args.scope_host or 'sds')
                 print(f"OK  ({scope.identify().strip()})")
             except Exception as exc:
                 print(f"FAILED ({exc})")

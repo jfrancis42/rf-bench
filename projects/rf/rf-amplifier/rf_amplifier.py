@@ -37,6 +37,7 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X          # noqa: E402
 from rf_bench.utils import (                              # noqa: E402
+from rf_bench import connect
     format_freq, format_freq_short, nearest_rbw,
 )
 
@@ -44,8 +45,8 @@ from rf_bench.utils import (                              # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SSA_HOST   = "10.1.1.60"
-DEFAULT_SDG_HOST   = "10.1.1.55"
+DEFAULT_SSA_HOST   = None  # Now uses inventory
+DEFAULT_SDG_HOST   = None  # Now uses inventory
 DEFAULT_INSTRUMENT_PORT = 5025
 DEFAULT_START_KHZ  = 1_000       # 1 MHz
 DEFAULT_STOP_KHZ   = 30_000      # 30 MHz
@@ -616,13 +617,13 @@ Examples:
     # Connect instruments
     ssa = sdg = None
     try:
-        print(f"Connecting to SSA @ {args.ssa_host} ...")
-        ssa = SSA3000X(args.ssa_host)
+        print(f"Connecting to SSA via inventory'} ...")
+        ssa = connect(args.ssa_host or 'ssa')
         print(f"  {ssa.identify()}")
 
         if args.source == "sdg" or args.p1db:
-            print(f"Connecting to SDG @ {args.sdg_host} ...")
-            sdg = SDG1000X(args.sdg_host)
+            print(f"Connecting to SDG via inventory'} ...")
+            sdg = connect(args.sdg_host or 'sdg')
             print(f"  {sdg.identify()}")
 
         # Ensure TG is off when using SDG mode

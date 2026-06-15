@@ -45,6 +45,7 @@ import time
 from datetime import datetime, timezone
 
 from rf_bench.icom import IC9700
+from rf_bench import connect
 
 GOVTDATA_HOST = "10.1.0.20"
 GOVTDATA_PORT = 8091

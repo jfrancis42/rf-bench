@@ -31,11 +31,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 from rf_bench.flipper import FlipperZero
 from rf_bench.siglent import SDS2000X
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 DEFAULT_SERIAL     = "/dev/ttyACM0"
 NEC_BURST_US       = 9000
 NEC_SPACE_US       = 4500
@@ -274,12 +275,12 @@ Examples:
         args.output = f"ir_waveform_{ts}"
 
     try:
-        print(f"Connecting to Flipper @ {args.serial} ...")
+        print(f"Connecting to Flipper via inventory'} ...")
         fz = FlipperZero(args.serial)
         print(f"  {fz.identify()}")
 
-        print(f"Connecting to scope @ {args.scope} ...")
-        scope = SDS2000X(args.scope)
+        print(f"Connecting to scope via inventory'} ...")
+        scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
 
         run_all = args.test == "all"

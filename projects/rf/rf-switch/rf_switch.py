@@ -22,6 +22,7 @@ import numpy as np
 from rf_bench.siglent import SSA3000X
 from rf_bench.buspirate import BusPirate
 from rf_bench.utils import format_freq
+from rf_bench import connect
 
 DEFAULT_SSA    = "10.1.1.60"
 DEFAULT_BP     = "/dev/ttyUSB1"

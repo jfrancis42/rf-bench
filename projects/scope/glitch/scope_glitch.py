@@ -24,12 +24,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 
 from rf_bench.siglent import SDS2000X  # noqa: E402
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_SCOPE_HOST = "10.1.1.58"
+DEFAULT_SCOPE_HOST = None  # Now uses inventory
 DEFAULT_CHANNEL    = 1
 DEFAULT_THRESHOLD  = 0.0    # V
 DEFAULT_DURATION   = 0.01   # capture window in seconds (10 ms)
@@ -185,10 +186,10 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDS2000X @ {args.scope} ...")
+    print(f"Connecting to SDS2000X via inventory'} ...")
     scope = None
     try:
-        scope = SDS2000X(args.scope)
+        scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
         run_glitch_trap(scope, args)
     except ConnectionRefusedError as exc:

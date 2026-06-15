@@ -22,6 +22,7 @@ from typing import Tuple, Optional
 
 try:
     from rf_bench.siglent import SSA3000X
+from rf_bench import connect
 except ImportError:
     print("ERROR: rf_bench.siglent not found. Install with:")
     print("  pip install rf-bench-drivers-siglent")
@@ -368,7 +369,7 @@ Examples:
     tuner = TunerController(tuner_esp)
     ptt = PTTController(ptt_esp)
     swr_meter = SWRMeter(swr_esp)
-    ssa = SSA3000X(args.ssa)
+    ssa = connect(args.ssa or 'ssa')
 
     try:
         tuner.connect()
