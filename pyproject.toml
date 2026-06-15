@@ -13,6 +13,7 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    "pyyaml>=5.1",
     "rf-bench-drivers-utils>=0.1.0",
     "rf-bench-drivers-siglent>=0.1.0",
     "rf-bench-drivers-icom>=0.2.0",
@@ -57,4 +58,8 @@ Repository = "https://github.com/jfrancis42/rf-bench"
 "Bug Tracker" = "https://github.com/jfrancis42/rf-bench/issues"
 
 [tool.setuptools]
-packages = []
+packages = ["rf_bench", "rf_bench.inventory"]
+package-dir = {"" = "."}
+
+[tool.setuptools.package-data]
+rf_bench = ["py.typed"]
