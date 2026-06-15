@@ -43,6 +43,7 @@ HTML5 Canvas instruments with SCPI-over-TCP backends. Multi-instrument panels ma
 | Text input | `virtual/text-input/backend/server.py` | HTML5 Canvas, parameter entry | `rf_bench.virtual.VirtualTextInput` | ✅ |
 | Gauge cluster | `virtual/gauge-cluster/backend/server.py` | HTML5 Canvas, multi-meter dashboard | `rf_bench.virtual.VirtualGaugeCluster` | ✅ |
 | Compass | `virtual/compass/backend/server.py` | HTML5 Canvas, directional indicator | `rf_bench.virtual.VirtualCompass` | ✅ |
+| Smith chart | `virtual/smith-chart/backend/server.py` | HTML5 Canvas, complex impedance, 4 traces | `rf_bench.virtual.VirtualSmithChart` | ✅ |
 | **BenchView** | `virtual/benchview/backend/benchview.py` | Multi-instrument panel manager, YAML config | — | ✅ |
 
 **Architecture:**
@@ -50,7 +51,7 @@ HTML5 Canvas instruments with SCPI-over-TCP backends. Multi-instrument panels ma
 - **WebSocket:** Real-time bidirectional updates, auto-reconnect
 - **Multi-instance:** 1-4 sub-instruments per backend for basic widgets (e.g., 2 meters on one server)
 - **Layouts:** ROW, COL, 2X2 grid arrangements (multi-instance backends only)
-- **Python drivers:** Complete `rf_bench.virtual` packages for all 15 instruments (267-451 lines each, comprehensive READMEs)
+- **Python drivers:** Complete `rf_bench.virtual` packages for all 16 instruments (267-455 lines each, comprehensive READMEs)
 
 **Usage:**
 ```bash

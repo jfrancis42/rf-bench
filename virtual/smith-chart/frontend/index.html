@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Smith Chart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 95vmin;
+            height: 95vmin;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            z-index: 10;
+        }
+
+        #legend {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00ff00;
+            padding: 10px;
+            font-size: 0.9rem;
+            z-index: 10;
+            max-width: 200px;
+        }
+
+        .legend-trace {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            margin-right: 8px;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 0.8rem;
+            color: #888;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="title">Smith Chart</div>
+        <canvas id="chart"></canvas>
+        <div id="legend"></div>
+        <div id="status">Connecting...</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('chart');
+        const ctx = canvas.getContext('2d');
+        const titleEl = document.getElementById('title');
+        const legendEl = document.getElementById('legend');
+        const statusEl = document.getElementById('status');
+
+        let state = {
+            z0: 50,
+            active_trace: 1,
+            traces: {},
+            swr_circle: null,
+            mode: 'IMPED',
+            grid: true,
+            title: 'Smith Chart'
+        };
+
+        // WebSocket connection
+        const ws_port = window.location.port || 8011;
+        const ws_url = `ws://${window.location.hostname}:${ws_port}/ws`;
+        let ws;
+        let reconnectInterval;
+
+        function connect() {
+            ws = new WebSocket(ws_url);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                statusEl.textContent = `Z₀ = ${state.z0} Ω | Mode: ${state.mode}`;
+                statusEl.style.color = '#0f0';
+                clearInterval(reconnectInterval);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                state = data;
+                draw();
+                updateLegend();
+                titleEl.textContent = state.title;
+                statusEl.textContent = `Z₀ = ${state.z0} Ω | Mode: ${state.mode}${state.swr_circle ? ' | SWR=' + state.swr_circle.toFixed(1) : ''}`;
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                statusEl.textContent = 'Disconnected - Retrying...';
+                statusEl.style.color = '#f00';
+                reconnectInterval = setInterval(connect, 2000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                ws.close();
+            };
+        }
+
+        function updateLegend() {
+            let html = '';
+            for (let tid of [1, 2, 3, 4]) {
+                if (state.traces[tid] && state.traces[tid].points.length > 0) {
+                    const trace = state.traces[tid];
+                    const count = trace.points.length;
+                    html += `<div class="legend-trace">
+                        <div class="legend-color" style="background: ${trace.color}"></div>
+                        <div>${trace.label} (${count})</div>
+                    </div>`;
+                }
+            }
+            legendEl.innerHTML = html || '<div style="color: #666">No data</div>';
+        }
+
+        function draw() {
+            // Set canvas resolution
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = rect.height;
+            const size = Math.min(w, h);
+            const cx = w / 2;
+            const cy = h / 2;
+            const radius = size * 0.42;
+
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+
+            if (!state.grid) {
+                drawTraces(cx, cy, radius);
+                return;
+            }
+
+            // Draw Smith chart grid
+            ctx.strokeStyle = '#0a3d0a';
+            ctx.lineWidth = 1;
+
+            // Outer circle
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Constant resistance circles (real axis)
+            const rValues = [0.2, 0.5, 1.0, 2.0, 5.0];
+            ctx.strokeStyle = '#0a3d0a';
+            ctx.lineWidth = 1;
+
+            for (let r of rValues) {
+                const rNorm = r;
+                const circleCx = cx + radius * rNorm / (1 + rNorm);
+                const circleR = radius / (1 + rNorm);
+
+                ctx.beginPath();
+                ctx.arc(circleCx, cy, circleR, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#0a5d0a';
+                ctx.font = '10px Courier New';
+                ctx.fillText(r.toString(), circleCx + circleR, cy - 5);
+            }
+
+            // Constant reactance arcs (imaginary axis)
+            const xValues = [0.2, 0.5, 1.0, 2.0, 5.0];
+
+            for (let x of xValues) {
+                // Positive reactance (upper arcs)
+                drawReactanceArc(cx, cy, radius, x, ctx);
+                // Negative reactance (lower arcs)
+                drawReactanceArc(cx, cy, radius, -x, ctx);
+            }
+
+            // Center lines
+            ctx.strokeStyle = '#0a3d0a';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(cx - radius, cy);
+            ctx.lineTo(cx + radius, cy);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - radius);
+            ctx.lineTo(cx, cy + radius);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // SWR circle
+            if (state.swr_circle && state.swr_circle >= 1.0) {
+                const gamma_mag = (state.swr_circle - 1) / (state.swr_circle + 1);
+                const swrRadius = radius * gamma_mag;
+
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([10, 5]);
+                ctx.beginPath();
+                ctx.arc(cx, cy, swrRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // SWR label
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 12px Courier New';
+                ctx.fillText(`SWR ${state.swr_circle.toFixed(1)}`, cx + swrRadius + 5, cy);
+            }
+
+            // Draw traces
+            drawTraces(cx, cy, radius);
+        }
+
+        function drawReactanceArc(cx, cy, radius, x, ctx) {
+            const arcCy = cy - radius / x;
+            const arcR = radius / Math.abs(x);
+            const startAngle = x > 0 ? 0 : Math.PI;
+            const endAngle = x > 0 ? Math.PI : Math.PI * 2;
+
+            ctx.beginPath();
+            ctx.arc(cx + radius, arcCy, arcR, startAngle, endAngle);
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = '#0a5d0a';
+            ctx.font = '10px Courier New';
+            const labelY = cy + (x > 0 ? -radius/x - 10 : -radius/x + 15);
+            ctx.fillText((x > 0 ? '+' : '') + x.toString() + 'j', cx + radius + 5, labelY);
+        }
+
+        function drawTraces(cx, cy, radius) {
+            for (let tid of [1, 2, 3, 4]) {
+                if (!state.traces[tid] || state.traces[tid].points.length === 0) {
+                    continue;
+                }
+
+                const trace = state.traces[tid];
+                const points = trace.points;
+
+                ctx.strokeStyle = trace.color;
+                ctx.fillStyle = trace.color;
+                ctx.lineWidth = 2;
+
+                // Draw line connecting points
+                if (points.length > 1) {
+                    ctx.beginPath();
+                    for (let i = 0; i < points.length; i++) {
+                        const pt = points[i];
+                        const [px, py] = impedanceToScreen(pt.real, pt.imag, cx, cy, radius);
+
+                        if (i === 0) {
+                            ctx.moveTo(px, py);
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    ctx.stroke();
+                }
+
+                // Draw points and markers
+                for (let i = 0; i < points.length; i++) {
+                    const pt = points[i];
+                    const [px, py] = impedanceToScreen(pt.real, pt.imag, cx, cy, radius);
+
+                    // Point marker
+                    ctx.beginPath();
+                    ctx.arc(px, py, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Frequency label
+                    if (pt.freq) {
+                        ctx.fillStyle = trace.color;
+                        ctx.font = '10px Courier New';
+                        const freqMHz = (pt.freq / 1e6).toFixed(2);
+                        ctx.fillText(freqMHz + ' MHz', px + 6, py - 6);
+                    }
+                }
+            }
+        }
+
+        function impedanceToScreen(zReal, zImag, cx, cy, radius) {
+            // Convert normalized impedance to reflection coefficient
+            const z = {re: zReal, im: zImag};
+            const gamma = impedanceToReflection(z);
+
+            // Map to screen coordinates
+            const px = cx + gamma.re * radius;
+            const py = cy - gamma.im * radius;  // Invert Y axis
+            return [px, py];
+        }
+
+        function impedanceToReflection(z) {
+            // Γ = (Z - 1) / (Z + 1)
+            const numerator = {
+                re: z.re - 1,
+                im: z.im
+            };
+            const denominator = {
+                re: z.re + 1,
+                im: z.im
+            };
+
+            // Complex division
+            const denom_mag_sq = denominator.re * denominator.re + denominator.im * denominator.im;
+            return {
+                re: (numerator.re * denominator.re + numerator.im * denominator.im) / denom_mag_sq,
+                im: (numerator.im * denominator.re - numerator.re * denominator.im) / denom_mag_sq
+            };
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            draw();
+        });
+
+        // Initial connection
+        connect();
+    </script>
+</body>
+</html>

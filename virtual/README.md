@@ -2,9 +2,9 @@
 
 Web-based virtual instruments with SCPI-over-TCP backends for RF bench automation. All instruments feature HTML5 Canvas frontends, FastAPI/WebSocket backends, and complete Python driver libraries.
 
-## Status: 15 Instruments Built, All with Complete Drivers ✅
+## Status: 16 Instruments Built, All with Complete Drivers ✅
 
-**COMPLETE (backend + frontend + Python driver):** 15 instruments
+**COMPLETE (backend + frontend + Python driver):** 16 instruments
 1. ✅ **Analog Meter** — 270° arc sweep, spring-damper needle physics, colored zones
 2. ✅ **LED Indicator** — On/off/blink states, customizable colors, CSS glow effects
 3. ✅ **7-Segment Display** — DSEG7 LED font, configurable precision and units
@@ -20,14 +20,14 @@ Web-based virtual instruments with SCPI-over-TCP backends for RF bench automatio
 13. ✅ **Text Input** — Interactive parameter entry with validation
 14. ✅ **Gauge Cluster** — Multi-meter dashboard (V/I/P triplets, battery cells)
 15. ✅ **Compass** — Directional indicator (0-360°) for satellite/antenna tracking
+16. ✅ **Smith Chart** — Complex impedance visualization with 4 traces, SWR circles, VNA integration
 
 **Infrastructure:**
 - ✅ **BenchView** — Multi-instrument panel manager with YAML config, iframe grid, HTTP/WebSocket proxy
-- ✅ **Python drivers** — Complete for all 15 instruments, ready for PyPI publication
+- ✅ **Python drivers** — Complete for all 16 instruments, ready for PyPI publication
 
 **Still needed (from integration project requirements):**
 - 💭 Map widget (GPS track overlay with maps.n0gq.org integration)
-- 💭 Smith chart (complex impedance visualization for antenna tuning)
 - 💭 GPS status display (comprehensive gpsd telemetry dashboard)
 
 ## Quick Start
@@ -293,7 +293,7 @@ panel:
 
 ## Python Driver API
 
-All 15 drivers share a common interface:
+All 16 drivers share a common interface:
 
 ```python
 from rf_bench.virtual import (
@@ -311,7 +311,8 @@ from rf_bench.virtual import (
     VirtualTextLCD,
     VirtualTextInput,
     VirtualGaugeCluster,
-    VirtualCompass
+    VirtualCompass,
+    VirtualSmithChart
 )
 
 # Connection
@@ -485,7 +486,7 @@ while True:
 
 ### Phase 1: Read-Only Displays — ✅ COMPLETE
 
-All 15 instruments built, tested, and documented:
+All 16 instruments built, tested, and documented:
 - [x] Analog meter
 - [x] LED indicator
 - [x] 7-segment numeric display
@@ -501,6 +502,7 @@ All 15 instruments built, tested, and documented:
 - [x] Text input
 - [x] Gauge cluster
 - [x] Compass
+- [x] Smith chart
 - [x] BenchView panel manager
 - [x] Python drivers for all instruments
 
