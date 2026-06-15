@@ -60,6 +60,59 @@ Python drivers and RF utilities for bench instrument automation. Connects
 to Siglent test equipment via raw TCP/SCPI (no pyvisa required) and to HF
 transceivers via [Hamlib](https://hamlib.github.io/) rigctld.
 
+## Quick Start: Instrument Inventory
+
+**Simplest connection method** — one import, one function call:
+
+```python
+from rf_bench import connect
+
+sdg = connect('sdg')
+sdg.set_waveform(1, 'sine', 1e6, 1.0)
+
+ssa = connect('ssa')
+trace = ssa.get_trace()
+```
+
+The inventory system:
+- Auto-loads `inventory.yaml` from `$RF_BENCH_INVENTORY`, `~/.rf-bench/inventory.yaml`, or `./inventory.yaml`
+- Looks up connection info (IP, port, protocol, driver class)
+- Imports the correct driver and connects
+- Updates `last_seen` timestamp
+- Tracks calibration dates, tags, and notes
+
+**Setup:**
+```bash
+# Copy example inventory
+cp inventory.example.yaml ~/.rf-bench/inventory.yaml
+
+# Edit with your instrument IPs
+vim ~/.rf-bench/inventory.yaml
+```
+
+**Example inventory.yaml:**
+```yaml
+instruments:
+  ssa-main:
+    type: SSA3000X
+    driver: rf_bench.siglent.SSA3000X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.60
+      port: 5025
+    calibration:
+      last: 2026-01-15
+      due: 2027-01-15
+    tags: [spectrum, rf, calibrated]
+
+aliases:
+  ssa: ssa-main
+```
+
+See `rf_bench/inventory/README.md` for full documentation.
+
+---
+
 ## Instruments supported
 
 ### Siglent (`rf_bench.siglent`)

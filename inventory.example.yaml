@@ -1,0 +1,225 @@
+# rf-bench Instrument Inventory
+#
+# Copy this file to one of:
+#   1. $RF_BENCH_INVENTORY (environment variable)
+#   2. ~/.rf-bench/inventory.yaml (user config)
+#   3. ./inventory.yaml (project local)
+#
+# The first file found in that order is used.
+
+version: 1
+
+# Default settings for discovery
+defaults:
+  scpi_ports: [5025, 5024, 111]
+  scpi_timeout: 1.0
+  discovery_enabled: true
+  auto_save_discovered: prompt  # prompt, always, never
+
+instruments:
+  # Network SCPI instrument example
+  ssa-main:
+    type: SSA3000X
+    driver: rf_bench.siglent.SSA3000X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.60
+      port: 5025
+    location: "Main bench, left side"
+    calibration:
+      last: 2026-01-15
+      due: 2027-01-15
+      notes: "Factory cal cert #12345"
+    tags: [spectrum, rf, calibrated]
+    last_seen: 2026-06-14T10:30:00Z
+    notes: "3.2 GHz model, firmware v3.2.2.6.3R2"
+
+  # Function generator
+  sdg-main:
+    type: SDG1062X
+    driver: rf_bench.siglent.SDG1000X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.55
+      port: 5025
+    location: "Main bench, center"
+    calibration:
+      last: 2026-02-01
+      due: 2027-02-01
+    tags: [signal-generator, calibrated]
+
+  # Oscilloscope
+  sds-main:
+    type: SDS2504X
+    driver: rf_bench.siglent.SDS2000X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.58
+      port: 5025
+    calibration:
+      last: 2026-01-20
+      due: 2027-01-20
+    tags: [oscilloscope, calibrated]
+
+  # DMM
+  sdm-main:
+    type: SDM3045X
+    driver: rf_bench.siglent.SDM3000X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.63
+      port: 5025
+    calibration:
+      last: 2025-12-15
+      due: 2026-12-15
+    tags: [dmm, calibrated]
+
+  # Power supply
+  spd-main:
+    type: SPD3303X
+    driver: rf_bench.siglent.SPD3303X
+    connection:
+      protocol: scpi-tcp
+      host: 10.1.1.56
+      port: 5025
+    tags: [power-supply]
+
+  # HF radio via Hamlib rigctld
+  ic7300-hf:
+    type: IC7300
+    driver: rf_bench.icom.IC7300
+    connection:
+      protocol: hamlib
+      host: 10.1.1.52
+      port: 4532
+      rigctld_args: "-m 3073 -r /dev/ttyUSB0 -s 115200"
+    location: "Main bench, right side"
+    serial: "IC-12345678"
+    tags: [radio, hf, transceiver]
+    notes: "CI-V address 0x94, 115200 baud"
+
+  # VHF/UHF radio
+  ic9700-vhf:
+    type: IC9700
+    driver: rf_bench.icom.IC9700
+    connection:
+      protocol: hamlib
+      host: 10.1.1.52
+      port: 4533
+      rigctld_args: "-m 3081 -r /dev/ttyUSB1 -s 115200"
+    serial: "IC-23456789"
+    tags: [radio, vhf, uhf, satellite, transceiver]
+
+  # DC electronic load
+  et5406a-load:
+    type: ET5406A
+    driver: rf_bench.yertai.ET5406A
+    connection:
+      protocol: serial
+      host: 10.1.0.16  # greybox
+      device: /dev/ttyUSB0
+      baud: 9600
+      serial: "5461234567"
+    location: "Greybox workstation"
+    tags: [electronic-load, dc]
+    notes: "200W/120V/20A model"
+
+  # RTL-SDR (library-based)
+  rtlsdr-1:
+    type: RTLSDR
+    driver: rf_bench.rtlsdr.RTLSDR
+    connection:
+      protocol: libusb
+      host: 10.1.1.52
+      serial: "00000001"
+      device_index: 0
+    calibration:
+      ppm_offset: 1
+    location: "Main PC, rear USB"
+    tags: [sdr, receiver]
+    notes: "RTL-SDR Blog v4, 1 PPM TCXO, bias tee"
+
+  # KiwiSDR (WebSocket)
+  kiwisdr-remote:
+    type: KiwiSDR
+    driver: rf_bench.kiwisdr.KiwiSDR
+    connection:
+      protocol: websocket
+      host: 192.168.1.100
+      port: 8073
+    location: "Remote site, attic antenna"
+    tags: [sdr, receiver, hf, remote]
+
+  # SunSDR2 Pro (TCI WebSocket)
+  sunsdr-main:
+    type: SunSDR
+    driver: rf_bench.sunsdr.SunSDR
+    connection:
+      protocol: websocket-tci
+      host: 10.1.1.54
+      port: 50001
+      trx: 0  # receiver index
+    serial: "SUN-12345"
+    tags: [sdr, transceiver, hf, vhf]
+
+  # Virtual numeric display
+  display-freq:
+    type: VirtualNumericDisplay
+    driver: rf_bench.virtual.VirtualNumericDisplay
+    connection:
+      protocol: scpi-tcp
+      host: localhost
+      port: 5000
+    tags: [virtual, display]
+    notes: "Frequency readout for IC-7300"
+
+  # Virtual analog meter
+  meter-swr:
+    type: VirtualAnalogMeter
+    driver: rf_bench.virtual.VirtualAnalogMeter
+    connection:
+      protocol: scpi-tcp
+      host: localhost
+      port: 5001
+    tags: [virtual, meter]
+    notes: "SWR meter display"
+
+  # GPS via gpsd
+  gps-main:
+    type: GPSD
+    driver: rf_bench.gpsd.GPSD
+    connection:
+      protocol: json-tcp
+      host: localhost
+      port: 2947
+    tags: [gps, timing]
+    notes: "u-blox NEO-8M, USB ACM"
+
+# Instrument aliases (short names)
+aliases:
+  ssa: ssa-main
+  sdg: sdg-main
+  sds: sds-main
+  sdm: sdm-main
+  spd: spd-main
+  ic7300: ic7300-hf
+  ic9700: ic9700-vhf
+  load: et5406a-load
+  rtl: rtlsdr-1
+  kiwi: kiwisdr-remote
+  sun: sunsdr-main
+  gps: gps-main
+
+# Discovery scan configuration
+discovery:
+  network:
+    subnets:
+      - 10.1.1.0/24
+    ports: [5025, 5024, 111, 4532, 4533, 50001]
+    timeout: 1.0
+  usb:
+    enabled: false  # Phase 2
+    vendor_ids:
+      - 0x0403  # FTDI
+      - 0x1a86  # CH340
+      - 0x0bda  # Realtek (RTL-SDR)

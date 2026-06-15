@@ -32,6 +32,10 @@ antenna_analysis_*.csv
 ~/.dig_atten_cal.json
 ~/.relay_router_state.json
 
+# Local instrument inventory (machine-specific)
+inventory.yaml
+.rf-bench/
+
 # Project-local backups and personal notes
 ideas.md.backup
 fuck.fuck.fuck
