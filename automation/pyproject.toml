@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-automation"
+version = "0.1.0"
+description = "High-level measurement automation framework for rf-bench"
+authors = [{name = "Jeff Francis", email = "gjfrancis@protonmail.com"}]
+license = {text = "GPL-3.0-or-later"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "tqdm",
+    "h5py",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov"]
+
+[project.scripts]
+rf-bench-data = "rf_bench.automation.data_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"

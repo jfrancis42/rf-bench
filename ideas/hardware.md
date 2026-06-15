@@ -21,6 +21,7 @@ workaround for the SSA's missing FM-demod SCPI), see
 | Bus Pirate v3/v4/v5 | SPI/I2C/UART/GPIO master | /dev/ttyUSB* (v3/v4) or /dev/ttyACM1 (v5) | `rf_bench.buspirate.BusPirate` | ✅ |
 | Flipper Zero | Sub-GHz / IR / RFID / NFC multi-tool | /dev/ttyACM0 | `rf_bench.flipper.FlipperZero` | 🔶 OOK + 2-FSK TX/RX verified; IR/RFID/NFC untested |
 | RTL-SDR Blog v4 | 500 kHz–1766 MHz, 2.4 MHz IQ | librtlsdr USB | `rf_bench.rtlsdr.RTLSDR` | ✅ IQ + streaming tested |
+| FX2LAFW Logic Analyzer (×3) | 8-ch, 24 MHz max, Saleae-compatible | USB VID=08a9 PID=0014 | `rf_bench.fx2lafw.FX2LAFWLogicAnalyzer` | ✅ Driver complete, hardware untested |
 | gpsd | GPS daemon client | localhost:2947 | `rf_bench.gpsd.GPSD` | ✅ tested |
 | HP 8712B | 2-port VNA 300 kHz–1.3 GHz | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.hp.HP8712B` | ❌ pending KISS-488 |
 | Solartron 7151 | 6.5-digit DMM, IEEE-488 | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.solartron.Solartron7151` | ❌ pending KISS-488 |
@@ -427,6 +428,65 @@ procedure, not a measurement.
   RX-only** because the firmware crashes on GFSK/MSK TX presets. Workaround
   in `projects/rtlsdr/ook-link/`: stick to OOK and 2-FSK on the TX side.
   IR / RFID / NFC subsystems not yet end-to-end tested.
+
+---
+
+### Logic analyzers
+
+#### FX2LAFW "24MHz 8CH" Saleae-compatible logic analyzers
+
+- **Count:** 3 units (tagged primary, backup, spare in registry)
+- **Hardware:** Cypress FX2-based, 8 digital channels, 24 MHz max sample rate
+- **USB:** VID=08a9 PID=0014 (Saleae Logic compatible)
+- **Firmware:** fx2lafw (open source)
+- **Driver:** `rf_bench.fx2lafw.FX2LAFWLogicAnalyzer`, version 0.1.0 local (not yet published)
+- **Connection:** USB, auto-detected by driver
+- **Sample rates:** 1, 2, 3, 4, 6, 8, 12, 16, 24 MHz (discrete steps only)
+- **Status:** ✅ Driver complete and installed, hardware not yet tested
+
+**Implementation:** Uses `sigrok-cli` subprocess rather than direct libsigrok Python bindings. More portable, easier installation, proven stable. Trade-off: subprocess overhead (~100ms), acceptable for logic analyzer use cases.
+
+**Supported features:**
+- Multi-channel capture (1-8 channels)
+- VCD file export (open in GTKWave or PulseView)
+- Duration-based or sample-count-based capture
+- Software triggering (edge detection, pattern matching in Python)
+
+**Protocol decode:** Planned but not yet implemented in driver. For now:
+1. Save capture to VCD with `save_vcd()`
+2. Open in PulseView (has built-in I2C/SPI/UART/1-Wire/CAN decoders)
+3. Or call `sigrok-cli -P <protocol>` from Python subprocess
+
+**Future:** Direct protocol decode integration via `sigrok-cli -P` subprocess, or direct libsigrok Python bindings if streaming becomes important.
+
+**Use cases:**
+- I2C/SPI/UART bus analysis
+- Protocol reverse engineering
+- Timing violation detection
+- PWM duty cycle measurement
+- Frequency counter (1 Hz to 12 MHz)
+- Digital bus debugging
+- Signal integrity analysis (when combined with SDG test patterns)
+
+**Limitations:**
+- No hardware triggering (capture starts immediately, use software triggering in Python)
+- No streaming mode (fixed-length captures only)
+- USB bandwidth limits long captures at 24 MHz × 8 channels
+- Protocol decode requires external tools (PulseView or sigrok-cli)
+
+**Three identical units:** Registry handles via tags:
+- Unit #1: `tags: [logic, digital, portable, primary]` — main bench, drawer
+- Unit #2: `tags: [logic, digital, portable, backup]` — portable kit
+- Unit #3: `tags: [logic, digital, portable, spare]` — storage box
+
+Access via registry:
+```python
+from rf_bench.instruments import Registry
+registry = Registry()
+la = registry.get('logic-analyzer')  # Returns first available
+# or
+la = registry.get('logic-analyzer', tag='primary')
+```
 
 ---
 

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-instruments"
+version = "0.1.0"
+description = "Instrument registry and discovery for rf-bench"
+authors = [{name = "Jeff Francis", email = "gjfrancis@protonmail.com"}]
+license = {text = "GPL-3.0-or-later"}
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov"]
+
+[project.scripts]
+rf-bench-instruments = "rf_bench.instruments.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"

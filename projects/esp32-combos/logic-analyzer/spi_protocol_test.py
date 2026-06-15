@@ -29,7 +29,7 @@ SPI modes:
     3: CPOL=1, CPHA=1 (sample rising, shift falling)
 
 Author: jfrancis / jfrancis
-License: MIT
+License: GPL-3.0-or-later
 """
 
 import argparse

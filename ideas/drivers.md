@@ -14,6 +14,7 @@
 | `rf_bench.buspirate` | `rf-bench-drivers-buspirate` | 0.1.0 | 🧪 | Published, untested in rf-bench context |
 | `rf_bench.kiwisdr` | (not yet on PyPI) | 0.1.0 local | 🧪 | Code complete; IP TBD |
 | `rf_bench.sunsdr` | (not yet on PyPI) | 0.2.0 local | 🧪 | Code complete; IP TBD |
+| `rf_bench.fx2lafw` | (not yet on PyPI) | 0.1.0 local | ✅ | FX2LAFW 8-ch logic analyzer; sigrok-cli subprocess; ready to publish |
 | `rf_bench.relay` | (not on PyPI) | local | ❌ | Hardware ordered 2026-06-03 |
 | `rf_bench.hp` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
 | `rf_bench.solartron` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |

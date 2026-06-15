@@ -517,6 +517,6 @@ pulse.disable(1)
 
 **Version:** 1.0 (2026-06-12)  
 **Author:** N0GQ  
-**License:** MIT (firmware), documentation public domain  
+**License:** GPL-3.0-or-later (firmware), documentation public domain  
 **Hardware:** ESP32 Dev Module (any variant with WiFi)  
 **Dependencies:** Arduino ESP32 core (built-in libraries only, no external deps)

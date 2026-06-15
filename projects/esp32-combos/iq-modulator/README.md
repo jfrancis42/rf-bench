@@ -368,7 +368,7 @@ Demonstrate practical IQ modulation concepts, show impact of DC offset and gain 
 
 ## License
 
-MIT License — see repository root for details.
+GPL-3.0-or-later — see repository root for details.
 
 ## Author
 

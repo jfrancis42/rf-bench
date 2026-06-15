@@ -426,5 +426,5 @@ Replace `readADC_SingleEnded(n)` with `readADC_Differential_0_1()`, `readADC_Dif
 ---
 
 **Author:** N0GQ  
-**License:** MIT  
+**License:** GPL-3.0-or-later  
 **Version:** 1.0 (2026-06-12)

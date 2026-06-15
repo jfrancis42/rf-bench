@@ -36,8 +36,9 @@ antenna_analysis_*.csv
 inventory.yaml
 .rf-bench/
 
-# Project-local backups and personal notes
+# Project-local backups, personal notes, and a draft web site
 local/
+www/
 
 # Project-local runtime data
 *.db

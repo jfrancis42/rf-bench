@@ -404,7 +404,7 @@ MPU6050 die temperature:
 
 ## License
 
-MIT License — free to use, modify, and distribute.
+GPL-3.0-or-later License — free to use, modify, and distribute.
 
 ## Author
 

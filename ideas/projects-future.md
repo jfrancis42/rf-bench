@@ -195,6 +195,304 @@ RTL-SDR for calibrated dBm. Deferred because the SSA isn't easily portable.
 
 GPS + IC-7300 + software TNC. Requires a TNC driver that doesn't exist yet.
 
+### Future-logic-analyzer
+
+Projects using the FX2LAFW "24MHz 8CH" Saleae-compatible logic analyzers. User has three units. Driver: `rf_bench.fx2lafw`.
+
+#### Protocol Decoder Integration
+
+`projects/logic-analyzer/protocol-decode/` — 💭 not started.
+
+**What it does:** Integrate sigrok-cli protocol decoders into Python. Capture I2C/SPI/UART/1-Wire/CAN traffic, decode via sigrok, present results as structured Python dicts. Useful for automated protocol compliance testing.
+
+**Hardware:** FX2LAFW logic analyzer + DUT (sensor, EEPROM, display, etc.)
+
+**Implementation:**
+- Capture with `rf_bench.fx2lafw.FX2LAFWLogicAnalyzer.capture()`
+- Export to temporary file
+- Call `sigrok-cli -P <protocol>` with appropriate channel mappings
+- Parse sigrok text output into Python data structures
+- Present as list of decoded frames
+
+**Example use:** Capture I2C traffic from temperature sensor, decode to `[{'type': 'START'}, {'type': 'ADDRESS', 'addr': 0x48, 'rw': 'write'}, ...]`
+
+**Why useful:** Automated testing without manual PulseView analysis. Can assert that DUT sends expected I2C sequences.
+
+#### UART Baud Rate Auto-Detector
+
+`projects/logic-analyzer/uart-baud-detect/` — 💭 not started.
+
+**What it does:** Capture unknown UART traffic, measure bit widths, identify baud rate. Reports detected baud (closest standard: 9600, 19200, 38400, 57600, 115200, etc.) plus parity/stop bits.
+
+**Hardware:** FX2LAFW + unknown UART source
+
+**Algorithm:**
+1. Capture 100ms at 24 MHz
+2. Find transitions (edges)
+3. Measure shortest stable pulse width → bit time
+4. Calculate baud = 1 / bit_time
+5. Round to nearest standard baud rate
+6. Decode with detected parameters to verify
+
+**Use case:** Reverse engineering serial devices, identifying bootloader baud rates, debugging embedded systems.
+
+#### SPI Flash Dumper
+
+`projects/logic-analyzer/spi-flash-dump/` — 💭 not started.
+
+**What it does:** Non-intrusive SPI flash memory dump via logic analyzer. Captures SPI bus traffic during boot or operation, decodes READ commands, reconstructs binary image.
+
+**Hardware:** FX2LAFW probed onto SPI flash (CLK, MOSI, MISO, CS)
+
+**Use case:** Firmware extraction from embedded systems, router/IoT device reverse engineering, PCB-level debug without desoldering chips.
+
+**Limitations:** Only captures data actively read by the system. For full dump, need to stimulate reads (power cycle, trigger firmware updates, etc.)
+
+**Output:** Binary file + annotated log showing address ranges read.
+
+#### I2C Bus Scanner
+
+`projects/logic-analyzer/i2c-scan/` — 💭 not started.
+
+**What it does:** Passive I2C bus monitor. Listens to existing I2C traffic, identifies all active addresses, decodes register access patterns, infers device types from access patterns.
+
+**Hardware:** FX2LAFW + I2C bus (SCL, SDA)
+
+**Features:**
+- List all I2C addresses seen
+- Identify common devices (OLED displays, EEPROMs, sensors) by register patterns
+- Traffic histogram (which addresses are busiest)
+- Register map extraction (which registers are read vs written)
+
+**Use case:** Reverse engineering I2C-based systems, identifying unknown sensors on dev boards, debugging I2C conflicts.
+
+#### Timing Analyzer / Glitch Detector
+
+`projects/logic-analyzer/timing-glitch/` — 💭 not started.
+
+**What it does:** Long-running capture looking for timing violations or glitches. Monitors setup/hold times, pulse width violations, clock jitter, unexpected transitions.
+
+**Hardware:** FX2LAFW + digital bus
+
+**Detection:**
+- Pulse widths < minimum spec
+- Setup/hold violations (data changes too close to clock edge)
+- Missing clock pulses
+- Unexpected state transitions
+- Metastability (rapid toggling)
+
+**Output:** Timestamped glitch events + VCD file showing context around each glitch.
+
+**Use case:** Debug intermittent failures, validate signal integrity, identify marginal timing.
+
+#### PWM Analyzer
+
+`projects/logic-analyzer/pwm-analyzer/` — 💭 not started.
+
+**What it does:** Capture and analyze PWM signals. Measures frequency, duty cycle, jitter. Supports multi-channel (e.g., RGB LED driver, motor controller).
+
+**Hardware:** FX2LAFW + PWM source
+
+**Measurements per channel:**
+- Frequency (Hz)
+- Duty cycle (%)
+- Jitter (σ, min, max)
+- Phase relationship between channels
+
+**Output:** CSV with per-channel stats, matplotlib plots showing duty cycle over time.
+
+**Use case:** Validate motor controller output, characterize LED dimming, debug servo control signals.
+
+#### Frequency Counter
+
+`projects/logic-analyzer/frequency-counter/` — 💭 not started.
+
+**What it does:** Measure signal frequency by counting edges over time. More accurate than oscilloscope counter for signals > 1 MHz.
+
+**Hardware:** FX2LAFW (captures up to 24 MHz)
+
+**Method:**
+- Capture 1 second at max sample rate
+- Count rising edges
+- Report frequency with confidence interval
+
+**Range:** 1 Hz to 12 MHz (Nyquist limit at 24 MS/s)
+
+**Use case:** Validate oscillator output, measure PLL VCO frequency, check microcontroller clock.
+
+#### Bus Pirate + Logic Analyzer Cross-Validation
+
+`projects/logic-analyzer/buspirate-validation/` — 💭 not started.
+
+**What it does:** Use Bus Pirate to generate known I2C/SPI/UART traffic, capture with logic analyzer, verify correctness. Validates both instruments against each other.
+
+**Hardware:** Bus Pirate + FX2LAFW (loopback or through DUT)
+
+**Test cases:**
+- I2C: Write known data to EEPROM, verify logic analyzer captures correct address/data/ACK
+- SPI: Transfer test pattern, verify bit timing and CPOL/CPHA
+- UART: Send known string, verify baud rate detection and data decode
+
+**Why useful:** Golden reference test — Bus Pirate is known-good, logic analyzer must match.
+
+#### Embedded System Boot Trace
+
+`projects/logic-analyzer/boot-trace/` — 💭 not started.
+
+**What it does:** Capture all I2C/SPI/UART traffic during embedded system boot. Generates timeline showing when each device initializes, register writes, timing bottlenecks.
+
+**Hardware:** FX2LAFW + embedded system (probe all buses)
+
+**Output:**
+- Timeline chart (Gantt-style) showing device init sequence
+- Protocol annotated with register meanings (if known)
+- Bottleneck identification (long pauses between transactions)
+
+**Use case:** Optimize boot time, debug init failures, reverse engineer boot sequence.
+
+#### CAN Bus Decoder
+
+`projects/logic-analyzer/can-decode/` — 💭 not started.
+
+**What it does:** Decode CAN bus traffic via logic analyzer. Captures CAN High/Low differential pair or CAN TX signal, decodes frames to show ID, data, CRC.
+
+**Hardware:** FX2LAFW + CAN bus (1 or 2 channels depending on capture point)
+
+**Supported:**
+- Standard 11-bit IDs
+- Extended 29-bit IDs
+- Error frames
+- Overload frames
+
+**Use case:** Automotive diagnostics (OBD-II), industrial control systems (CANopen), robotics.
+
+**Note:** Requires sigrok CAN decoder or manual Python decode implementation.
+
+#### 1-Wire Bus Analyzer
+
+`projects/logic-analyzer/onewire-analyzer/` — 💭 not started.
+
+**What it does:** Decode 1-Wire bus (Dallas/Maxim protocol). Identifies device ROMs, decodes temperature readings, captures timing for standard vs overdrive speed.
+
+**Hardware:** FX2LAFW + 1-Wire bus (DS18B20, iButton, etc.)
+
+**Features:**
+- ROM search sequence decode
+- Temperature conversion timing
+- CRC validation
+- Multi-drop bus topology mapping
+
+**Use case:** Debug DS18B20 sensor arrays, reverse engineer iButton locks, validate 1-Wire timing.
+
+### Future-logic-analyzer-integrated
+
+Multi-instrument projects that combine logic analyzer with other bench equipment.
+
+#### SDG + Logic Analyzer: Signal Integrity Test
+
+`projects/logic-analyzer/signal-integrity/` — 💭 not started.
+
+**What it does:** SDG generates test pattern (square wave, PWM, clock), logic analyzer captures at various distances/loads/cable lengths. Measures rise/fall time degradation, overshoot, ringing, crosstalk.
+
+**Hardware:** SDG1062X + FX2LAFW + test cables/loads
+
+**Tests:**
+- Rise/fall time vs cable length
+- Overshoot vs load capacitance
+- Crosstalk between channels
+- Impedance mismatch effects
+
+**Output:** Plots showing signal quality vs test condition, annotated VCD files.
+
+**Use case:** Validate PCB layout, select appropriate termination, debug signal integrity issues.
+
+#### Bus Pirate + Logic Analyzer: I2C/SPI Protocol Fuzzer
+
+`projects/logic-analyzer/protocol-fuzzer/` — 💭 not started.
+
+**What it does:** Bus Pirate generates semi-random I2C/SPI traffic (valid and invalid), logic analyzer monitors DUT responses, Python script logs crashes/hangs/error responses.
+
+**Hardware:** Bus Pirate + FX2LAFW + DUT
+
+**Fuzzing strategies:**
+- Invalid addresses
+- Malformed frames (bad CRC, incorrect length)
+- Timing violations (clock glitches, stretched clocks)
+- Unexpected NACK/ACK patterns
+
+**Output:** List of inputs that cause DUT to crash/hang/misbehave.
+
+**Use case:** Security testing, robustness validation, protocol compliance.
+
+#### ESP32 + Logic Analyzer: Automated Protocol Compliance Suite
+
+`projects/logic-analyzer/esp32-compliance/` — 💭 not started.
+
+**What it does:** ESP32 generates I2C/SPI/UART traffic (via scpi-i2c/scpi-spi/scpi-uart), logic analyzer captures, Python validates compliance against protocol specs.
+
+**Hardware:** ESP32 + FX2LAFW + optional DUT
+
+**Test suite:**
+- I2C: Clock stretching, repeated START, 10-bit addressing
+- SPI: All CPOL/CPHA combinations, variable CS timing
+- UART: Parity error injection, break conditions, framing errors
+
+**Output:** Pass/fail report per test case, VCD files for failures.
+
+**Use case:** Validate protocol stack implementations, regression testing.
+
+#### SSA + Logic Analyzer: RF + Digital Correlation
+
+`projects/logic-analyzer/rf-digital-correlation/` — 💭 not started.
+
+**What it does:** Logic analyzer captures digital control signals (TX enable, frequency select, etc.), SSA captures RF output, Python correlates timing. Measures TX key-up time, frequency switching speed, spurious emissions during transitions.
+
+**Hardware:** SSA3032X + FX2LAFW + radio or transmitter
+
+**Measurements:**
+- TX key-up time (digital assert to RF carrier detected)
+- Frequency switching latency
+- Phase noise during PLL lock
+- Spurious emissions during mode changes
+
+**Output:** Timeline showing digital events overlaid on RF spectrum, annotated plots.
+
+**Use case:** Optimize transmitter control loops, debug spurious emissions, validate FCC compliance during transitions.
+
+#### Scope + Logic Analyzer: Mixed-Signal Debug
+
+`projects/logic-analyzer/scope-mixed-signal/` — 💭 not started.
+
+**What it does:** SDS2504X Plus analog channels + FX2LAFW digital channels on shared trigger. Correlates analog waveforms with digital bus traffic.
+
+**Hardware:** SDS2504X Plus + FX2LAFW + DUT
+
+**Use case:** Debug ADC/DAC systems (capture analog input + SPI config), power supply droops during I2C transactions, clock jitter effects on analog signals.
+
+**Trigger:** Logic analyzer detects digital event (I2C START, SPI CS falling), triggers scope analog capture.
+
+**Output:** Synchronized VCD (digital) + scope CSV (analog), matplotlib plots overlaying both.
+
+**Note:** SDS2504X Plus has built-in MSO option, but external logic analyzer provides more channels (8 vs 16 digital).
+
+#### DMM + Logic Analyzer: Sensor Calibration Validator
+
+`projects/logic-analyzer/sensor-calibration/` — 💭 not started.
+
+**What it does:** DMM reads sensor analog output, logic analyzer captures digital I2C/SPI config, Python verifies that sensor reports match DMM measurements.
+
+**Hardware:** SDM3045X + FX2LAFW + sensor DUT
+
+**Test flow:**
+1. Logic analyzer captures sensor config (range, gain, offset)
+2. DMM measures sensor analog output
+3. Logic analyzer captures sensor digital readout
+4. Python compares: does sensor digital value match DMM analog reading?
+
+**Output:** Calibration error plot (sensor reported vs DMM measured), list of out-of-spec sensors.
+
+**Use case:** Production test ADCs, validate sensor calibration, identify defective units.
+
 ### Future-tci-router
 
 #### TCI Audio Router — Linux sound device bridge

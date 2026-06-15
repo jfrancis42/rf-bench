@@ -1,0 +1,59 @@
+# BenchView Panel Configuration
+# PSU Accuracy Sweep Display
+
+name: psu-accuracy-sweep
+title: PSU Accuracy Sweep
+
+layout:
+  rows: 2
+  cols: 2
+
+instruments:
+  - name: voltage-display
+    type: numeric-display
+    position: [0, 0]
+    title: "Measured Voltage"
+    config:
+      instances: 1
+      style: NIXIE
+      color: "#00ff00"
+      precision: 3
+      units: "V"
+
+  - name: error-bar
+    type: bar-graph
+    position: [0, 1]
+    title: "Voltage Error"
+    config:
+      instances: 1
+      min: -1.0
+      max: 1.0
+      units: "V"
+      zones:
+        - color: "#00ff00"
+          min: -0.1
+          max: 0.1
+        - color: "#ffaa00"
+          min: -0.5
+          max: 0.5
+        - color: "#ff0000"
+          min: -1.0
+          max: 1.0
+
+  - name: status-led
+    type: led
+    position: [1, 0]
+    title: "Measuring"
+    config:
+      instances: 1
+      on_color: "#00ff00"
+      off_color: "#333333"
+
+  - name: info-text
+    type: text-lcd
+    position: [1, 1]
+    title: "Status"
+    config:
+      instances: 1
+      rows: 4
+      cols: 20

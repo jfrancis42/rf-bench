@@ -335,7 +335,7 @@ For closed-loop speed or position control, add:
 
 **Firmware:** 1.0 (2026-06-12)
 
-**License:** MIT
+**License:** GPL-3.0-or-later
 
 **Author:** N0GQ
 

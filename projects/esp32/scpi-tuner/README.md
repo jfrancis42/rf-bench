@@ -280,7 +280,7 @@ for l_pos in range(0, 256, 8):
 
 ## License
 
-Same as rf-bench — MIT or similar open-source license.
+Same as rf-bench — GPL-3.0-or-later.
 
 ## Author
 

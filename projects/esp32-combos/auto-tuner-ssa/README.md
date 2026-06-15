@@ -602,7 +602,7 @@ Drive circuit: ESP32 GPIO → 2N2222 NPN → relay coil (flyback diode across co
 
 ## License
 
-(Same as parent rf-bench project: MIT or project-wide license)
+(Same as parent rf-bench project: GPL-3.0-or-later)
 
 ## Author
 

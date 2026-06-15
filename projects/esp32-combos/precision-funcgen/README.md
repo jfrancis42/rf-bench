@@ -378,7 +378,7 @@ Currently requires LXI/Ethernet. Add support for:
 
 ## License
 
-MIT License — see ~/Dropbox/build/rf-bench/LICENSE
+GPL-3.0-or-later — see ~/Dropbox/build/rf-bench/LICENSE
 
 ---
 

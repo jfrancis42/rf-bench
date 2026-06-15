@@ -23,7 +23,7 @@ Test vector CSV format:
     scan,,,100000,Address scan 0x00-0x7F
 
 Author: jfrancis / jfrancis
-License: MIT
+License: GPL-3.0-or-later
 """
 
 import argparse
