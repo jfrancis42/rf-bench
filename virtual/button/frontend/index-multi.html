@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Button</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .button-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+      gap: 15px;
+    }
+
+    .button-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    .button-element {
+      width: clamp(80px, 20vw, 120px);
+      height: clamp(80px, 20vw, 120px);
+      border-radius: 50%;
+      background: linear-gradient(135deg, #2a4a6a 0%, #1a2a3a 100%);
+      border: 4px solid #1a3a5a;
+      cursor: pointer;
+      transition: all 0.1s;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(14px, 4vw, 20px);
+      font-weight: bold;
+      color: #88ccff;
+      text-shadow: 0 0 8px rgba(136, 204, 255, 0.5);
+      user-select: none;
+    }
+
+    .button-element:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+      background: linear-gradient(135deg, #1a3a5a 0%, #0a1a2a 100%);
+    }
+
+    .button-state {
+      font-size: clamp(10px, 2.5vw, 12px);
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8007';
+
+    let ws = null;
+    let buttons = [];
+
+    function initButtons() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'button-panel';
+        panel.id = `button-panel-${i}`;
+        panel.innerHTML = `
+          <div class="button-label"></div>
+          <div class="button-element" id="button-${i}">PUSH</div>
+          <div class="button-state" id="state-${i}">Released</div>
+        `;
+        grid.appendChild(panel);
+
+        buttons[i] = {
+          pressed: false,
+          label: ''
+        };
+
+        const btnEl = document.getElementById(`button-${i}`);
+        btnEl.addEventListener('mousedown', () => handlePress(i));
+        btnEl.addEventListener('mouseup', () => handleRelease(i));
+        btnEl.addEventListener('mouseleave', () => handleRelease(i));
+        btnEl.addEventListener('touchstart', (e) => { e.preventDefault(); handlePress(i); });
+        btnEl.addEventListener('touchend', (e) => { e.preventDefault(); handleRelease(i); });
+      }
+    }
+
+    function handlePress(index) {
+      buttons[index].pressed = true;
+      updateDisplay(index);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({index, pressed: true}));
+      }
+    }
+
+    function handleRelease(index) {
+      buttons[index].pressed = false;
+      updateDisplay(index);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({index, pressed: false}));
+      }
+    }
+
+    function updateDisplay(index) {
+      const stateEl = document.getElementById(`state-${index}`);
+      stateEl.textContent = buttons[index].pressed ? 'Pressed' : 'Released';
+      stateEl.style.color = buttons[index].pressed ? '#00ff88' : '#666';
+    }
+
+    function updateButton(index, state_obj) {
+      const panel = document.getElementById(`button-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.button-label');
+
+      buttons[index] = { ...buttons[index], ...state_obj };
+
+      if (state_obj.label !== undefined) {
+        labelEl.textContent = state_obj.label;
+      }
+
+      updateDisplay(index);
+    }
+
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateButton(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    initButtons();
+    connect();
+
+    for (let i = 1; i <= count; i++) {
+      updateDisplay(i);
+    }
+  </script>
+</body>
+</html>

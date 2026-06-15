@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head><title>WS Test</title></head>
+<body>
+<h1>WebSocket Test</h1>
+<div id="status">Connecting...</div>
+<div id="messages"></div>
+<script>
+const status = document.getElementById('status');
+const messages = document.getElementById('messages');
+
+status.textContent = 'Creating WebSocket to: ws://' + window.location.host + '/instrument/power-meter/ws';
+
+const ws = new WebSocket('ws://' + window.location.host + '/instrument/power-meter/ws');
+
+ws.onopen = () => {
+    status.textContent = 'Connected!';
+    status.style.color = 'green';
+};
+
+ws.onmessage = (event) => {
+    const div = document.createElement('div');
+    div.textContent = 'Received: ' + event.data;
+    messages.appendChild(div);
+};
+
+ws.onerror = (error) => {
+    status.textContent = 'Error: ' + error;
+    status.style.color = 'red';
+};
+
+ws.onclose = () => {
+    status.textContent = 'Closed';
+    status.style.color = 'orange';
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Toggle Switch</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+      min-width: 300px;
+    }
+    #label-display {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    #switch-container {
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      margin: 20px 0;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 120px;
+      height: 60px;
+      background: #1a1a2a;
+      border: 3px solid #2a2a40;
+      border-radius: 30px;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.5);
+    }
+    .toggle-switch.on {
+      box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .toggle-knob {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(145deg, #ffffff, #cccccc);
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4),
+                  inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+                  inset 0 2px 2px rgba(255, 255, 255, 0.5);
+    }
+    .toggle-switch.on .toggle-knob {
+      left: 66px;
+    }
+    #state-label {
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 20px;
+      text-shadow: 0 0 10px currentColor;
+      letter-spacing: 3px;
+      transition: all 0.3s ease;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background: #00aa00;
+      color: #fff;
+    }
+    .status.disconnected {
+      background: #aa0000;
+      color: #fff;
+    }
+    .toggle-labels {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      pointer-events: none;
+    }
+    .toggle-labels.left {
+      left: 12px;
+      color: #666;
+    }
+    .toggle-labels.right {
+      right: 12px;
+      color: #666;
+    }
+    .toggle-switch.on .toggle-labels.right {
+      color: #fff;
+    }
+    .toggle-switch:not(.on) .toggle-labels.left {
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="status disconnected" id="status">Disconnected</div>
+  <div id="container">
+    <h1>Virtual Toggle Switch</h1>
+    <div id="label-display">Switch</div>
+    <div id="switch-container">
+      <div class="toggle-switch" id="toggle">
+        <span class="toggle-labels left" id="off-label">OFF</span>
+        <span class="toggle-labels right" id="on-label">ON</span>
+        <div class="toggle-knob"></div>
+      </div>
+    </div>
+    <div id="state-label">OFF</div>
+  </div>
+  <div class="info">
+    Click switch to toggle • Updates via SCPI/MQTT/WebSocket
+  </div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let toggleState = {
+      state: false,
+      label: 'Switch',
+      on_color: '#00ff00',
+      off_color: '#444444',
+      on_label: 'ON',
+      off_label: 'OFF',
+      size: 100
+    };
+
+    let ws = null;
+    let reconnectInterval = null;
+    let userIsInteracting = false;
+
+    const toggleElement = document.getElementById('toggle');
+    const stateLabelElement = document.getElementById('state-label');
+    const labelDisplay = document.getElementById('label-display');
+    const onLabelElement = document.getElementById('on-label');
+    const offLabelElement = document.getElementById('off-label');
+    const statusElement = document.getElementById('status');
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusElement.textContent = 'Connected';
+        statusElement.className = 'status connected';
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const newState = JSON.parse(event.data);
+
+          // Only update if user isn't currently clicking
+          if (!userIsInteracting) {
+            toggleState = newState;
+            updateDisplay();
+          }
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        statusElement.textContent = 'Disconnected - reconnecting...';
+        statusElement.className = 'status disconnected';
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateDisplay() {
+      // Update label
+      labelDisplay.textContent = toggleState.label;
+      onLabelElement.textContent = toggleState.on_label;
+      offLabelElement.textContent = toggleState.off_label;
+
+      // Update switch appearance
+      if (toggleState.state) {
+        toggleElement.classList.add('on');
+        stateLabelElement.textContent = toggleState.on_label;
+        stateLabelElement.style.color = toggleState.on_color;
+        toggleElement.style.background = toggleState.on_color;
+      } else {
+        toggleElement.classList.remove('on');
+        stateLabelElement.textContent = toggleState.off_label;
+        stateLabelElement.style.color = toggleState.off_color;
+        toggleElement.style.background = toggleState.off_color;
+      }
+
+      // Update size
+      const scale = toggleState.size / 100;
+      const width = 120 * scale;
+      const height = 60 * scale;
+      const knobSize = 42 * scale;
+      const knobOffset = 6 * scale;
+      const knobRightPos = 66 * scale;
+
+      toggleElement.style.width = width + 'px';
+      toggleElement.style.height = height + 'px';
+      toggleElement.style.borderRadius = (height / 2) + 'px';
+
+      const knob = toggleElement.querySelector('.toggle-knob');
+      knob.style.width = knobSize + 'px';
+      knob.style.height = knobSize + 'px';
+      knob.style.top = knobOffset + 'px';
+
+      // Update knob position based on state
+      if (toggleState.state) {
+        knob.style.left = knobRightPos + 'px';
+      } else {
+        knob.style.left = knobOffset + 'px';
+      }
+    }
+
+    function sendStateChange(state) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'state_change',
+          state: state
+        }));
+      }
+    }
+
+    // Handle switch click
+    toggleElement.addEventListener('click', (e) => {
+      userIsInteracting = true;
+
+      // Toggle state
+      const newState = !toggleState.state;
+      toggleState.state = newState;
+
+      // Update display immediately for responsiveness
+      updateDisplay();
+
+      // Send to backend
+      sendStateChange(newState);
+
+      // Release interaction lock after animation
+      setTimeout(() => {
+        userIsInteracting = false;
+      }, 300);
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>

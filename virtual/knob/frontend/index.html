@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Rotary Knob</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #label-display {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 10px;
+      letter-spacing: 2px;
+    }
+    #value-display {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px currentColor;
+      letter-spacing: 4px;
+      min-width: 200px;
+      text-align: center;
+    }
+    #units-display {
+      font-size: 20px;
+      color: #888;
+      margin-bottom: 30px;
+      letter-spacing: 2px;
+    }
+    #knob-container {
+      position: relative;
+      cursor: grab;
+      user-select: none;
+      margin: 20px 0;
+    }
+    #knob-container:active {
+      cursor: grabbing;
+    }
+    canvas {
+      display: block;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background: #00aa00;
+      color: #fff;
+    }
+    .status.disconnected {
+      background: #aa0000;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="status disconnected" id="status">Disconnected</div>
+  <div id="container">
+    <h1>Virtual Rotary Knob</h1>
+    <div id="label-display">Knob</div>
+    <div id="value-display">50.0</div>
+    <div id="units-display"></div>
+    <div id="knob-container">
+      <canvas id="knob" width="150" height="150"></canvas>
+    </div>
+  </div>
+  <div class="info">
+    Drag knob to rotate • Updates via SCPI/MQTT/WebSocket
+  </div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let knobState = {
+      value: 50.0,
+      min_val: 0.0,
+      max_val: 100.0,
+      step: 1.0,
+      wrap: false,
+      label: 'Knob',
+      units: '',
+      color: '#00ff88',
+      size: 150
+    };
+
+    let ws = null;
+    let reconnectInterval = null;
+    let userIsInteracting = false;
+    let dragStartAngle = 0;
+    let dragStartValue = 0;
+
+    const canvas = document.getElementById('knob');
+    const ctx = canvas.getContext('2d');
+    const valueDisplay = document.getElementById('value-display');
+    const labelDisplay = document.getElementById('label-display');
+    const unitsDisplay = document.getElementById('units-display');
+    const statusElement = document.getElementById('status');
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusElement.textContent = 'Connected';
+        statusElement.className = 'status connected';
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const newState = JSON.parse(event.data);
+          if (!userIsInteracting) {
+            knobState = newState;
+            updateDisplay();
+            drawKnob();
+          }
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        statusElement.textContent = 'Disconnected - reconnecting...';
+        statusElement.className = 'status disconnected';
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateDisplay() {
+      labelDisplay.textContent = knobState.label;
+      unitsDisplay.textContent = knobState.units;
+
+      const decimals = knobState.step >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(knobState.step)));
+      valueDisplay.textContent = knobState.value.toFixed(decimals);
+      valueDisplay.style.color = knobState.color;
+
+      canvas.width = knobState.size;
+      canvas.height = knobState.size;
+    }
+
+    function drawKnob() {
+      const size = knobState.size;
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size * 0.4;
+
+      ctx.clearRect(0, 0, size, size);
+
+      // Calculate angle (-135° to +135°, 270° range)
+      const range = knobState.max_val - knobState.min_val;
+      const normalized = (knobState.value - knobState.min_val) / range;
+      const angle = -135 + (normalized * 270);
+      const radians = (angle * Math.PI) / 180;
+
+      // Draw knob body
+      const gradient = ctx.createRadialGradient(centerX - radius * 0.3, centerY - radius * 0.3, 0, centerX, centerY, radius);
+      gradient.addColorStop(0, '#3a3a4a');
+      gradient.addColorStop(1, '#1a1a2a');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Draw tick marks
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 10; i++) {
+        const tickAngle = -135 + (i * 27);
+        const tickRad = (tickAngle * Math.PI) / 180;
+        const startRadius = radius * 0.85;
+        const endRadius = radius * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(centerX + Math.cos(tickRad) * startRadius, centerY + Math.sin(tickRad) * startRadius);
+        ctx.lineTo(centerX + Math.cos(tickRad) * endRadius, centerY + Math.sin(tickRad) * endRadius);
+        ctx.stroke();
+      }
+
+      // Draw pointer
+      ctx.strokeStyle = knobState.color;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(centerX + Math.cos(radians) * radius * 0.7, centerY + Math.sin(radians) * radius * 0.7);
+      ctx.stroke();
+
+      // Draw center cap
+      ctx.fillStyle = '#2a2a40';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius * 0.2, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#4a4a60';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function sendValueChange(value) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'value_change',
+          value: parseFloat(value)
+        }));
+      }
+    }
+
+    function getAngleFromMouse(e) {
+      const rect = canvas.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const mouseX = e.clientX - centerX;
+      const mouseY = e.clientY - centerY;
+      return Math.atan2(mouseY, mouseX) * (180 / Math.PI);
+    }
+
+    function angleToValue(angle) {
+      // Normalize angle to -135 to +135 range
+      let normalized = (angle + 135) / 270;
+      normalized = Math.max(0, Math.min(1, normalized));
+
+      const range = knobState.max_val - knobState.min_val;
+      let value = knobState.min_val + (normalized * range);
+
+      if (knobState.step > 0) {
+        value = Math.round(value / knobState.step) * knobState.step;
+      }
+
+      return value;
+    }
+
+    // Mouse drag handling
+    canvas.addEventListener('mousedown', (e) => {
+      userIsInteracting = true;
+      dragStartAngle = getAngleFromMouse(e);
+      dragStartValue = knobState.value;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!userIsInteracting) return;
+
+      const currentAngle = getAngleFromMouse(e);
+      const angleDelta = currentAngle - dragStartAngle;
+
+      const range = knobState.max_val - knobState.min_val;
+      const valueDelta = (angleDelta / 270) * range;
+
+      let newValue = dragStartValue + valueDelta;
+
+      if (knobState.wrap) {
+        newValue = ((newValue - knobState.min_val) % range) + knobState.min_val;
+      } else {
+        newValue = Math.max(knobState.min_val, Math.min(knobState.max_val, newValue));
+      }
+
+      if (knobState.step > 0) {
+        newValue = Math.round(newValue / knobState.step) * knobState.step;
+      }
+
+      knobState.value = newValue;
+      updateDisplay();
+      drawKnob();
+      sendValueChange(newValue);
+    });
+
+    document.addEventListener('mouseup', () => {
+      userIsInteracting = false;
+    });
+
+    // Initial connection
+    connectWebSocket();
+    updateDisplay();
+    drawKnob();
+  </script>
+</body>
+</html>

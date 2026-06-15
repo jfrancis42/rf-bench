@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LED Indicator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    /* Connection status LED */
+    
+
+    /* Grid container */
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    /* LED panel */
+    .led-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+      gap: 15px;
+    }
+
+    .led-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    .led {
+      width: clamp(40px, 15vw, 80px);
+      height: clamp(40px, 15vw, 80px);
+      border-radius: 50%;
+      border: 3px solid #1a1a2a;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 4px rgba(0, 0, 0, 0.8);
+      transition: all 0.2s ease;
+    }
+
+    .led.on {
+      box-shadow: 0 0 15px currentColor, 0 0 30px currentColor, inset 0 1px 4px rgba(255, 255, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8003';
+
+    // State
+    let ws = null;
+    let leds = [];
+
+    // Initialize LEDs
+    function initLEDs() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'led-panel';
+        panel.id = `led-panel-${i}`;
+        panel.innerHTML = `
+          <div class="led-label"></div>
+          <div class="led" style="background-color: #404040; color: #404040;"></div>
+        `;
+        grid.appendChild(panel);
+
+        leds[i] = {
+          state: false,
+          label: '',
+          on_color: '#00ff00',
+          off_color: '#404040'
+        };
+      }
+    }
+
+    // Update LED
+    function updateLED(index, state_obj) {
+      const panel = document.getElementById(`led-panel-${index}`);
+      if (!panel) return;
+
+      const led = panel.querySelector('.led');
+      const labelEl = panel.querySelector('.led-label');
+
+      const current = leds[index];
+      const newState = { ...current, ...state_obj };
+      leds[index] = newState;
+
+      if (state_obj.label !== undefined) {
+        labelEl.textContent = newState.label;
+      }
+
+      const color = newState.state ? newState.on_color : newState.off_color;
+      led.style.backgroundColor = color;
+      led.style.color = color;
+
+      if (newState.state) {
+        led.classList.add('on');
+      } else {
+        led.classList.remove('on');
+      }
+    }
+
+    // WebSocket connection
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          // msg format: {index: 1, state: true, label: "PTT", on_color: "#ff0000", off_color: "#404040"}
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateLED(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    // Initialize
+    initLEDs();
+    connect();
+  </script>
+</body>
+</html>

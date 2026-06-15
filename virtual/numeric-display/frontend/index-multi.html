@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Numeric Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'DSEG7';
+      src: url('fonts-DSEG_v046/DSEG7-Classic/DSEG7Classic-Regular.woff2') format('woff2'),
+           url('fonts-DSEG_v046/DSEG7-Classic/DSEG7Classic-Regular.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    /* Connection status LED */
+    
+
+    /* Grid container */
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    /* Display panel */
+    .display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+    }
+
+    .display-value {
+      font-family: 'DSEG7', 'Orbitron', monospace;
+      font-weight: 900;
+      font-size: clamp(24px, 8vw, 80px);
+      letter-spacing: 0.1em;
+      text-align: center;
+      line-height: 1;
+      text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+      transition: color 0.2s;
+      min-height: 1.2em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .display-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      min-height: 1em;
+    }
+
+    .display-units {
+      font-size: clamp(12px, 2.5vw, 18px);
+      color: #888;
+      letter-spacing: 0.15em;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';  // row, col, 2x2
+    const wsPort = params.get('ws_port') || '8000';
+
+    // State
+    let ws = null;
+    let displays = [];
+
+    // Initialize displays
+    function initDisplays() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const display = document.createElement('div');
+        display.className = 'display';
+        display.id = `display-${i}`;
+        display.innerHTML = `
+          <div class="display-label"></div>
+          <div class="display-value" style="color: #00ff88;">0.00</div>
+          <div class="display-units"></div>
+        `;
+        grid.appendChild(display);
+
+        displays[i] = {
+          value: 0.0,
+          precision: 2,
+          units: '',
+          label: '',
+          color: '#00ff88'
+        };
+      }
+    }
+
+    // Update display
+    function updateDisplay(index, state) {
+      const display = document.getElementById(`display-${index}`);
+      if (!display) return;
+
+      const valueEl = display.querySelector('.display-value');
+      const unitsEl = display.querySelector('.display-units');
+      const labelEl = display.querySelector('.display-label');
+
+      if (state.value !== undefined) {
+        valueEl.textContent = state.value.toFixed(state.precision || 2);
+      }
+      if (state.color) {
+        valueEl.style.color = state.color;
+      }
+      if (state.units !== undefined) {
+        unitsEl.textContent = state.units;
+      }
+      if (state.label !== undefined) {
+        labelEl.textContent = state.label;
+      }
+
+      displays[index] = { ...displays[index], ...state };
+    }
+
+    // WebSocket connection
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          // msg format: {index: 1, value: 14.257, precision: 3, units: "MHz", color: "#00ff88", label: "Frequency"}
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateDisplay(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    // Initialize
+    initDisplays();
+    connect();
+  </script>
+</body>
+</html>

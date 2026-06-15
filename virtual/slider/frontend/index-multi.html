@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slider</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .slider-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+      gap: 15px;
+    }
+
+    .slider-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    .slider-container {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 80%;
+      height: 8px;
+      background: #1a1a2a;
+      border-radius: 4px;
+      outline: none;
+      border: 2px solid #2a2a40;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #00ff88;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #00ff88;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+    }
+
+    .slider-value {
+      font-size: clamp(16px, 4vw, 24px);
+      font-weight: bold;
+      color: #00ff88;
+      text-shadow: 0 0 10px currentColor;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8005';
+
+    let ws = null;
+    let sliders = [];
+    let sendTimeout = null;
+
+    function initSliders() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'slider-panel';
+        panel.id = `slider-panel-${i}`;
+        panel.innerHTML = `
+          <div class="slider-label"></div>
+          <div class="slider-container">
+            <input type="range" id="slider-${i}" min="0" max="100" value="0" step="1">
+            <div class="slider-value" id="value-${i}">0</div>
+          </div>
+        `;
+        grid.appendChild(panel);
+
+        sliders[i] = {
+          value: 0.0,
+          min: 0.0,
+          max: 100.0,
+          label: '',
+          units: '',
+          color: '#00ff88'
+        };
+
+        const sliderEl = document.getElementById(`slider-${i}`);
+        sliderEl.addEventListener('input', () => handleSliderChange(i));
+      }
+    }
+
+    function handleSliderChange(index) {
+      const sliderEl = document.getElementById(`slider-${index}`);
+      const value = parseFloat(sliderEl.value);
+
+      const slider = sliders[index];
+      const range = slider.max - slider.min;
+      const actualValue = slider.min + (value / 100) * range;
+
+      slider.value = actualValue;
+      updateDisplay(index);
+
+      // Debounce SCPI send
+      if (sendTimeout) clearTimeout(sendTimeout);
+      sendTimeout = setTimeout(() => sendValue(index, actualValue), 100);
+    }
+
+    function sendValue(index, value) {
+      // Send SCPI command via WebSocket
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({index, value}));
+      }
+    }
+
+    function updateDisplay(index) {
+      const valueEl = document.getElementById(`value-${index}`);
+      const slider = sliders[index];
+      const displayValue = slider.units ? `${slider.value.toFixed(1)} ${slider.units}` : slider.value.toFixed(1);
+      valueEl.textContent = displayValue;
+    }
+
+    function updateSlider(index, state) {
+      const panel = document.getElementById(`slider-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.slider-label');
+      const sliderEl = document.getElementById(`slider-${index}`);
+      const valueEl = document.getElementById(`value-${index}`);
+
+      sliders[index] = { ...sliders[index], ...state };
+      const slider = sliders[index];
+
+      if (state.label !== undefined) {
+        labelEl.textContent = state.label;
+      }
+
+      if (state.color) {
+        valueEl.style.color = state.color;
+        sliderEl.style.setProperty('--thumb-color', state.color);
+      }
+
+      // Update slider position
+      const range = slider.max - slider.min;
+      const percent = ((slider.value - slider.min) / range) * 100;
+      sliderEl.value = percent;
+
+      updateDisplay(index);
+    }
+
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateSlider(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    initSliders();
+    connect();
+
+    for (let i = 1; i <= count; i++) {
+      updateDisplay(i);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knob</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .knob-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+      gap: 10px;
+    }
+
+    .knob-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    canvas {
+      width: clamp(100px, 25vw, 150px) !important;
+      height: clamp(100px, 25vw, 150px) !important;
+      cursor: pointer;
+    }
+
+    .knob-value {
+      font-size: clamp(14px, 3.5vw, 20px);
+      font-weight: bold;
+      color: #00ff88;
+      text-shadow: 0 0 8px currentColor;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8008';
+
+    let ws = null;
+    let knobs = [];
+    let dragging = null;
+
+    function initKnobs() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'knob-panel';
+        panel.id = `knob-panel-${i}`;
+        panel.innerHTML = `
+          <div class="knob-label"></div>
+          <canvas id="knob-canvas-${i}" width="150" height="150"></canvas>
+          <div class="knob-value" id="knob-value-${i}">0</div>
+        `;
+        grid.appendChild(panel);
+
+        knobs[i] = {
+          value: 0.0,
+          min: 0.0,
+          max: 100.0,
+          label: '',
+          units: '',
+          color: '#00ff88',
+          angle: -135  // Start angle in degrees
+        };
+
+        const canvas = document.getElementById(`knob-canvas-${i}`);
+        canvas.addEventListener('mousedown', (e) => startDrag(i, e));
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrag(i, e.touches[0]); });
+
+        drawKnob(i);
+      }
+
+      document.addEventListener('mousemove', handleDrag);
+      document.addEventListener('mouseup', stopDrag);
+      document.addEventListener('touchmove', (e) => handleDrag(e.touches[0]));
+      document.addEventListener('touchend', stopDrag);
+    }
+
+    function startDrag(index, event) {
+      dragging = {index, startY: event.clientY, startAngle: knobs[index].angle};
+    }
+
+    function handleDrag(event) {
+      if (!dragging) return;
+
+      const deltaY = dragging.startY - event.clientY;
+      const deltaAngle = deltaY * 0.5;  // Sensitivity
+      let newAngle = dragging.startAngle + deltaAngle;
+
+      // Clamp to -135° to +135° (270° range)
+      newAngle = Math.max(-135, Math.min(135, newAngle));
+
+      knobs[dragging.index].angle = newAngle;
+
+      // Convert angle to value
+      const percent = (newAngle + 135) / 270;
+      const knob = knobs[dragging.index];
+      knob.value = knob.min + percent * (knob.max - knob.min);
+
+      drawKnob(dragging.index);
+      updateDisplay(dragging.index);
+
+      // Send to backend
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.dumps({index: dragging.index, value: knob.value}));
+      }
+    }
+
+    function stopDrag() {
+      dragging = null;
+    }
+
+    function drawKnob(index) {
+      const canvas = document.getElementById(`knob-canvas-${index}`);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.min(w, h) * 0.4;
+
+      ctx.clearRect(0, 0, w, h);
+
+      const knob = knobs[index];
+
+      // Draw knob body
+      const gradient = ctx.createRadialGradient(cx - 10, cy - 10, 10, cx, cy, radius);
+      gradient.addColorStop(0, '#4a5a6a');
+      gradient.addColorStop(1, '#1a2a3a');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw border
+      ctx.strokeStyle = '#0a1a2a';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Draw indicator line
+      const angleRad = (knob.angle - 90) * Math.PI / 180;
+      const lineLength = radius * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angleRad) * lineLength, cy + Math.sin(angleRad) * lineLength);
+      ctx.strokeStyle = knob.color;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Draw center dot
+      ctx.fillStyle = knob.color;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw arc showing range
+      const startAngle = (-135 - 90) * Math.PI / 180;
+      const endAngle = (knob.angle - 90) * Math.PI / 180;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.85, startAngle, endAngle);
+      ctx.strokeStyle = knob.color + '88';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+
+    function updateDisplay(index) {
+      const valueEl = document.getElementById(`knob-value-${index}`);
+      const knob = knobs[index];
+      const displayValue = knob.units ? `${knob.value.toFixed(1)} ${knob.units}` : knob.value.toFixed(1);
+      valueEl.textContent = displayValue;
+    }
+
+    function updateKnob(index, state) {
+      const panel = document.getElementById(`knob-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.knob-label');
+
+      knobs[index] = { ...knobs[index], ...state };
+
+      if (state.label !== undefined) {
+        labelEl.textContent = state.label;
+      }
+
+      // Update angle from value
+      if (state.value !== undefined) {
+        const knob = knobs[index];
+        const range = knob.max - knob.min;
+        const percent = (knob.value - knob.min) / range;
+        knob.angle = -135 + percent * 270;
+      }
+
+      drawKnob(index);
+      updateDisplay(index);
+    }
+
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateKnob(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    initKnobs();
+    connect();
+
+    for (let i = 1; i <= count; i++) {
+      updateDisplay(i);
+    }
+  </script>
+</body>
+</html>

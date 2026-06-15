@@ -1,0 +1,52 @@
+panel: RF Bench Demo Panel
+instruments:
+  power-meter:
+    scpi_port: 5100
+    http_port: 8100
+    ws_port: 8100
+    type: analog-meter
+    count: 2
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-2
+  ptt-led:
+    scpi_port: 5101
+    http_port: 8101
+    ws_port: 8101
+    type: led
+    count: 4
+    layout: 2X2
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-4
+  signal-bars:
+    scpi_port: 5102
+    http_port: 8102
+    ws_port: 8102
+    type: bar-graph
+    count: 3
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-3
+  freq-display:
+    scpi_port: 5103
+    http_port: 8103
+    ws_port: 8103
+    type: numeric-display
+    count: 2
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-2
+  volume-knob:
+    scpi_port: 5104
+    http_port: 8104
+    ws_port: 8104
+    type: knob
+    count: 1
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-1

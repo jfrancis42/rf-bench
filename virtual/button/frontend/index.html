@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Push Button</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+      min-width: 300px;
+    }
+    #button-container {
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      margin: 20px 0;
+    }
+    .push-button {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #4488ff, #3366cc);
+      border: 4px solid #2a2a40;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4),
+                  inset 0 -4px 8px rgba(0, 0, 0, 0.3),
+                  inset 0 4px 8px rgba(255, 255, 255, 0.2);
+      transition: all 0.1s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .push-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5),
+                  inset 0 -4px 8px rgba(0, 0, 0, 0.3),
+                  inset 0 4px 8px rgba(255, 255, 255, 0.2);
+    }
+    .push-button:active,
+    .push-button.pressed {
+      transform: translateY(2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3),
+                  inset 0 4px 12px rgba(0, 0, 0, 0.5),
+                  inset 0 -2px 4px rgba(255, 255, 255, 0.1);
+    }
+    .button-label {
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffffff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    #press-count {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #888;
+      letter-spacing: 1px;
+    }
+    #press-count-value {
+      color: #00ff88;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background: #00aa00;
+      color: #fff;
+    }
+    .status.disconnected {
+      background: #aa0000;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="status disconnected" id="status">Disconnected</div>
+  <div id="container">
+    <h1>Virtual Push Button</h1>
+    <div id="button-container">
+      <div class="push-button" id="button">
+        <span class="button-label" id="button-label">Button</span>
+      </div>
+    </div>
+    <div id="press-count">
+      Press Count: <span id="press-count-value">0</span>
+    </div>
+  </div>
+  <div class="info">
+    Click button to trigger • Momentary press action
+  </div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let buttonState = {
+      pressed: false,
+      press_count: 0,
+      label: 'Button',
+      color: '#4488ff',
+      press_color: '#66aaff',
+      size: 120
+    };
+
+    let ws = null;
+    let reconnectInterval = null;
+
+    const buttonElement = document.getElementById('button');
+    const buttonLabelElement = document.getElementById('button-label');
+    const pressCountElement = document.getElementById('press-count-value');
+    const statusElement = document.getElementById('status');
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusElement.textContent = 'Connected';
+        statusElement.className = 'status connected';
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const newState = JSON.parse(event.data);
+          buttonState = newState;
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        statusElement.textContent = 'Disconnected - reconnecting...';
+        statusElement.className = 'status disconnected';
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateDisplay() {
+      // Update label
+      buttonLabelElement.textContent = buttonState.label;
+
+      // Update press count
+      pressCountElement.textContent = buttonState.press_count;
+
+      // Update button appearance
+      const color = buttonState.pressed ? buttonState.press_color : buttonState.color;
+      buttonElement.style.background = `linear-gradient(145deg, ${color}, ${darkenColor(color, 20)})`;
+
+      // Update pressed class
+      if (buttonState.pressed) {
+        buttonElement.classList.add('pressed');
+      } else {
+        buttonElement.classList.remove('pressed');
+      }
+
+      // Update size
+      const size = buttonState.size;
+      buttonElement.style.width = size + 'px';
+      buttonElement.style.height = size + 'px';
+
+      const fontSize = Math.max(12, size / 8);
+      buttonLabelElement.style.fontSize = fontSize + 'px';
+    }
+
+    function darkenColor(color, percent) {
+      // Simple color darkening
+      const hex = color.replace('#', '');
+      const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - percent);
+      const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - percent);
+      const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - percent);
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
+    function sendPress() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'press'
+        }));
+      }
+    }
+
+    // Handle button click
+    buttonElement.addEventListener('click', (e) => {
+      console.log('Button clicked');
+      sendPress();
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>

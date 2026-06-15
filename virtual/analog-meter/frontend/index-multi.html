@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analog Meter</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .meter-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+    }
+
+    .meter-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      min-height: 1em;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      max-height: 90%;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8002';
+
+    let ws = null;
+    let meters = [];
+
+    function initMeters() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'meter-panel';
+        panel.id = `meter-panel-${i}`;
+        panel.innerHTML = `
+          <div class="meter-label"></div>
+          <canvas id="meter-canvas-${i}" width="300" height="250"></canvas>
+        `;
+        grid.appendChild(panel);
+
+        meters[i] = {
+          value: 0.0,
+          min: 0.0,
+          max: 100.0,
+          label: '',
+          units: '',
+          color: '#00ff88',
+          zones: [
+            {min: 0, max: 70, color: '#00ff00'},
+            {min: 70, max: 85, color: '#ffff00'},
+            {min: 85, max: 100, color: '#ff0000'}
+          ]
+        };
+      }
+    }
+
+    function drawMeter(index) {
+      const canvas = document.getElementById(`meter-canvas-${index}`);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h * 0.58;  // Move center point further up to maximize space usage
+      const radius = Math.min(w, h) * 0.45;  // Increase radius even more
+
+      const meter = meters[index];
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Draw color zones
+      const startAngle = Math.PI * 0.75;  // 135° (bottom-left)
+      const endAngle = Math.PI * 2.25;    // 405° = 45° (bottom-right), full 270° sweep
+      const range = meter.max - meter.min;
+
+      meter.zones.forEach(zone => {
+        const zoneStart = startAngle + (zone.min - meter.min) / range * (endAngle - startAngle);
+        const zoneEnd = startAngle + (zone.max - meter.min) / range * (endAngle - startAngle);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.9, zoneStart, zoneEnd);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = zone.color;
+        ctx.stroke();
+      });
+
+      // Draw tick marks
+      const tickStartAngle = Math.PI * 0.75;
+      const tickEndAngle = Math.PI * 2.25;
+      for (let i = 0; i <= 10; i++) {
+        const angle = tickStartAngle + (i / 10) * (tickEndAngle - tickStartAngle);
+        const x1 = cx + Math.cos(angle) * radius * 0.75;
+        const y1 = cy + Math.sin(angle) * radius * 0.75;
+        const x2 = cx + Math.cos(angle) * radius * 0.85;
+        const y2 = cy + Math.sin(angle) * radius * 0.85;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Value labels
+        const value = meter.min + (i / 10) * range;
+        const tx = cx + Math.cos(angle) * radius * 0.6;
+        const ty = cy + Math.sin(angle) * radius * 0.6;
+        ctx.fillStyle = '#888';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.round(value), tx, ty);
+      }
+
+      // Draw needle
+      const needleStartAngle = Math.PI * 0.75;
+      const needleEndAngle = Math.PI * 2.25;
+      const needleAngle = needleStartAngle + ((meter.value - meter.min) / range) * (needleEndAngle - needleStartAngle);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(needleAngle) * radius * 0.7, cy + Math.sin(needleAngle) * radius * 0.7);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Center dot
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Value text
+      ctx.fillStyle = meter.color;
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(meter.value.toFixed(1), cx, cy + radius * 0.35);
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#888';
+      ctx.fillText(meter.units, cx, cy + radius * 0.5);
+    }
+
+    function updateMeter(index, state) {
+      const panel = document.getElementById(`meter-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.meter-label');
+
+      meters[index] = { ...meters[index], ...state };
+
+      if (state.label !== undefined) {
+        labelEl.textContent = state.label;
+      }
+
+      drawMeter(index);
+    }
+
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateMeter(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    initMeters();
+    connect();
+
+    // Initial draw
+    for (let i = 1; i <= count; i++) {
+      drawMeter(i);
+    }
+  </script>
+</body>
+</html>

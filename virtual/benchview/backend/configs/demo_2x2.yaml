@@ -1,0 +1,57 @@
+panel:
+  name: "Demo 2×2 Panel"
+  description: "Four basic instruments in a 2×2 grid"
+
+  grid:
+    columns: 2
+    rows: 2
+    gap: 10px
+
+  instruments:
+    - id: frequency
+      path: numeric-display/frontend/index.html
+      position: {row: 0, col: 0}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5000
+      mqtt_topic: bench/demo/frequency
+      config:
+        label: Frequency
+        units: MHz
+        precision: 3
+        color: "#00ff88"
+
+    - id: power
+      path: numeric-display/frontend/index.html
+      position: {row: 0, col: 1}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5001
+      mqtt_topic: bench/demo/power
+      config:
+        label: Power
+        units: W
+        precision: 1
+        color: "#ff8800"
+
+    - id: ptt
+      path: led/frontend/index.html
+      position: {row: 1, col: 0}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5003
+      mqtt_topic: bench/demo/ptt
+      config:
+        label: PTT
+        on_color: "#ff0000"
+        off_color: "#404040"
+        size: 80
+
+    - id: lock
+      path: led/frontend/index.html
+      position: {row: 1, col: 1}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5004
+      mqtt_topic: bench/demo/lock
+      config:
+        label: "GPS Lock"
+        on_color: "#00ff00"
+        off_color: "#404040"
+        size: 80

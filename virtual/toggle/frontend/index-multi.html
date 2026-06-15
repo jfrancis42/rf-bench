@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toggle</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      position: relative;
+    }
+
+    
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .toggle-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+      gap: 15px;
+    }
+
+    .toggle-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: clamp(60px, 15vw, 100px);
+      height: clamp(30px, 7.5vw, 50px);
+      background: #2a2a40;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: background 0.3s;
+      border: 2px solid #1a1a2a;
+    }
+
+    .toggle-switch.on {
+      background: #00aa55;
+    }
+
+    .toggle-knob {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: calc(50% - 8px);
+      height: calc(100% - 8px);
+      background: #ffffff;
+      border-radius: 50%;
+      transition: left 0.3s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch.on .toggle-knob {
+      left: calc(50% + 4px);
+    }
+
+    .toggle-state {
+      font-size: clamp(12px, 3vw, 16px);
+      font-weight: bold;
+      color: #888;
+    }
+
+    .toggle-state.on {
+      color: #00ff88;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8006';
+
+    let ws = null;
+    let toggles = [];
+
+    function initToggles() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'toggle-panel';
+        panel.id = `toggle-panel-${i}`;
+        panel.innerHTML = `
+          <div class="toggle-label"></div>
+          <div class="toggle-switch" id="toggle-${i}">
+            <div class="toggle-knob"></div>
+          </div>
+          <div class="toggle-state" id="state-${i}">OFF</div>
+        `;
+        grid.appendChild(panel);
+
+        toggles[i] = {
+          state: false,
+          label: ''
+        };
+
+        const switchEl = document.getElementById(`toggle-${i}`);
+        switchEl.addEventListener('click', () => handleToggleClick(i));
+      }
+    }
+
+    function handleToggleClick(index) {
+      toggles[index].state = !toggles[index].state;
+      updateDisplay(index);
+
+      // Send to backend
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({index, state: toggles[index].state}));
+      }
+    }
+
+    function updateDisplay(index) {
+      const switchEl = document.getElementById(`toggle-${index}`);
+      const stateEl = document.getElementById(`state-${index}`);
+
+      if (toggles[index].state) {
+        switchEl.classList.add('on');
+        stateEl.classList.add('on');
+        stateEl.textContent = 'ON';
+      } else {
+        switchEl.classList.remove('on');
+        stateEl.classList.remove('on');
+        stateEl.textContent = 'OFF';
+      }
+    }
+
+    function updateToggle(index, state_obj) {
+      const panel = document.getElementById(`toggle-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.toggle-label');
+
+      toggles[index] = { ...toggles[index], ...state_obj };
+
+      if (state_obj.label !== undefined) {
+        labelEl.textContent = state_obj.label;
+      }
+
+      updateDisplay(index);
+    }
+
+    function connect() {
+      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateToggle(msg.index, msg);
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    initToggles();
+    connect();
+
+    for (let i = 1; i <= count; i++) {
+      updateDisplay(i);
+    }
+  </script>
+</body>
+</html>

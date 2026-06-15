@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Slider</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+    }
+    #label-display {
+      font-size: 16px;
+      color: #888;
+      margin-bottom: 10px;
+      letter-spacing: 2px;
+    }
+    #value-display {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      text-shadow: 0 0 20px currentColor,
+                   0 0 40px currentColor,
+                   0 0 60px currentColor;
+      letter-spacing: 4px;
+      min-width: 200px;
+      text-align: center;
+    }
+    #units-display {
+      font-size: 20px;
+      color: #888;
+      margin-bottom: 30px;
+      letter-spacing: 2px;
+      min-height: 24px;
+    }
+    #slider-container {
+      position: relative;
+      margin: 20px 0;
+    }
+    #slider-container.horizontal {
+      width: 500px;
+      height: 60px;
+    }
+    #slider-container.vertical {
+      width: 60px;
+      height: 400px;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-track {
+      background: #1a1a2a;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -10px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      transition: all 0.1s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      transform: scale(1.1);
+    }
+    input[type="range"]::-moz-range-track {
+      background: #1a1a2a;
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      transition: all 0.1s ease;
+    }
+    input[type="range"]::-moz-range-thumb:hover {
+      transform: scale(1.2);
+    }
+    input[type="range"]::-moz-range-thumb:active {
+      transform: scale(1.1);
+    }
+    /* Horizontal slider */
+    .horizontal input[type="range"] {
+      width: 500px;
+      height: 40px;
+    }
+    .horizontal input[type="range"]::-webkit-slider-track {
+      height: 40px;
+    }
+    .horizontal input[type="range"]::-moz-range-track {
+      height: 40px;
+    }
+    /* Vertical slider */
+    .vertical {
+      transform: rotate(-90deg);
+      transform-origin: center center;
+    }
+    .vertical input[type="range"] {
+      width: 400px;
+      height: 40px;
+    }
+    .vertical input[type="range"]::-webkit-slider-track {
+      height: 40px;
+    }
+    .vertical input[type="range"]::-moz-range-track {
+      height: 40px;
+    }
+    #range-display {
+      display: flex;
+      justify-content: space-between;
+      width: 500px;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
+    }
+    .vertical + #range-display {
+      transform: rotate(90deg);
+      margin-top: 40px;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background: #00aa00;
+      color: #fff;
+    }
+    .status.disconnected {
+      background: #aa0000;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="status disconnected" id="status">Disconnected</div>
+  <div id="container">
+    <h1>Virtual Slider</h1>
+    <div id="label-display">Value</div>
+    <div id="value-display">50.0</div>
+    <div id="units-display"></div>
+    <div id="slider-container" class="horizontal">
+      <input type="range" id="slider" min="0" max="100" step="1" value="50">
+    </div>
+    <div id="range-display">
+      <span id="min-label">0</span>
+      <span id="max-label">100</span>
+    </div>
+  </div>
+  <div class="info">
+    Drag slider to control • Updates via SCPI/MQTT/WebSocket
+  </div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let sliderState = {
+      value: 50.0,
+      min_val: 0.0,
+      max_val: 100.0,
+      step: 1.0,
+      orientation: 'HOR',
+      scale: 'LIN',
+      label: 'Value',
+      units: '',
+      color: '#00ff88'
+    };
+
+    let ws = null;
+    let reconnectInterval = null;
+    let userIsInteracting = false;
+
+    const sliderElement = document.getElementById('slider');
+    const valueDisplay = document.getElementById('value-display');
+    const labelDisplay = document.getElementById('label-display');
+    const unitsDisplay = document.getElementById('units-display');
+    const sliderContainer = document.getElementById('slider-container');
+    const rangeDisplay = document.getElementById('range-display');
+    const minLabel = document.getElementById('min-label');
+    const maxLabel = document.getElementById('max-label');
+    const statusElement = document.getElementById('status');
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusElement.textContent = 'Connected';
+        statusElement.className = 'status connected';
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const newState = JSON.parse(event.data);
+
+          // Only update if user isn't currently dragging
+          if (!userIsInteracting) {
+            sliderState = newState;
+            updateDisplay();
+          }
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        statusElement.textContent = 'Disconnected - reconnecting...';
+        statusElement.className = 'status disconnected';
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateDisplay() {
+      // Update label and units
+      labelDisplay.textContent = sliderState.label;
+      unitsDisplay.textContent = sliderState.units;
+
+      // Update value display
+      const decimals = sliderState.step >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(sliderState.step)));
+      valueDisplay.textContent = sliderState.value.toFixed(decimals);
+      valueDisplay.style.color = sliderState.color;
+
+      // Update slider attributes
+      sliderElement.min = sliderState.min_val;
+      sliderElement.max = sliderState.max_val;
+      sliderElement.step = sliderState.step || 'any';
+      sliderElement.value = sliderState.value;
+
+      // Update range labels
+      minLabel.textContent = sliderState.min_val.toFixed(decimals);
+      maxLabel.textContent = sliderState.max_val.toFixed(decimals);
+
+      // Update orientation
+      if (sliderState.orientation === 'VERT') {
+        sliderContainer.className = 'vertical';
+      } else {
+        sliderContainer.className = 'horizontal';
+      }
+
+      // Update slider color (track and thumb)
+      const style = document.createElement('style');
+      style.textContent = `
+        input[type="range"]::-webkit-slider-thumb {
+          background: ${sliderState.color};
+          box-shadow: 0 0 10px ${sliderState.color};
+        }
+        input[type="range"]::-moz-range-thumb {
+          background: ${sliderState.color};
+          box-shadow: 0 0 10px ${sliderState.color};
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    function sendValueChange(value) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'value_change',
+          value: parseFloat(value)
+        }));
+      }
+    }
+
+    // Handle slider input
+    sliderElement.addEventListener('input', (e) => {
+      userIsInteracting = true;
+      const value = parseFloat(e.target.value);
+
+      // Update display immediately for responsiveness
+      const decimals = sliderState.step >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(sliderState.step)));
+      valueDisplay.textContent = value.toFixed(decimals);
+
+      // Send to backend
+      sendValueChange(value);
+    });
+
+    sliderElement.addEventListener('change', () => {
+      userIsInteracting = false;
+    });
+
+    sliderElement.addEventListener('mouseup', () => {
+      userIsInteracting = false;
+    });
+
+    sliderElement.addEventListener('touchend', () => {
+      userIsInteracting = false;
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>

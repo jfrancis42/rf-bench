@@ -1,0 +1,49 @@
+panel:
+  name: "Flight Instruments Demo"
+  description: "Analog meter, gauge cluster, text LCD, and line chart"
+
+  grid:
+    columns: 2
+    rows: 2
+    gap: 10px
+
+  instruments:
+    - id: airspeed
+      path: analog-meter/frontend/index.html
+      position: {row: 0, col: 0}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5010
+      mqtt_topic: flight/airspeed
+      config:
+        label: Airspeed
+        units: kts
+        min: 0
+        max: 200
+
+    - id: cluster
+      path: gauge-cluster/frontend/index.html
+      position: {row: 0, col: 1}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5011
+      mqtt_topic: flight/cluster
+
+    - id: lcd
+      path: text-lcd/frontend/index.html
+      position: {row: 1, col: 0}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5012
+      mqtt_topic: flight/lcd
+      config:
+        rows: 4
+        cols: 20
+
+    - id: chart
+      path: line-chart/frontend/index.html
+      position: {row: 1, col: 1}
+      span: {rows: 1, cols: 1}
+      scpi_port: 5013
+      mqtt_topic: flight/chart
+      config:
+        label: "Altitude History"
+        y_min: 0
+        y_max: 10000

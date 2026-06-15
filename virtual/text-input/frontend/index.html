@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Text Input</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #6c9bd1;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 3px solid #2a2a40;
+      border-radius: 12px;
+      padding: 40px 60px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.05);
+      min-width: 500px;
+      max-width: 800px;
+    }
+    #label-display {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    #input-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    #text-input {
+      flex: 1;
+      background: #1a1a2a;
+      border: 2px solid #2a2a40;
+      border-radius: 6px;
+      padding: 12px;
+      color: #00ff88;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 42px;
+    }
+    #text-input:focus {
+      outline: none;
+      border-color: #00ff88;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+    }
+    #send-button {
+      background: linear-gradient(145deg, #00ff88, #00cc66);
+      border: 2px solid #00aa55;
+      border-radius: 6px;
+      padding: 12px 24px;
+      color: #0a0a0f;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.1s ease;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3),
+                  inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.3);
+    }
+    #send-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4),
+                  inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+                  inset 0 2px 4px rgba(255, 255, 255, 0.3);
+    }
+    #send-button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2),
+                  inset 0 2px 6px rgba(0, 0, 0, 0.3),
+                  inset 0 -1px 2px rgba(255, 255, 255, 0.1);
+    }
+    #history-container {
+      border-top: 1px solid #2a2a40;
+      padding-top: 20px;
+    }
+    #history-label {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    #history-list {
+      background: #0a0a15;
+      border: 2px solid #2a2a40;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .history-item {
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      background: #1a1a2a;
+      border-left: 3px solid #00ff88;
+      border-radius: 3px;
+      color: #e0e0e0;
+      font-size: 13px;
+      word-break: break-all;
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+    .history-item:hover {
+      background: #2a2a3a;
+    }
+    .history-item:last-child {
+      margin-bottom: 0;
+    }
+    .info {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+    }
+    .status {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background: #00aa00;
+      color: #fff;
+    }
+    .status.disconnected {
+      background: #aa0000;
+      color: #fff;
+    }
+    #history-list::-webkit-scrollbar {
+      width: 8px;
+    }
+    #history-list::-webkit-scrollbar-track {
+      background: #1a1a2a;
+      border-radius: 4px;
+    }
+    #history-list::-webkit-scrollbar-thumb {
+      background: #2a2a40;
+      border-radius: 4px;
+    }
+    #history-list::-webkit-scrollbar-thumb:hover {
+      background: #3a3a50;
+    }
+  </style>
+</head>
+<body>
+  <div class="status disconnected" id="status">Disconnected</div>
+  <div id="container">
+    <h1>Virtual Text Input</h1>
+    <div id="label-display">Command</div>
+    <div id="input-container">
+      <textarea id="text-input" rows="1" placeholder="Enter command..."></textarea>
+      <button id="send-button">Send</button>
+    </div>
+    <div id="history-container">
+      <div id="history-label">Command History</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+  <div class="info">
+    Type command and press Enter or click Send • Click history item to recall
+  </div>
+
+  <script>
+    'use strict';
+    const WS_URL = `ws://${window.location.hostname}:${window.location.port}/ws`;
+
+    let textState = {
+      last_text: '',
+      history: [],
+      label: 'Command',
+      rows: 1,
+      max_history: 20,
+      placeholder: 'Enter command...'
+    };
+
+    let ws = null;
+    let reconnectInterval = null;
+
+    const textInput = document.getElementById('text-input');
+    const sendButton = document.getElementById('send-button');
+    const labelDisplay = document.getElementById('label-display');
+    const historyList = document.getElementById('history-list');
+    const statusElement = document.getElementById('status');
+
+    function connectWebSocket() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        statusElement.textContent = 'Connected';
+        statusElement.className = 'status connected';
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const newState = JSON.parse(event.data);
+          textState = newState;
+          updateDisplay();
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        statusElement.textContent = 'Disconnected - reconnecting...';
+        statusElement.className = 'status disconnected';
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateDisplay() {
+      // Update label
+      labelDisplay.textContent = textState.label;
+
+      // Update placeholder
+      textInput.placeholder = textState.placeholder;
+
+      // Update rows
+      textInput.rows = textState.rows;
+
+      // Update history list
+      historyList.innerHTML = '';
+      // Show most recent first
+      const reversedHistory = [...textState.history].reverse();
+      reversedHistory.forEach((item, index) => {
+        const historyItem = document.createElement('div');
+        historyItem.className = 'history-item';
+        historyItem.textContent = item;
+        historyItem.title = 'Click to recall';
+        historyItem.addEventListener('click', () => {
+          textInput.value = item;
+          textInput.focus();
+        });
+        historyList.appendChild(historyItem);
+      });
+    }
+
+    function sendText() {
+      const text = textInput.value.trim();
+      if (!text) return;
+
+      console.log('Sending text:', text);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'text_submit',
+          text: text
+        }));
+      }
+
+      // Clear input
+      textInput.value = '';
+      textInput.focus();
+    }
+
+    // Send button click handler
+    sendButton.addEventListener('click', () => {
+      sendText();
+    });
+
+    // Enter key handler (Shift+Enter for newline in multi-row mode)
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendText();
+      }
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>
