@@ -153,6 +153,51 @@ class SPD3303X:
     def _query_float(self, cmd: str) -> float:
         return float(self._query(cmd))
 
+    # ------------------------------------------------------------------ #
+    # Escape hatch — raw SCPI commands                                    #
+    # ------------------------------------------------------------------ #
+
+    def write(self, cmd: str) -> None:
+        """Send raw SCPI command without expecting a response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI command string (newline will be appended automatically)
+
+        Example:
+            >>> psu.write("OUTP CH1,ON")  # Enable CH1 output
+            >>> psu.write("TIMER CH1,10")  # Set 10s timer on CH1
+
+        Warning:
+            Use with caution. Invalid commands may put the instrument in an
+            unexpected state. Consult the SPD3303X programming manual for valid
+            SCPI commands.
+        """
+        self._send(cmd)
+
+    def query(self, cmd: str) -> str:
+        """Send raw SCPI query and return the response.
+
+        This is an "escape hatch" for sending queries not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI query string (should end with '?')
+
+        Returns:
+            Response string from instrument (stripped of whitespace)
+
+        Example:
+            >>> status = psu.query("OUTP? CH1")
+            >>> print(status)
+            'ON'
+
+        Warning:
+            Use with caution. Invalid queries may hang or return unexpected data.
+            Consult the SPD3303X programming manual for valid SCPI queries.
+        """
+        return self._query(cmd)
+
     @staticmethod
     def _validate_channel(channel: int, allow_ch3: bool = True) -> str:
         """Return 'CH1', 'CH2', or 'CH3' after range-checking channel."""

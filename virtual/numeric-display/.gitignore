@@ -1,0 +1,16 @@
+# Analog Digits font packs (licensed, cannot redistribute)
+# Users must download from https://speakthesky.itch.io/
+frontend/fonts/reNix-Regular.woff2
+frontend/fonts/fluoWrite-Regular.woff2
+frontend/fonts/nimoType-Regular.woff2
+frontend/fonts/reLix-Regular.woff2
+frontend/fonts/tEggst-*.woff2
+frontend/fonts/cursiv8-Regular.woff2
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log

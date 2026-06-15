@@ -303,3 +303,34 @@ class FT891:
             return resp.decode(errors="replace").strip()
         except socket.timeout:
             return ""
+
+    # ------------------------------------------------------------------ #
+    # Escape hatch — raw Hamlib commands                                 #
+    # ------------------------------------------------------------------ #
+
+    def raw_command(self, cmd: str) -> str:
+        """Send raw command to Hamlib rigctld and return the response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: Hamlib command (single letter or long form)
+
+        Returns:
+            Response from rigctld (may be multi-line)
+
+        Examples:
+            >>> # Single-letter commands
+            >>> freq = radio.raw_command("f")  # Get frequency
+            >>> radio.raw_command("F 7200000")  # Set frequency
+
+            >>> # Long-form commands (backslash prefix)
+            >>> info = radio.raw_command("\\dump_state")
+            >>> radio.raw_command("\\set_level PREAMP 1")  # Preamp on
+
+        Warning:
+            Use with caution. Invalid commands may put rigctld or the radio in an
+            unexpected state. Consult the Hamlib documentation for valid commands:
+            https://hamlib.sourceforge.net/manpages/4.5/rigctld.8.html
+        """
+        return self._cmd(cmd)

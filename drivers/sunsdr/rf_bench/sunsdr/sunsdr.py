@@ -541,7 +541,23 @@ class SunSDR:
             }
 
     def send_raw(self, command: str) -> None:
-        """Send an arbitrary TCI command string (advanced / diagnostic use)."""
+        """Send raw TCI command to SunSDR/ExpertSDR3 WebSocket.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            command: TCI command string (semicolon will be appended if missing)
+
+        Examples:
+            >>> sdr.send_raw("RX_MUTE:0,true;")  # Mute receiver
+            >>> sdr.send_raw("CW_MACROS_SPEED:25")  # Set CW speed
+            >>> sdr.send_raw("DRIVE:0,50")  # Set TX drive level
+
+        Warning:
+            Use with caution. Invalid commands may put the radio in an
+            unexpected state. Consult the TCI 2.0 protocol specification:
+            https://github.com/ExpertSDR3/TCI
+        """
         self._send(command)
 
     # ── radio control — frequency ─────────────────────────────────────────────

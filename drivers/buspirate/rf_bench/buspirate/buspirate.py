@@ -752,6 +752,37 @@ class BusPirate:
                 f"Must be in {required!r} mode (currently {self._mode!r})."
             )
 
+    # ── escape hatch — raw command access ────────────────────────────────────
+
+    def raw_command(self, data: bytes) -> bytes:
+        """Send raw binary command to Bus Pirate and return response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            data: Raw bytes to send
+
+        Returns:
+            Raw bytes received from Bus Pirate
+
+        Example:
+            >>> # Send raw BBIO command (v3/v4)
+            >>> resp = bp.raw_command(b'\x01')  # Enter binary mode
+            >>> print(resp)
+            b'BBIO1'
+
+        Warning:
+            Use with extreme caution. Invalid binary commands can brick the
+            Bus Pirate or leave it in an unrecoverable state. This bypasses
+            all driver state tracking. Consult the Bus Pirate binary protocol
+            documentation:
+            - v3/v4: http://dangerousprototypes.com/docs/Bitbang
+            - v5: https://github.com/BusPirate/BusPirate5-firmware
+        """
+        self._ser.write(data)
+        time.sleep(0.05)
+        return self._ser.read(self._ser.in_waiting or 1)
+
     # ── identification ────────────────────────────────────────────────────────
 
     def identify(self) -> str:

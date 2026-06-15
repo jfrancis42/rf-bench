@@ -15,6 +15,18 @@
       font-weight: normal;
       font-style: normal;
     }
+    @font-face {
+      font-family: 'reNix';
+      src: url('fonts/reNix-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'fluoWrite';
+      src: url('fonts/fluoWrite-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
@@ -113,9 +125,10 @@
       color: rgba(255, 0, 0, 0.12);
     }
     #display-value.nixie {
-      font-family: 'Nixie One', 'Times New Roman', serif;
+      font-family: 'reNix', 'Nixie One', 'Times New Roman', serif;
       font-weight: 400;
       letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
       background: radial-gradient(ellipse at center, rgba(40, 20, 10, 0.8) 0%, rgba(20, 10, 5, 0.9) 70%, rgba(0, 0, 0, 0.95) 100%);
       padding: 30px 120px;
       border-radius: 6px;
@@ -131,6 +144,27 @@
     }
     #display-value.nixie #display-background {
       color: rgba(255, 136, 51, 0.08);
+    }
+    #display-value.vfd {
+      font-family: 'fluoWrite', 'Courier New', monospace;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      font-variant-numeric: tabular-nums;
+      background: linear-gradient(135deg, #001a1a 0%, #002222 50%, #001a1a 100%);
+      padding: 30px 120px;
+      border-radius: 4px;
+      border: 2px solid #003333;
+      box-shadow: inset 0 0 30px rgba(0, 255, 255, 0.1),
+                  0 0 15px rgba(0, 255, 255, 0.15);
+    }
+    #display-value.vfd #display-foreground {
+      color: #00ffcc;
+      text-shadow: 0 0 12px #00ffcc,
+                   0 0 25px #00ddaa,
+                   0 0 40px rgba(0, 255, 204, 0.3);
+    }
+    #display-value.vfd #display-background {
+      color: rgba(0, 255, 204, 0.06);
     }
     #display-units {
       font-size: 24px;
@@ -251,6 +285,8 @@
         valueElement.className = 'led';
       } else if (style === 'NIXIE') {
         valueElement.className = 'nixie';
+      } else if (style === 'VFD') {
+        valueElement.className = 'vfd';
       } else {
         valueElement.className = 'seven-segment';
       }

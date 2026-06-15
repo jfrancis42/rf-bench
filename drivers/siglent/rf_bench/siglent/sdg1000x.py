@@ -254,3 +254,49 @@ class SDG1000X:
             return data.decode(errors="replace").strip()
         except socket.timeout:
             return ""
+
+    # ------------------------------------------------------------------ #
+    # Escape hatch — raw SCPI commands                                    #
+    # ------------------------------------------------------------------ #
+
+    def write(self, cmd: str) -> None:
+        """Send raw SCPI command without expecting a response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI command string (newline will be appended automatically)
+
+        Example:
+            >>> sdg.write("OUTP CH1,LOAD,50")  # Set output load to 50 ohm
+            >>> sdg.write("BTWV CARR,SINE")  # Set carrier waveform
+
+        Warning:
+            Use with caution. Invalid commands may put the instrument in an
+            unexpected state. Consult the SDG1000X programming manual for valid
+            SCPI commands.
+        """
+        self._sock.sendall((cmd + "\n").encode())
+        time.sleep(0.05)
+
+    def query(self, cmd: str) -> str:
+        """Send raw SCPI query and return the response.
+
+        This is an "escape hatch" for sending queries not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI query string (should end with '?')
+
+        Returns:
+            Response string from instrument (stripped of whitespace)
+
+        Example:
+            >>> load = sdg.query("C1:OUTP? LOAD")
+            >>> print(load)
+            'LOAD,50OHM'
+
+        Warning:
+            Use with caution. Invalid queries may hang or return unexpected data.
+            Consult the SDG1000X programming manual for valid SCPI queries.
+        """
+        return self._query(cmd)

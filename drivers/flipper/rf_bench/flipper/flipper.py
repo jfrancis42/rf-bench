@@ -286,6 +286,40 @@ class FlipperZero:
         return "\n".join(lines).strip()
 
     # ------------------------------------------------------------------
+    # Escape hatch — raw CLI commands                                     #
+    # ------------------------------------------------------------------
+
+    def raw_command(self, cmd: str, timeout: float = 2.0) -> str:
+        """Send raw CLI command to Flipper Zero and return the response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: CLI command string
+            timeout: Response timeout in seconds
+
+        Returns:
+            Response text (command echo and prompt stripped)
+
+        Example:
+            >>> # Query GPIO state
+            >>> resp = fz.raw_command("gpio read PA7")
+            >>> print(resp)
+            'high'
+
+            >>> # Power management
+            >>> info = fz.raw_command("power info")
+
+        Warning:
+            Use with caution. Invalid commands may leave the Flipper in an
+            unexpected state. Some commands may require specific modes (CLI vs RPC).
+            Consult the Flipper Zero firmware CLI documentation:
+            https://docs.flipper.net/development/cli
+        """
+        self._ensure_cli()
+        return self._cli_send(cmd, timeout=timeout)
+
+    # ------------------------------------------------------------------
     # Internal — RPC mode
     # ------------------------------------------------------------------
 

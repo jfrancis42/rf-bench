@@ -272,6 +272,30 @@ class KiwiSDR:
         except _websocket.WebSocketException as exc:
             raise KiwiSDRError(f"WebSocket receive failed: {exc}") from exc
 
+    # ------------------------------------------------------------------
+    # Escape hatch — raw WebSocket commands                              #
+    # ------------------------------------------------------------------
+
+    def send_command(self, cmd: str) -> None:
+        """Send raw text command to KiwiSDR WebSocket.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: Text command string
+
+        Example:
+            >>> kiwi.send_command("SET zoom=14 cf=14200")
+            >>> kiwi.send_command("SET ident_user=rf-bench")
+
+        Warning:
+            Use with caution. Invalid commands may put the KiwiSDR in an
+            unexpected state or break the WebSocket connection. Consult the
+            KiwiSDR firmware WebSocket API documentation (see extensions/
+            directory in the KiwiSDR firmware source).
+        """
+        self._ws_send(cmd)
+
     def _drain_text_msgs(self, deadline: float) -> None:
         """Receive and discard text MSG frames until a binary frame arrives or deadline."""
         while time.monotonic() < deadline:

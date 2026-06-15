@@ -763,6 +763,51 @@ class SDS2000X:
                 break
         return buf.decode(errors="replace")
 
+    # ------------------------------------------------------------------ #
+    # Escape hatch — raw SCPI commands                                    #
+    # ------------------------------------------------------------------ #
+
+    def write(self, cmd: str) -> None:
+        """Send raw SCPI command without expecting a response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI command string (newline will be appended automatically)
+
+        Example:
+            >>> scope.write("TRMD AUTO")  # Set trigger mode to AUTO
+            >>> scope.write("BUZZ BEEP")  # Beep the instrument
+
+        Warning:
+            Use with caution. Invalid commands may put the instrument in an
+            unexpected state. Consult the SDS2000X programming manual for valid
+            SCPI commands.
+        """
+        self._send(cmd)
+
+    def query(self, cmd: str) -> str:
+        """Send raw SCPI query and return the response.
+
+        This is an "escape hatch" for sending queries not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI query string (should end with '?')
+
+        Returns:
+            Response string from instrument (stripped of whitespace)
+
+        Example:
+            >>> trig = scope.query("TRMD?")  # Query trigger mode
+            >>> print(trig)
+            'AUTO'
+
+        Warning:
+            Use with caution. Invalid queries may hang or return unexpected data.
+            Consult the SDS2000X programming manual for valid SCPI queries.
+        """
+        return self._query(cmd)
+
     def _read_binary_block(self, cmd: str) -> bytes:
         """
         Send cmd and receive an IEEE 488.2 binary block response.

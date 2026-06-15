@@ -1,19 +1,30 @@
 # Virtual Numeric Display
 
-✅ **Status: Tested 2026-06-14** — SCPI commands, WebSocket updates, all three styles (7SEG/LED/NIXIE), precision/units/color/size verified
+✅ **Status: Tested 2026-06-15** — SCPI commands, WebSocket updates, all five styles (7SEG/LED/PLAIN/NIXIE/VFD), precision/units/color/size verified
 
-SCPI-controlled numeric display with configurable precision, units, font size, color, and style. Web-based display with 7-segment LCD or plain text rendering.
+SCPI-controlled numeric display with configurable precision, units, font size, color, and style. Web-based display with multiple rendering styles including Nixie tubes and VFD displays.
 
 ## Features
 
 - **SCPI TCP server** on port 5025 (IEEE 488.2 standard)
 - **WebSocket real-time updates** for instant value changes
-- **Two display styles**: 7-segment LCD (classic) or plain text (modern)
+- **Five display styles**: 7-segment LCD, LED, Plain text, Nixie tube, VFD
+- **Fixed-width vintage fonts** for Nixie and VFD styles
 - **Configurable precision** (0-6 decimal places)
 - **Configurable font size** (20-120 pixels)
 - **Configurable color** with glow effect
 - **Units display** below main value
 - **Auto-reconnect** on WebSocket disconnect
+
+## Font Installation (Required for Nixie & VFD)
+
+**IMPORTANT:** Nixie and VFD styles require the Analog Digits font packs, which cannot be redistributed due to licensing. Run the installer to download and install them:
+
+```bash
+python3 install_fonts.py
+```
+
+See [FONTS.md](FONTS.md) for detailed installation instructions.
 
 ## Quick Start
 

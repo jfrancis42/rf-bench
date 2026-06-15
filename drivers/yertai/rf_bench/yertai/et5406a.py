@@ -107,6 +107,48 @@ class ET5406A:
                 f"fw={self.firmware!r}, hw={self.hardware!r})")
 
     # ------------------------------------------------------------------
+    # Escape hatch — raw serial commands
+    # ------------------------------------------------------------------
+
+    def write(self, cmd: str) -> None:
+        """Send raw command to the load without expecting a response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: Command string (will be sent as-is to the serial port)
+
+        Example:
+            >>> load.write(":SYST:BEEP")
+
+        Warning:
+            Use with caution. Invalid commands may put the instrument in an
+            unexpected state. Consult the ET5406A+ programming manual for valid
+            commands.
+        """
+        self._inst.write(cmd)
+
+    def query(self, cmd: str) -> str:
+        """Send raw query to the load and return the response.
+
+        This is an "escape hatch" for sending queries not yet wrapped by the driver.
+
+        Args:
+            cmd: Query string (should typically end with '?')
+
+        Returns:
+            Response string from instrument
+
+        Example:
+            >>> model = load.query(":SYST:VERS?")
+
+        Warning:
+            Use with caution. Invalid queries may hang or return unexpected data.
+            Consult the ET5406A+ programming manual for valid commands.
+        """
+        return self._inst.query(cmd)
+
+    # ------------------------------------------------------------------
     # Utility commands
     # ------------------------------------------------------------------
 

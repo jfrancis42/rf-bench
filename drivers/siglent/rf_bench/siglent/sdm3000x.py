@@ -160,6 +160,51 @@ class SDM3000X:
         return float(self._query(cmd))
 
     # ------------------------------------------------------------------ #
+    # Escape hatch — raw SCPI commands                                    #
+    # ------------------------------------------------------------------ #
+
+    def write(self, cmd: str) -> None:
+        """Send raw SCPI command without expecting a response.
+
+        This is an "escape hatch" for sending commands not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI command string (newline will be appended automatically)
+
+        Example:
+            >>> dmm.write("SYST:BEEP")  # Beep the instrument
+            >>> dmm.write("DISP:TEXT 'HELLO'")  # Display text (if supported)
+
+        Warning:
+            Use with caution. Invalid commands may put the instrument in an
+            unexpected state. Consult the SDM3000X programming manual for valid
+            SCPI commands.
+        """
+        self._send(cmd)
+
+    def query(self, cmd: str) -> str:
+        """Send raw SCPI query and return the response.
+
+        This is an "escape hatch" for sending queries not yet wrapped by the driver.
+
+        Args:
+            cmd: SCPI query string (should end with '?')
+
+        Returns:
+            Response string from instrument (stripped of whitespace)
+
+        Example:
+            >>> resp = dmm.query("SYST:VERS?")  # Query SCPI version
+            >>> print(resp)
+            '1995.0'
+
+        Warning:
+            Use with caution. Invalid queries may hang or return unexpected data.
+            Consult the SDM3000X programming manual for valid SCPI queries.
+        """
+        return self._query(cmd)
+
+    # ------------------------------------------------------------------ #
     # Helpers                                                               #
     # ------------------------------------------------------------------ #
 

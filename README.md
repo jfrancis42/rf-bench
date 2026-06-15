@@ -2152,3 +2152,67 @@ output format. The HP 8712B gives R + jX so the engineer knows whether the anten
 inductive or capacitive at each frequency, enabling direct matching network design.
 
 **Requires:** `rf-bench-drivers-hp`, HP 8712B, SOLT calibration standard set.
+
+---
+
+## Credits and Third-Party Assets
+
+### Analog Digits Font Packs
+
+The Virtual Numeric Display instrument supports **Nixie tube** and **VFD (Vacuum Fluorescent Display)** rendering styles using the Analog Digits font packs by **SpeakTheSky**.
+
+**Font Creator:** SpeakTheSky  
+**Download:** https://speakthesky.itch.io/  
+**License:** Commercial use allowed; redistribution of font files not permitted
+
+**Fonts used:**
+- **reNix** (Nixie tube style) — from Analog Digits Pack v1.1
+- **fluoWrite** (VFD style) — from Analog Digits Pack v1.1
+
+### Dot Matrix Font
+
+The Virtual Text LCD instrument uses the **Dot Matrix** font by **Moonbase Press** for authentic dot-matrix LCD display rendering.
+
+**Font Creator:** Moonbase Press  
+**Download:** http://www.pickafont.com/fonts/dot-matrix  
+**License:** Free to use; check pickafont.com for full terms
+
+**Font used:**
+- **DotMatrix.TTF** — Classic dot-matrix LCD style
+
+Due to licensing restrictions, these fonts cannot be redistributed with this application. Users must download them directly from the original sources (free).
+
+**Installation:**
+
+```bash
+cd virtual
+python3 install_fonts.py
+```
+
+The installer will guide you through downloading the font packs and extracting them to the correct locations. See `virtual/numeric-display/FONTS.md` for detailed instructions.
+
+**Windows users:**
+```cmd
+cd virtual
+python install_fonts.py
+```
+
+After installation, the following display styles become available:
+
+- `CONF:STYLE NIXIE` — Orange Nixie tube glow with fixed-width reNix font
+- `CONF:STYLE VFD` — Cyan VFD glow with fixed-width fluoWrite font
+
+Built-in styles (no installation needed):
+- `CONF:STYLE 7SEG` — Green 7-segment LCD (DSEG7 font)
+- `CONF:STYLE LED` — Red LED display (DSEG7 font)
+- `CONF:STYLE PLAIN` — Modern sans-serif (Orbitron font)
+
+**Usage example:**
+```python
+from rf_bench.virtual import VirtualNumericDisplay
+
+display = VirtualNumericDisplay("localhost", port=5000)
+display.set_style("NIXIE")  # Requires font installation
+display.set_color("#ff6600")
+display.set_value(13.8)
+```

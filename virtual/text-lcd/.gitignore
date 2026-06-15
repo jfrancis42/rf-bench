@@ -1,0 +1,11 @@
+# Dot Matrix font (from pickafont.com, cannot redistribute)
+# Users must download from http://www.pickafont.com/fonts/dot-matrix
+frontend/DotMatrix.TTF
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log

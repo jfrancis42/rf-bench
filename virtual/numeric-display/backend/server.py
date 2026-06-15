@@ -24,7 +24,7 @@ SCPI Commands:
   CONF:SIZE?               → Query font size
   CONF:COL <color>         → Set text color (hex, e.g., "#00ff00")
   CONF:COL?                → Query text color
-  CONF:STYLE <string>      → Set display style: "7SEG", "PLAIN", "LED", or "NIXIE" (default 7SEG)
+  CONF:STYLE <string>      → Set display style: "7SEG", "PLAIN", "LED", "NIXIE", or "VFD" (default 7SEG)
   CONF:STYLE?              → Query display style
   MQTT:CONF <host>,<topic> → Configure MQTT broker and topic to subscribe
   MQTT:CONF?               → Query MQTT configuration
@@ -73,7 +73,7 @@ class NumericDisplayState:
         self.units: str = ""
         self.font_size: int = 80          # Pixels (20-120)
         self.color: str = "#00ff00"       # Hex color
-        self.style: str = "7SEG"          # "7SEG", "PLAIN", "LED", "NIXIE"
+        self.style: str = "7SEG"          # "7SEG", "PLAIN", "LED", "NIXIE", "VFD"
         self.error_queue: List[str] = []
         # MQTT configuration
         self.mqtt_host: Optional[str] = None
@@ -165,10 +165,18 @@ frontend_build = Path(__file__).parent.parent / "frontend" / "build"
 if frontend_build.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_build)), name="static")
 
-# Mount fonts directory
-frontend_fonts = Path(__file__).parent.parent / "frontend" / "fonts-DSEG_v046"
+# Mount fonts directories
+frontend_fonts_dseg = Path(__file__).parent.parent / "frontend" / "fonts-DSEG_v046"
+if frontend_fonts_dseg.exists():
+    app.mount("/fonts-DSEG_v046", StaticFiles(directory=str(frontend_fonts_dseg)), name="fonts-dseg")
+    print(f"Mounted DSEG fonts from: {frontend_fonts_dseg}")
+
+frontend_fonts = Path(__file__).parent.parent / "frontend" / "fonts"
 if frontend_fonts.exists():
-    app.mount("/fonts-DSEG_v046", StaticFiles(directory=str(frontend_fonts)), name="fonts")
+    app.mount("/fonts", StaticFiles(directory=str(frontend_fonts)), name="fonts-analog")
+    print(f"Mounted analog fonts from: {frontend_fonts}")
+else:
+    print(f"WARNING: Fonts directory not found at: {frontend_fonts}")
 
 
 # ==============================================================================
@@ -394,12 +402,12 @@ class SCPIServer:
             else:
                 try:
                     style = cmd.split()[1].strip('"').upper()
-                    if style in ["7SEG", "PLAIN", "LED", "NIXIE"]:
+                    if style in ["7SEG", "PLAIN", "LED", "NIXIE", "VFD"]:
                         state.style = style
                         asyncio.create_task(broadcast_state())
                         return None
                     else:
-                        state.error_queue.append("-222,Style must be 7SEG, PLAIN, LED, or NIXIE")
+                        state.error_queue.append("-222,Style must be 7SEG, PLAIN, LED, NIXIE, or VFD")
                         return None
                 except IndexError:
                     state.error_queue.append("-222,Missing parameter")
