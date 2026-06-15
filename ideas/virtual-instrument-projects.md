@@ -1,24 +1,36 @@
 # Virtual Instrument Integration Projects
 
-**Phase 1 Status:** ✅ **COMPLETE** — All 8 virtual instruments built and tested with Python drivers
+**Virtual Instruments Status:** 15 built, 8 with complete Python drivers
 
-**Built instruments:**
-- Analog meter (270° arc, spring-damper physics)
-- LED indicator (on/off/blink, custom colors)
-- 7-segment numeric display (DSEG7 font)
-- Bar graph / level meter (colored zones)
-- Rotary knob control
-- Linear slider control
-- Momentary push button
-- Toggle switch
+**COMPLETE (backend + frontend + Python driver):** 8 instruments
+1. ✅ Analog meter (270° arc, spring-damper physics)
+2. ✅ LED indicator (on/off/blink, custom colors)
+3. ✅ 7-segment numeric display (DSEG7 font)
+4. ✅ Bar graph / level meter (colored zones)
+5. ✅ Rotary knob control
+6. ✅ Linear slider control
+7. ✅ Momentary push button
+8. ✅ Toggle switch
 
-**BenchView:** ✅ Multi-instrument panel manager with iframe grid, HTTP/WebSocket proxy, dynamic port assignment
+**BUILT (backend + frontend, need Python drivers):** 7 instruments
+9. 🔧 Line chart (time-series data, multiple traces, auto-scaling)
+10. 🔧 XY plot (2D scatter, parametric curves, zoom/pan)
+11. 🔧 Waterfall display (spectrum history, frequency vs time)
+12. 🔧 Text LCD (multi-line text display, scrolling)
+13. 🔧 Text input (interactive parameter entry)
+14. 🔧 Gauge cluster (multi-meter dashboard layout)
+15. 🔧 Compass (directional indicator, 0-360°)
 
-**Drivers:** ✅ Complete Python SCPI-over-TCP libraries for all 8 instruments (`rf_bench.virtual` namespace)
+**NOT YET BUILT (mentioned in project ideas below):**
+- 💭 Map widget (GPS track overlay with maps.n0gq.org integration)
+- 💭 Smith chart (complex impedance visualization for antenna tuning)
+- 💭 GPS status display (comprehensive gpsd telemetry: lat/lon/alt/speed/course/HDOP/satellites/DOP/time/error)
 
-**Backend:** ✅ FastAPI servers with SCPI TCP (port 5025), WebSocket, multi-instance support (1-4 sub-instruments, 1-based indexing)
-
-**Frontend:** ✅ HTML5 Canvas + WebSocket, real-time updates, no build step required
+**Infrastructure:**
+- ✅ BenchView: Multi-instrument panel manager with iframe grid, HTTP/WebSocket proxy, dynamic port assignment
+- ✅ Python drivers: Complete SCPI-over-TCP libraries for all 8 built instruments (`rf_bench.virtual` namespace)
+- ✅ Backend pattern: FastAPI + SCPI TCP (port 5025) + WebSocket, multi-instance (1-4 sub-instruments, 1-based indexing)
+- ✅ Frontend pattern: HTML5 Canvas + WebSocket, real-time updates, no build step required
 
 ---
 

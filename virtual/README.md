@@ -2,20 +2,35 @@
 
 Web-based virtual instruments with SCPI-over-TCP backends for RF bench automation. All instruments feature HTML5 Canvas frontends, FastAPI/WebSocket backends, and complete Python driver libraries.
 
-## Status: Phase 1 Complete ✅
+## Status: 15 Instruments Built, 8 with Complete Drivers
 
-All 8 core virtual instruments are **built, tested, and documented**:
+**COMPLETE (backend + frontend + Python driver):** 8 instruments
+1. ✅ **Analog Meter** — 270° arc sweep, spring-damper needle physics, colored zones
+2. ✅ **LED Indicator** — On/off/blink states, customizable colors, CSS glow effects
+3. ✅ **7-Segment Display** — DSEG7 LED font, configurable precision and units
+4. ✅ **Bar Graph** — Vertical level meter with colored zones (green/yellow/red)
+5. ✅ **Rotary Knob** — Rotation animation with min/max range and label
+6. ✅ **Linear Slider** — Smooth motion with value display and units
+7. ✅ **Push Button** — Momentary press animation with label
+8. ✅ **Toggle Switch** — Flip animation with on/off states
 
-1. **Analog Meter** — 270° arc sweep, spring-damper needle physics, colored zones
-2. **LED Indicator** — On/off/blink states, customizable colors, CSS glow effects
-3. **7-Segment Display** — DSEG7 LED font, configurable precision and units
-4. **Bar Graph** — Vertical level meter with colored zones (green/yellow/red)
-5. **Rotary Knob** — Rotation animation with min/max range and label
-6. **Linear Slider** — Smooth motion with value display and units
-7. **Push Button** — Momentary press animation with label
-8. **Toggle Switch** — Flip animation with on/off states
+**BUILT (backend + frontend, need Python drivers):** 7 instruments
+9. 🔧 **Line Chart** — Time-series scrolling chart, multiple traces, auto-scaling, threshold zones
+10. 🔧 **XY Plot** — 2D scatter plot, parametric curves, zoom/pan, grid overlay
+11. 🔧 **Waterfall** — Spectrum history display, frequency vs time heatmap
+12. 🔧 **Text LCD** — Multi-line text display with scrolling and word wrap
+13. 🔧 **Text Input** — Interactive parameter entry with validation
+14. 🔧 **Gauge Cluster** — Multi-meter dashboard (V/I/P triplets, battery cells)
+15. 🔧 **Compass** — Directional indicator (0-360°) for satellite/antenna tracking
 
-**Plus:** **BenchView** multi-instrument panel manager with YAML config, iframe grid layout, HTTP/WebSocket proxy, and dynamic port assignment.
+**Infrastructure:**
+- ✅ **BenchView** — Multi-instrument panel manager with YAML config, iframe grid, HTTP/WebSocket proxy
+- ✅ **Python drivers** — Complete for 8 instruments, need to create for 7 more
+
+**Still needed (from integration project requirements):**
+- 💭 Map widget (GPS track overlay with maps.n0gq.org integration)
+- 💭 Smith chart (complex impedance visualization for antenna tuning)
+- 💭 GPS status display (comprehensive gpsd telemetry dashboard)
 
 ## Quick Start
 
