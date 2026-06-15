@@ -284,7 +284,7 @@
 
       console.log('Sending text:', text);
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({
           type: 'text_submit',
           text: text
