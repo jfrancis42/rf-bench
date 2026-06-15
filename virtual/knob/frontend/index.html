@@ -249,7 +249,7 @@
     }
 
     function sendValueChange(value) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({
           type: 'value_change',
           value: parseFloat(value)

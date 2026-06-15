@@ -135,7 +135,7 @@
       updateDisplay(index);
 
       // Send to backend
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({index, state: toggles[index].state}));
       }
     }

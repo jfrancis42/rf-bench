@@ -125,7 +125,7 @@
       buttons[index].pressed = true;
       updateDisplay(index);
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({index, pressed: true}));
       }
     }
@@ -134,7 +134,7 @@
       buttons[index].pressed = false;
       updateDisplay(index);
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({index, pressed: false}));
       }
     }

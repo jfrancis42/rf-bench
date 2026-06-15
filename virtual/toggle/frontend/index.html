@@ -266,7 +266,7 @@
     }
 
     function sendStateChange(state) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({
           type: 'state_change',
           state: state

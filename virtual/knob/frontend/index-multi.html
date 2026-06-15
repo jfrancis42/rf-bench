@@ -139,7 +139,7 @@
       updateDisplay(dragging.index);
 
       // Send to backend
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === 1) {
         ws.send(JSON.dumps({index: dragging.index, value: knob.value}));
       }
     }
