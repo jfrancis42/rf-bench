@@ -2,6 +2,7 @@
 
 import os
 import socket
+import subprocess
 import importlib
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -51,13 +52,43 @@ class Inventory:
         # No inventory found - return default location for creation
         return str(Path.home() / '.rf-bench' / 'inventory.yaml')
 
+    def _load_benchview_overlays(self) -> Dict[str, Any]:
+        """Load BenchView port assignment overlays.
+
+        BenchView writes *_ports.yaml files when launching virtual instruments.
+        These files contain dynamic port assignments that override inventory defaults.
+
+        Returns:
+            Dict of overlays (instrument name -> overlay data)
+        """
+        overlays = {}
+        benchview_dir = Path.home() / '.rf-bench'
+
+        if not benchview_dir.exists():
+            return overlays
+
+        # Find all *_ports.yaml files
+        for overlay_file in benchview_dir.glob('*_ports.yaml'):
+            try:
+                with open(overlay_file) as f:
+                    data = yaml.safe_load(f)
+
+                # BenchView format: {panel: "name", instruments: {name: {connection: {...}}}}
+                if 'instruments' in data:
+                    for inst_name, inst_data in data['instruments'].items():
+                        overlays[inst_name] = inst_data
+            except Exception as e:
+                print(f"Warning: Failed to load BenchView overlay {overlay_file}: {e}")
+
+        return overlays
+
     def _load(self) -> Dict[str, Any]:
-        """Load YAML inventory file."""
+        """Load YAML inventory file and merge BenchView overlays."""
         path = Path(self.path)
 
         if not path.exists():
             # Start with empty inventory
-            return {
+            data = {
                 'version': 1,
                 'instruments': {},
                 'aliases': {},
@@ -68,9 +99,23 @@ class Inventory:
                     'auto_save_discovered': 'prompt',
                 }
             }
+        else:
+            with open(path) as f:
+                data = yaml.safe_load(f) or {}
 
-        with open(path) as f:
-            return yaml.safe_load(f) or {}
+        # Load and merge BenchView overlays
+        overlays = self._load_benchview_overlays()
+        if overlays:
+            for inst_name, overlay_data in overlays.items():
+                if inst_name in data.get('instruments', {}):
+                    # Merge overlay connection data with existing instrument
+                    if 'connection' in overlay_data:
+                        data['instruments'][inst_name]['connection'].update(overlay_data['connection'])
+                else:
+                    # Add new instrument from overlay
+                    data.setdefault('instruments', {})[inst_name] = overlay_data
+
+        return data
 
     def save(self):
         """Save inventory to YAML file."""
@@ -219,20 +264,42 @@ class Inventory:
             params['host'] = kwargs.get('host', conn.get('host', 'localhost'))
             params['port'] = kwargs.get('port', conn.get('port', 4532))
         elif protocol == 'serial':
-            # Serial instruments typically need host SSH + device path
-            # For now, just pass device if local, otherwise raise
+            # Serial instruments: local or remote via SSH tunnel
             host = conn.get('host', 'localhost')
+            device = kwargs.get('device', conn.get('device'))
+            baud = kwargs.get('baud', conn.get('baud', 115200))
+
             if host in ['localhost', '127.0.0.1']:
-                params['port'] = kwargs.get('port', conn.get('device'))
+                # Local serial - pass device path directly
+                params['port'] = device
+                if 'baud' in conn:
+                    params['baud'] = baud
             else:
-                raise NotImplementedError(
-                    f"Remote serial not yet supported for {name} on {host}. "
-                    "TODO: SSH tunnel support (Phase 2)"
-                )
+                # Remote serial - check if SSH tunnel requested
+                if conn.get('ssh_tunnel', False):
+                    # Create SSH tunnel for remote serial device
+                    local_port = self._create_ssh_serial_tunnel(host, device)
+                    params['port'] = f'socket://localhost:{local_port}'
+                    if 'baud' in conn:
+                        params['baud'] = baud
+                else:
+                    raise NotImplementedError(
+                        f"Remote serial for {name} on {host} requires ssh_tunnel: true in inventory"
+                    )
         elif protocol == 'libusb':
-            # RTL-SDR and similar
-            params['device_index'] = kwargs.get('device_index', conn.get('device_index', 0))
-            params['serial'] = kwargs.get('serial', conn.get('serial'))
+            # RTL-SDR and similar USB devices
+            # Try serial number first, fall back to device_index
+            serial = kwargs.get('serial', conn.get('serial'))
+            if serial:
+                params['serial'] = serial
+            else:
+                params['device_index'] = kwargs.get('device_index', conn.get('device_index', 0))
+
+            # Pass through optional parameters
+            if 'ppm_correction' in conn:
+                params['ppm_correction'] = conn['ppm_correction']
+            if 'gain' in conn:
+                params['gain'] = conn['gain']
         elif protocol in ['websocket', 'websocket-tci']:
             params['host'] = kwargs.get('host', conn.get('host'))
             params['port'] = kwargs.get('port', conn.get('port'))
@@ -348,6 +415,118 @@ class Inventory:
                 pass
 
         return None
+
+    def _create_ssh_serial_tunnel(self, host: str, device: str) -> int:
+        """Create SSH tunnel for remote serial device.
+
+        Uses ser2net or socat on the remote host to expose the serial device.
+
+        Args:
+            host: Remote host (IP or hostname)
+            device: Serial device path on remote (e.g., /dev/ttyUSB0)
+
+        Returns:
+            Local port number where tunnel is listening
+
+        Note:
+            This is a simple implementation. For production use, consider:
+            - Connection pooling (reuse existing tunnels)
+            - Health monitoring
+            - Automatic cleanup on disconnect
+        """
+        # Find available local port
+        with socket.socket() as s:
+            s.bind(('', 0))
+            local_port = s.getsockname()[1]
+
+        # TODO: Implement SSH tunnel with socat/ser2net
+        # For now, raise not implemented
+        raise NotImplementedError(
+            f"SSH serial tunnel not yet implemented. "
+            f"To use remote serial device {device} on {host}:\n"
+            f"1. On {host}: socat TCP-LISTEN:9999,reuseaddr,fork FILE:{device},b115200,raw\n"
+            f"2. Create SSH tunnel: ssh -L {local_port}:localhost:9999 {host}\n"
+            f"3. Use 'host: localhost' and 'device: socket://localhost:{local_port}' in inventory"
+        )
+
+    def _discover_usb_serial(self) -> List[Dict[str, Any]]:
+        """Discover USB serial devices on local system.
+
+        Returns:
+            List of discovered device dicts with path, serial, vendor info
+        """
+        devices = []
+
+        try:
+            # Try pyserial.tools.list_ports first
+            import serial.tools.list_ports
+            for port in serial.tools.list_ports.comports():
+                devices.append({
+                    'device': port.device,
+                    'serial': port.serial_number,
+                    'vendor': port.manufacturer,
+                    'product': port.product,
+                    'vid': f"0x{port.vid:04x}" if port.vid else None,
+                    'pid': f"0x{port.pid:04x}" if port.pid else None,
+                })
+        except ImportError:
+            pass
+
+        return devices
+
+    def _discover_rtlsdr(self) -> List[Dict[str, Any]]:
+        """Discover RTL-SDR devices via librtlsdr.
+
+        Returns:
+            List of discovered RTL-SDR dicts with index and serial
+        """
+        devices = []
+
+        try:
+            from rtlsdr import RtlSdr
+            # Try to open each device index until we fail
+            for idx in range(32):  # Arbitrary upper limit
+                try:
+                    sdr = RtlSdr(idx)
+                    devices.append({
+                        'device_index': idx,
+                        'serial': sdr.get_serial(),
+                        'gain_values': sdr.get_gains(),
+                        'sample_rates': [225000, 900000, 1024000, 1800000, 1920000, 2400000, 2800000, 3200000],
+                    })
+                    sdr.close()
+                except:
+                    break  # No more devices
+        except ImportError:
+            pass
+
+        return devices
+
+    def discover_all(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Run all discovery methods and return results.
+
+        Returns:
+            Dict with keys 'network', 'usb_serial', 'rtlsdr', each containing list of devices
+        """
+        results = {
+            'network': [],
+            'usb_serial': [],
+            'rtlsdr': [],
+        }
+
+        # Network SCPI devices
+        for port in [5025, 4532]:
+            discovered = self._discover_scpi(port)
+            if discovered:
+                results['network'].append(discovered)
+
+        # USB serial devices
+        results['usb_serial'] = self._discover_usb_serial()
+
+        # RTL-SDR devices
+        results['rtlsdr'] = self._discover_rtlsdr()
+
+        return results
 
 
 # Module-level singleton for convenience

@@ -90,16 +90,31 @@ class BenchView:
             print(f"  {name}: SCPI={ports['scpi_port']}, HTTP={ports['http_port']}, count={ports['count']}, indexing={ports['indexing']}")
 
     def _write_output_yaml(self):
-        """Write output YAML with port assignments"""
-        output_path = Path(self.config_path).parent / f"{Path(self.config_path).stem}_ports.yaml"
+        """Write output YAML with port assignments.
 
-        output = {
+        Writes both legacy format (for backward compat) and inventory overlay format.
+        """
+        # Legacy format (in same dir as config)
+        legacy_path = Path(self.config_path).parent / f"{Path(self.config_path).stem}_ports.yaml"
+
+        legacy_output = {
+            'panel': self.config['panel']['name'],
+            'instruments': {}
+        }
+
+        # Inventory overlay format (in ~/.rf-bench/)
+        inventory_dir = Path.home() / '.rf-bench'
+        inventory_dir.mkdir(exist_ok=True, parents=True)
+        inventory_path = inventory_dir / f"benchview_{Path(self.config_path).stem}_ports.yaml"
+
+        inventory_output = {
             'panel': self.config['panel']['name'],
             'instruments': {}
         }
 
         for name, ports in self.port_assignments.items():
-            output['instruments'][name] = {
+            # Legacy format
+            legacy_output['instruments'][name] = {
                 'scpi_port': ports['scpi_port'],
                 'http_port': ports['http_port'],
                 'ws_port': ports['ws_port'],
@@ -111,11 +126,33 @@ class BenchView:
                 'scpi_index_range': f"1-{ports['count']}"
             }
 
-        with open(output_path, 'w') as f:
-            yaml.dump(output, f, default_flow_style=False, sort_keys=False)
+            # Inventory overlay format - matches inventory schema
+            inventory_output['instruments'][name] = {
+                'type': ports['type'],
+                'driver': f"rf_bench.virtual.{ports['type']}",
+                'connection': {
+                    'protocol': 'scpi-tcp',
+                    'host': 'localhost',
+                    'port': ports['scpi_port'],
+                    'http_port': ports['http_port'],
+                    'ws_port': ports['ws_port'],
+                },
+                'tags': ['virtual', 'benchview'],
+                'notes': f"BenchView panel: {self.config['panel']['name']}, " +
+                         f"count: {ports['count']}, indexing: {ports['indexing']}"
+            }
 
-        print(f"\nWrote port assignments to: {output_path}")
-        return output_path
+        # Write both formats
+        with open(legacy_path, 'w') as f:
+            yaml.dump(legacy_output, f, default_flow_style=False, sort_keys=False)
+
+        with open(inventory_path, 'w') as f:
+            yaml.dump(inventory_output, f, default_flow_style=False, sort_keys=False)
+
+        print(f"\nWrote port assignments:")
+        print(f"  Legacy:    {legacy_path}")
+        print(f"  Inventory: {inventory_path}")
+        return legacy_path
 
     def _setup_routes(self):
         """Setup FastAPI routes"""
