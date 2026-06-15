@@ -134,9 +134,7 @@
         };
 
         const sliderEl = document.getElementById(`slider-${i}`);
-        console.log(`SLIDER: Created slider ${i}, element:`, sliderEl);
         sliderEl.addEventListener('input', () => {
-          console.log('SLIDER: Input event fired for slider', i);
           handleSliderChange(i);
         });
       }
@@ -161,7 +159,6 @@
       // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
       if (ws && ws.readyState === 1) {
         const msg = {type: 'value_change', index, value};
-        console.log('SLIDER: Sending', msg);
         ws.send(JSON.stringify(msg));
       }
     }
@@ -198,12 +195,10 @@
       if (state.min_val !== undefined) {
         sliderEl.min = slider.min_val;
         slider.min = slider.min_val;  // Normalize field name
-        console.log(`Slider ${index}: set min to ${slider.min_val}`);
       }
       if (state.max_val !== undefined) {
         sliderEl.max = slider.max_val;
         slider.max = slider.max_val;  // Normalize field name
-        console.log(`Slider ${index}: set max to ${slider.max_val}`);
       }
       if (state.step !== undefined) {
         sliderEl.step = slider.step;
@@ -219,11 +214,9 @@
       // Use window.location.host (includes port) instead of constructing with wsPort param
       // BenchView's injected JavaScript will intercept and rewrite this URL
       const wsUrl = `ws://${window.location.host}/ws`;
-      console.log('Creating WebSocket with URL:', wsUrl);
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('SLIDER WebSocket connected');
         };
 
       ws.onmessage = (event) => {
@@ -233,23 +226,18 @@
             updateSlider(msg.index, msg);
           }
         } catch (e) {
-          console.error('Parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         setTimeout(connect, 2000);
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
       };
     }
 
-    console.log('SLIDER: Initializing...');
     initSliders();
-    console.log('SLIDER: Connecting WebSocket...');
     connect();
 
     for (let i = 1; i <= count; i++) {

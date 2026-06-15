@@ -141,7 +141,6 @@
       ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
         statusElement.textContent = 'Connected';
         statusElement.className = 'status connected';
         if (reconnectInterval) {
@@ -159,24 +158,20 @@
             drawKnob();
           }
         } catch (e) {
-          console.error('WebSocket parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         statusElement.textContent = 'Disconnected - reconnecting...';
         statusElement.className = 'status disconnected';
         if (!reconnectInterval) {
           reconnectInterval = setInterval(() => {
-            console.log('Attempting to reconnect...');
             connectWebSocket();
           }, 2000);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
       };
     }
 

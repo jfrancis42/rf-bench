@@ -241,11 +241,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text(json.dumps(state.knobs[i].to_dict()))
         while True:
             data = await websocket.receive_text()
-            msg = json.loads(data)
-            if 'index' in msg and 'value' in msg:
-                index = msg['index']
-                if 1 <= index <= state.count and index in state.knobs:
-                    state.knobs[index].value = msg['value']
+            # Handle knob changes from frontend
+            try:
+                msg = json.loads(data)
+                # Frontend sends {type: 'value_change', value: float, index: int}
+                if msg.get('type') == 'value_change' and 'value' in msg:
+                    index = msg.get('index', 1)
+                    if 1 <= index <= state.count and index in state.knobs:
+                        state.knobs[index].value = float(msg['value'])
+                        # Broadcast to other clients
+                        await broadcast_state(index)
+            except (json.JSONDecodeError, ValueError):
+                pass  # Ignore malformed messages
     except WebSocketDisconnect:
         connected_clients.remove(websocket)
 

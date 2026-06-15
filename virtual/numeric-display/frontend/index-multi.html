@@ -176,10 +176,8 @@
       if (state.style) {
         // Apply style class: NIXIE, VFD, 7SEG, etc.
         const styleClass = 'display-value ' + state.style.toLowerCase();
-        console.log('Setting className to:', styleClass);
         valueEl.className = styleClass;
       } else {
-        console.log('No style in state:', state);
       }
       if (state.units !== undefined) {
         unitsEl.textContent = state.units;
@@ -198,7 +196,6 @@
       ws = new WebSocket(`ws://${window.location.host}/ws`);
 
       ws.onopen = () => {
-        console.log('DISPLAY WebSocket connected');
         };
 
       ws.onmessage = (event) => {
@@ -209,17 +206,14 @@
             updateDisplay(msg.index, msg);
           }
         } catch (e) {
-          console.error('Parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         setTimeout(connect, 2000);
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
       };
     }
 

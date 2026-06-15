@@ -435,23 +435,16 @@ canvas {{
                         try:
                             while True:
                                 data = await websocket.receive_text()
-                                print(f"forward_to_backend: Received from browser: {data[:100]}", flush=True)
                                 await backend_ws.send(data)
-                                print(f"forward_to_backend: Sent to backend", flush=True)
                         except Exception as e:
-                            print(f"WebSocket forward_to_backend error: {e} - ignoring, keeping connection open", flush=True)
+                            pass  # Ignore errors, keep connection open
 
                     async def forward_to_client():
                         try:
-                            print(f"forward_to_client: Starting to listen for backend messages", flush=True)
                             async for message in backend_ws:
-                                print(f"forward_to_client: Received from backend: {message[:100]}", flush=True)
                                 await websocket.send_text(message)
-                                print(f"forward_to_client: Sent to browser", flush=True)
                         except Exception as e:
-                            print(f"WebSocket forward_to_client error: {e}", flush=True)
-                        finally:
-                            print(f"forward_to_client: Exiting", flush=True)
+                            pass
 
                     # Run both tasks independently
                     task1 = asyncio.create_task(forward_to_backend())

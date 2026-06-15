@@ -140,7 +140,8 @@
 
       // Send to backend
       if (ws && ws.readyState === 1) {
-        ws.send(JSON.dumps({index: dragging.index, value: knob.value}));
+        const msg = {type: 'value_change', index: dragging.index, value: knob.value};
+        ws.send(JSON.stringify(msg));
       }
     }
 
@@ -238,7 +239,6 @@
       ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
         };
 
       ws.onmessage = (event) => {
@@ -248,17 +248,14 @@
             updateKnob(msg.index, msg);
           }
         } catch (e) {
-          console.error('Parse error:', e);
         }
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         setTimeout(connect, 2000);
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
       };
     }
 

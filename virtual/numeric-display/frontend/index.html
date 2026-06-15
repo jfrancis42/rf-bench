@@ -223,7 +223,6 @@
       const ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
         wsConnected = true;
         document.getElementById('status').textContent = 'Connected';
         document.getElementById('status').className = 'status connected';
@@ -241,16 +240,13 @@
           displayState.style = data.style || '7SEG';
           updateDisplay();
         } catch (e) {
-          console.error('WebSocket parse error:', e);
         }
       };
       
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
       };
       
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         wsConnected = false;
         document.getElementById('status').textContent = 'Disconnected - Reconnecting...';
         document.getElementById('status').className = 'status disconnected';
