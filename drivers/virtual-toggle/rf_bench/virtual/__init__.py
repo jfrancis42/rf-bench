@@ -2,4 +2,5 @@
 
 from .toggle import VirtualToggle, VirtualToggleError
 
-__all__ = ["VirtualToggle", "VirtualToggleError"]
+from .toggle_multi import VirtualToggleMulti, VirtualToggleMultiError
+__all__ = ["VirtualToggleMulti", "VirtualToggleMultiError", "VirtualToggle", "VirtualToggleError"]

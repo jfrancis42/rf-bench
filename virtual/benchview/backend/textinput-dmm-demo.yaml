@@ -1,0 +1,31 @@
+# BenchView Text-Input-DMM Feedback Demo
+# Text input sets SPD3303X CH1 voltage, Numeric display shows SDM3045X reading
+
+panel:
+  name: "Text-Input-DMM Demo"
+  grid:
+    columns: 2
+    rows: 1
+
+  instruments:
+    - name: voltage-input
+      type: text-input
+      count: 1
+      position: {col: 0, row: 0}
+      span: {cols: 1, rows: 1}
+      config:
+        label: "PSU Voltage (V)"
+        placeholder: "Enter voltage 0-30"
+        units: "V"
+
+    - name: voltage-display
+      type: numeric-display
+      count: 1
+      position: {col: 1, row: 0}
+      span: {cols: 1, rows: 1}
+      config:
+        style: "NIXIE"
+        color: "#ff6600"
+        precision: 3
+        units: "V"
+        size: 90

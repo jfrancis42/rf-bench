@@ -432,12 +432,13 @@ canvas {{
                     import asyncio
 
                     async def forward_to_backend():
-                        try:
-                            while True:
+                        while True:
+                            try:
                                 data = await websocket.receive_text()
                                 await backend_ws.send(data)
-                        except Exception as e:
-                            pass  # Ignore errors, keep connection open
+                            except Exception as e:
+                                # Ignore all errors and keep trying
+                                await asyncio.sleep(0.1)
 
                     async def forward_to_client():
                         try:

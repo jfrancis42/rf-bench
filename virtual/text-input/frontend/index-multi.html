@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Input</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: #0a0a0f;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 20px;
+    }
+    #grid.layout-row { grid-template-columns: repeat(var(--count), 1fr); grid-template-rows: 1fr; }
+    #grid.layout-col { grid-template-columns: 1fr; grid-template-rows: repeat(var(--count), 1fr); }
+    #grid.layout-2x2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    .input-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2a 0%, #0a0a15 100%);
+      border: 2px solid #2a2a40;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      gap: 15px;
+    }
+
+    .input-label {
+      font-size: clamp(10px, 2vw, 14px);
+      color: #888;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      min-height: 1em;
+    }
+
+    .input-container {
+      width: 100%;
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      background: #0a0a15;
+      border: 2px solid #2a2a40;
+      border-radius: 4px;
+      color: #00ff88;
+      font-size: clamp(14px, 3vw, 16px);
+      font-family: monospace;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #00ff88;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #00ff88;
+      border: none;
+      border-radius: 4px;
+      color: #0a0a15;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: clamp(12px, 2.5vw, 14px);
+    }
+
+    button:hover {
+      background: #00dd77;
+    }
+
+    button:active {
+      background: #00bb66;
+    }
+  </style>
+</head>
+<body>
+  <div id="grid"></div>
+
+  <script>
+    'use strict';
+
+    const params = new URLSearchParams(window.location.search);
+    const count = parseInt(params.get('count') || '1');
+    const layout = params.get('layout') || 'row';
+    const wsPort = params.get('ws_port') || '8000';
+
+    let ws = null;
+    let inputs = [];
+
+    function initInputs() {
+      const grid = document.getElementById('grid');
+      grid.className = `layout-${layout}`;
+      grid.style.setProperty('--count', count);
+
+      for (let i = 1; i <= count; i++) {
+        const panel = document.createElement('div');
+        panel.className = 'input-panel';
+        panel.id = `input-panel-${i}`;
+        panel.innerHTML = `
+          <div class="input-label"></div>
+          <div class="input-container">
+            <input type="text" id="input-${i}" placeholder="Enter value...">
+            <button id="btn-${i}">Submit</button>
+          </div>
+        `;
+        grid.appendChild(panel);
+
+        inputs[i] = {
+          value: '',
+          label: '',
+          placeholder: 'Enter value...'
+        };
+
+        const inputEl = document.getElementById(`input-${i}`);
+        const btnEl = document.getElementById(`btn-${i}`);
+
+        // Enter key submits
+        inputEl.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            sendValue(i);
+          }
+        });
+
+        // Button click submits
+        btnEl.addEventListener('click', () => sendValue(i));
+      }
+    }
+
+    function sendValue(index) {
+      const inputEl = document.getElementById(`input-${index}`);
+      const value = inputEl.value.trim();
+      console.log('TEXTINPUT: sendValue called, index=', index, 'value=', value, 'ws=', ws, 'readyState=', ws ? ws.readyState : 'null');
+
+      if (value) {
+        // Send to backend via WebSocket
+        if (ws && ws.readyState === 1) {
+          const msg = {type: 'value_change', index, value};
+          console.log('TEXTINPUT: Sending', msg);
+          ws.send(JSON.stringify(msg));
+        } else {
+          console.log('TEXTINPUT: WebSocket not ready');
+        }
+
+        inputs[index].value = value;
+      } else {
+        console.log('TEXTINPUT: Empty value, not sending');
+      }
+    }
+
+    function updateInput(index, state) {
+      const panel = document.getElementById(`input-panel-${index}`);
+      if (!panel) return;
+
+      const labelEl = panel.querySelector('.input-label');
+      const inputEl = document.getElementById(`input-${index}`);
+
+      inputs[index] = { ...inputs[index], ...state };
+      const inp = inputs[index];
+
+      if (state.label !== undefined) {
+        labelEl.textContent = state.label;
+      }
+
+      if (state.placeholder !== undefined) {
+        inputEl.placeholder = state.placeholder;
+      }
+
+      if (state.value !== undefined && state.value !== inputs[index].value) {
+        inputEl.value = state.value;
+      }
+    }
+
+    function connect() {
+      const wsUrl = `ws://${window.location.host}/ws`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.index && msg.index >= 1 && msg.index <= count) {
+            updateInput(msg.index, msg);
+          }
+        } catch (e) {
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = (error) => {
+      };
+    }
+
+    initInputs();
+    connect();
+  </script>
+</body>
+</html>

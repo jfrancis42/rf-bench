@@ -8,13 +8,6 @@ Python driver for **Virtual Analog Meter** SCPI instrument. Controls 1-4 analog 
 pip install rf-bench-drivers-virtual-analog-meter
 ```
 
-Or install from source:
-
-```bash
-cd drivers/virtual-analog-meter
-pip install -e .
-```
-
 ## Quick Start
 
 ```python
@@ -35,6 +28,44 @@ with VirtualAnalogMeter("10.1.1.52") as meters:
     meters.set_value(1, 50.2)
     meters.set_value(2, 13.8)
 ```
+
+## Multi-Instance Usage
+
+For multiple analog-meters controlled by a single backend (e.g., via BenchView), use the multi-instance driver:
+
+```python
+from rf_bench.virtual import VirtualAnalogMeterMulti
+
+# Connect to multi-instance backend
+# Port is assigned by BenchView and read from *_ports.yaml
+meters = VirtualAnalogMeterMulti("localhost", port=5100)
+
+# Control individual instances (1-based indexing)
+meters.set_value(1, 50.0)  # Instance 1
+meters.set_value(2, 75.0)  # Instance 2
+meters.set_label(1, "Channel 1")
+meters.set_label(2, "Channel 2")
+
+# Query instance count
+count = meters.get_count()  # → 2
+
+meters.close()
+```
+
+**Multi-instance backend:**
+
+```bash
+cd ~/Dropbox/build/rf-bench/virtual/analog-meter/backend
+python3 server-multi.py --scpi-port 5100 --http-port 8100 --count 2 --layout row
+```
+
+**Port Assignment:**
+
+When using BenchView, ports are assigned dynamically and exported to:
+- `~/.rf-bench/<panel-name>_ports.yaml` (inventory overlay)
+- `<config-dir>/<panel-name>_ports.yaml` (legacy)
+
+Bridge scripts should read port assignments from the YAML file rather than hardcoding them.
 
 ## Backend Server
 

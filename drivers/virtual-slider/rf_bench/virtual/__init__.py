@@ -2,4 +2,5 @@
 
 from .slider import VirtualSlider, VirtualSliderError
 
-__all__ = ['VirtualSlider', 'VirtualSliderError']
+from .slider_multi import VirtualSliderMulti, VirtualSliderMultiError
+__all__ = ["VirtualSliderMulti", "VirtualSliderMultiError", 'VirtualSlider', 'VirtualSliderError']

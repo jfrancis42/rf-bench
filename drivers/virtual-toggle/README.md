@@ -8,13 +8,6 @@ Python driver for **Virtual Toggle Switch** SCPI instrument. Controls toggle swi
 pip install rf-bench-drivers-virtual-toggle
 ```
 
-Or install from source:
-
-```bash
-cd drivers/virtual-toggle
-pip install -e .
-```
-
 ## Quick Start
 
 ```python
@@ -42,6 +35,44 @@ with VirtualToggle("10.1.1.52") as toggle:
     )
     toggle.toggle()  # Flip state
 ```
+
+## Multi-Instance Usage
+
+For multiple toggles controlled by a single backend (e.g., via BenchView), use the multi-instance driver:
+
+```python
+from rf_bench.virtual import VirtualToggleMulti
+
+# Connect to multi-instance backend
+# Port is assigned by BenchView and read from *_ports.yaml
+toggles = VirtualToggleMulti("localhost", port=5100)
+
+# Control individual instances (1-based indexing)
+toggles.set_value(1, 50.0)  # Instance 1
+toggles.set_value(2, 75.0)  # Instance 2
+toggles.set_label(1, "Channel 1")
+toggles.set_label(2, "Channel 2")
+
+# Query instance count
+count = toggles.get_count()  # → 2
+
+toggles.close()
+```
+
+**Multi-instance backend:**
+
+```bash
+cd ~/Dropbox/build/rf-bench/virtual/toggle/backend
+python3 server-multi.py --scpi-port 5100 --http-port 8100 --count 2 --layout row
+```
+
+**Port Assignment:**
+
+When using BenchView, ports are assigned dynamically and exported to:
+- `~/.rf-bench/<panel-name>_ports.yaml` (inventory overlay)
+- `<config-dir>/<panel-name>_ports.yaml` (legacy)
+
+Bridge scripts should read port assignments from the YAML file rather than hardcoding them.
 
 ## Backend Server
 

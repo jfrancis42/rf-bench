@@ -6,4 +6,5 @@ This package provides Python drivers for virtual SCPI instruments.
 
 from rf_bench.virtual.knob import VirtualKnob, VirtualKnobError
 
-__all__ = ['VirtualKnob', 'VirtualKnobError']
+from .knob_multi import VirtualKnobMulti, VirtualKnobMultiError
+__all__ = ["VirtualKnobMulti", "VirtualKnobMultiError", 'VirtualKnob', 'VirtualKnobError']

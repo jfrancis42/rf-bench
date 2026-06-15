@@ -2,4 +2,5 @@
 
 from .analog_meter import VirtualAnalogMeter
 
-__all__ = ["VirtualAnalogMeter"]
+from .analog_meter_multi import VirtualAnalogMeterMulti, VirtualAnalogMeterMultiError
+__all__ = ["VirtualAnalogMeterMulti", "VirtualAnalogMeterMultiError", "VirtualAnalogMeter"]

@@ -2,4 +2,5 @@
 
 from .button import VirtualButton, VirtualButtonError
 
-__all__ = ['VirtualButton', 'VirtualButtonError']
+from .button_multi import VirtualButtonMulti, VirtualButtonMultiError
+__all__ = ["VirtualButtonMulti", "VirtualButtonMultiError", 'VirtualButton', 'VirtualButtonError']

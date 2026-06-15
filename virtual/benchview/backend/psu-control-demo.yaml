@@ -1,0 +1,39 @@
+# BenchView PSU Control Demo
+# Inputs (voltage/current), 4 displays (DMM + PSU readings), 3 LEDs (output/CC/CV status)
+
+panel:
+  name: "PSU Control Demo"
+  grid:
+    columns: 3
+    rows: 1
+
+  instruments:
+    - name: psu-controls
+      type: text-input
+      count: 2
+      position: {col: 0, row: 0}
+      span: {cols: 1, rows: 1}
+      layout: col
+      config:
+        label: "PSU Settings"
+
+    - name: measurements
+      type: numeric-display
+      count: 4
+      position: {col: 1, row: 0}
+      span: {cols: 1, rows: 1}
+      layout: 2x2
+      config:
+        style: "NIXIE"
+        color: "#ff6600"
+        precision: 3
+        size: 60
+
+    - name: status-leds
+      type: led
+      count: 3
+      position: {col: 2, row: 0}
+      span: {cols: 1, rows: 1}
+      layout: col
+      config:
+        size: 80

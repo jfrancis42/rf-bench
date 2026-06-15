@@ -1,0 +1,32 @@
+panel: PSU Control Demo
+instruments:
+  psu-controls:
+    scpi_port: 5100
+    http_port: 8100
+    ws_port: 8100
+    type: text-input
+    count: 2
+    layout: col
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-2
+  measurements:
+    scpi_port: 5101
+    http_port: 8101
+    ws_port: 8101
+    type: numeric-display
+    count: 4
+    layout: 2x2
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-4
+  status-leds:
+    scpi_port: 5102
+    http_port: 8102
+    ws_port: 8102
+    type: led
+    count: 3
+    layout: col
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-3

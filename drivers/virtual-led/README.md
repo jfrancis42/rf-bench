@@ -8,13 +8,6 @@ Python driver for **Virtual LED Indicator** SCPI instrument. Controls LED on/off
 pip install rf-bench-drivers-virtual-led
 ```
 
-Or install from source:
-
-```bash
-cd drivers/virtual-led
-pip install -e .
-```
-
 ## Quick Start
 
 ```python
@@ -39,6 +32,44 @@ with VirtualLED("10.1.1.52") as led:
     )
     led.on()
 ```
+
+## Multi-Instance Usage
+
+For multiple leds controlled by a single backend (e.g., via BenchView), use the multi-instance driver:
+
+```python
+from rf_bench.virtual import VirtualLEDMulti
+
+# Connect to multi-instance backend
+# Port is assigned by BenchView and read from *_ports.yaml
+leds = VirtualLEDMulti("localhost", port=5100)
+
+# Control individual instances (1-based indexing)
+leds.set_value(1, 50.0)  # Instance 1
+leds.set_value(2, 75.0)  # Instance 2
+leds.set_label(1, "Channel 1")
+leds.set_label(2, "Channel 2")
+
+# Query instance count
+count = leds.get_count()  # → 2
+
+leds.close()
+```
+
+**Multi-instance backend:**
+
+```bash
+cd ~/Dropbox/build/rf-bench/virtual/led/backend
+python3 server-multi.py --scpi-port 5100 --http-port 8100 --count 2 --layout row
+```
+
+**Port Assignment:**
+
+When using BenchView, ports are assigned dynamically and exported to:
+- `~/.rf-bench/<panel-name>_ports.yaml` (inventory overlay)
+- `<config-dir>/<panel-name>_ports.yaml` (legacy)
+
+Bridge scripts should read port assignments from the YAML file rather than hardcoding them.
 
 ## Backend Server
 

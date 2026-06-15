@@ -8,13 +8,6 @@ Python driver for **Virtual Text Input** SCPI instrument. Provides an interactiv
 pip install rf-bench-drivers-virtual-text-input
 ```
 
-Or install from source:
-
-```bash
-cd drivers/virtual-text-input
-pip install -e .
-```
-
 ## Quick Start
 
 ### Basic Text Input
@@ -72,6 +65,44 @@ with VirtualTextInput("10.1.1.52") as text_input:
     
     # Any messages on sub_topic appear in the UI automatically
 ```
+
+## Multi-Instance Usage
+
+For multiple text-inputs controlled by a single backend (e.g., via BenchView), use the multi-instance driver:
+
+```python
+from rf_bench.virtual import VirtualTextInputMulti
+
+# Connect to multi-instance backend
+# Port is assigned by BenchView and read from *_ports.yaml
+text_inputs = VirtualTextInputMulti("localhost", port=5100)
+
+# Control individual instances (1-based indexing)
+text_inputs.set_value(1, 50.0)  # Instance 1
+text_inputs.set_value(2, 75.0)  # Instance 2
+text_inputs.set_label(1, "Channel 1")
+text_inputs.set_label(2, "Channel 2")
+
+# Query instance count
+count = text_inputs.get_count()  # → 2
+
+text_inputs.close()
+```
+
+**Multi-instance backend:**
+
+```bash
+cd ~/Dropbox/build/rf-bench/virtual/text-input/backend
+python3 server-multi.py --scpi-port 5100 --http-port 8100 --count 2 --layout row
+```
+
+**Port Assignment:**
+
+When using BenchView, ports are assigned dynamically and exported to:
+- `~/.rf-bench/<panel-name>_ports.yaml` (inventory overlay)
+- `<config-dir>/<panel-name>_ports.yaml` (legacy)
+
+Bridge scripts should read port assignments from the YAML file rather than hardcoding them.
 
 ## Backend Server
 

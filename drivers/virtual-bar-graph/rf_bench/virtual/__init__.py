@@ -2,4 +2,5 @@
 
 from .bar_graph import VirtualBarGraph, VirtualBarGraphError
 
-__all__ = ["VirtualBarGraph", "VirtualBarGraphError"]
+from .bar_graph_multi import VirtualBarGraphMulti, VirtualBarGraphMultiError
+__all__ = ["VirtualBarGraphMulti", "VirtualBarGraphMultiError", "VirtualBarGraph", "VirtualBarGraphError"]
