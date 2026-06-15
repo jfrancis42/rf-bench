@@ -1,10 +1,30 @@
 # Virtual Instrument Integration Projects
 
-**Status:** All projects in this file are 💭 ideas (not yet started).
+**Phase 1 Status:** ✅ **COMPLETE** — All 8 virtual instruments built and tested with Python drivers
 
-Projects that combine virtual SCPI instruments (Phase 1 read-only displays + Phase 2 interactive controls) with existing bench hardware. Assumes virtual instrument **cluster** capability where multiple widgets display on a single web page or mobile app.
+**Built instruments:**
+- Analog meter (270° arc, spring-damper physics)
+- LED indicator (on/off/blink, custom colors)
+- 7-segment numeric display (DSEG7 font)
+- Bar graph / level meter (colored zones)
+- Rotary knob control
+- Linear slider control
+- Momentary push button
+- Toggle switch
 
-All virtual instruments expose SCPI TCP servers, HTTP/WebSocket for browsers, and MQTT bidirectional pub/sub. The cluster framework loads JSON/YAML panel configs that define widget layout, bindings (SCPI commands or MQTT topics), and refresh rates.
+**BenchView:** ✅ Multi-instrument panel manager with iframe grid, HTTP/WebSocket proxy, dynamic port assignment
+
+**Drivers:** ✅ Complete Python SCPI-over-TCP libraries for all 8 instruments (`rf_bench.virtual` namespace)
+
+**Backend:** ✅ FastAPI servers with SCPI TCP (port 5025), WebSocket, multi-instance support (1-4 sub-instruments, 1-based indexing)
+
+**Frontend:** ✅ HTML5 Canvas + WebSocket, real-time updates, no build step required
+
+---
+
+Projects below combine these virtual instruments with existing bench hardware. All projects are 💭 ideas (not yet started) that demonstrate integration patterns.
+
+All virtual instruments expose SCPI TCP servers (port 5025), HTTP/WebSocket for browsers. BenchView loads YAML panel configs that define widget layout, instrument assignments, and refresh rates.
 
 ---
 
