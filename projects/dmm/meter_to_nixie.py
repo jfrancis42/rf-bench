@@ -11,35 +11,25 @@ License: GPL-3.0-or-later
 
 import time
 import sys
-from pathlib import Path
-
-# Add drivers to path
-sys.path.insert(0, str(Path(__file__).parent / "../../drivers/siglent"))
-sys.path.insert(0, str(Path(__file__).parent / "../../drivers/virtual-numeric-display"))
-
-from rf_bench.siglent import SDM3000X
-from rf_bench.virtual import VirtualNumericDisplay
+from rf_bench import connect
 
 
 def main():
     """Read DMM and display on virtual Nixie display."""
 
-    # Connect to instruments
-    dmm_host = "10.1.1.63"  # May need to scan network if IP changed
-    display_host = "localhost"
-    display_port = 5000  # SCPI port for single-instance backend
-
-    print(f"Connecting to SDM3045X at {dmm_host}...")
+    print("Connecting to instruments via inventory...")
     try:
-        dmm = SDM3000X(dmm_host, timeout=2.0)
+        dmm = connect('sdm')
+        # TODO: Add virtual display to inventory when multi-instance support is ready
+        # For now, virtual instruments require explicit connection
+        from rf_bench.virtual import VirtualNumericDisplay
+        display = VirtualNumericDisplay("localhost", port=5000)
     except Exception as e:
-        print(f"ERROR: Could not connect to DMM: {e}")
-        print("The meter may be off or at a different IP address.")
-        print("Try running 'nmap -sn 10.1.0.0/23' to find it.")
+        print(f"ERROR: Could not connect to instruments: {e}")
+        print("Check that SDM3045X is powered on and inventory.yaml has correct IP.")
         sys.exit(1)
 
-    print(f"Connecting to Virtual Numeric Display at {display_host}:{display_port}...")
-    display = VirtualNumericDisplay(display_host, port=display_port)
+    print("Connected successfully.")
 
     # Configure display for Nixie tube style
     print("Configuring Nixie display...")
@@ -49,7 +39,7 @@ def main():
     display.set_units("Bench Meter")  # Static label since DMM doesn't report function
 
     print("\nReading DMM and updating display at 1 Hz...")
-    print("View at: http://10.1.0.11:8000")
+    print("View at: http://localhost:8000")
     print("Press Ctrl+C to stop\n")
     print("NOTE: Units are not auto-detected. The display shows the raw value")
     print("      from whatever function is currently selected on the meter.\n")

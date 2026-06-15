@@ -33,7 +33,7 @@ import numpy as np
 # Shared drivers
 # ---------------------------------------------------------------------------
 
-from rf_bench.siglent import SSA3000X, SDG1000X               # noqa: E402
+from rf_bench import connect                                    # noqa: E402
 from rf_bench.utils import (                                    # noqa: E402
     format_freq, format_freq_short, nearest_rbw,
 )
@@ -42,8 +42,9 @@ from rf_bench.utils import (                                    # noqa: E402
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_SSA_HOST       = "10.1.1.60"
-DEFAULT_SDG_HOST       = "10.1.1.55"
+# Now uses inventory system - IPs configured in ~/.rf-bench/inventory.yaml
+DEFAULT_SSA_HOST       = None
+DEFAULT_SDG_HOST       = None
 
 DEFAULT_REF_LEVEL_DBM  = -10.0
 DEFAULT_START_KHZ      = 100
@@ -862,11 +863,11 @@ Examples:
 """,
     )
 
-    # Instruments
-    parser.add_argument("--sdg",  default=DEFAULT_SDG_HOST, metavar="HOST",
-                        help=f"SDG1000X IP address (default {DEFAULT_SDG_HOST})")
-    parser.add_argument("--ssa",  default=DEFAULT_SSA_HOST, metavar="HOST",
-                        help=f"SSA3000X IP address (default {DEFAULT_SSA_HOST})")
+    # Instruments (now uses inventory - these args are kept for backward compat)
+    parser.add_argument("--sdg",  default=DEFAULT_SDG_HOST, metavar="NAME",
+                        help="SDG1000X inventory name (default: 'sdg' from inventory)")
+    parser.add_argument("--ssa",  default=DEFAULT_SSA_HOST, metavar="NAME",
+                        help="SSA3000X inventory name (default: 'ssa' from inventory)")
 
     # Test selection
     parser.add_argument("--level-cal",  action="store_true",
@@ -946,12 +947,15 @@ Examples:
     # Connect instruments
     ssa = sdg = None
     try:
-        print(f"Connecting to SSA3000X @ {args.ssa} ...")
-        ssa = SSA3000X(args.ssa)
+        inst_ssa = args.ssa if args.ssa else 'ssa'
+        inst_sdg = args.sdg if args.sdg else 'sdg'
+
+        print(f"Connecting to SSA3000X '{inst_ssa}' via inventory...")
+        ssa = connect(inst_ssa)
         print(f"  {ssa.identify()}")
 
-        print(f"Connecting to SDG1000X @ {args.sdg} ...")
-        sdg = SDG1000X(args.sdg)
+        print(f"Connecting to SDG1000X '{inst_sdg}' via inventory...")
+        sdg = connect(inst_sdg)
         print(f"  {sdg.identify()}")
 
         # Ensure TG is off

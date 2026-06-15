@@ -11,23 +11,16 @@ License: GPL-3.0-or-later
 
 import time
 import random
-import sys
-from pathlib import Path
-
-# Add driver to path
-sys.path.insert(0, str(Path(__file__).parent / "../../drivers/virtual-numeric-display"))
-
 from rf_bench.virtual import VirtualNumericDisplay
 
 
 def main():
     """Display simulated DMM readings on virtual Nixie display."""
 
-    display_host = "localhost"
-    display_port = 5000
-
-    print(f"Connecting to Virtual Numeric Display at {display_host}:{display_port}...")
-    display = VirtualNumericDisplay(display_host, port=display_port)
+    # TODO: Add virtual display to inventory when multi-instance support is ready
+    # For now, virtual instruments require explicit connection
+    print("Connecting to Virtual Numeric Display...")
+    display = VirtualNumericDisplay("localhost", port=5000)
 
     # Configure display for Nixie tube style
     print("Configuring Nixie display...")
