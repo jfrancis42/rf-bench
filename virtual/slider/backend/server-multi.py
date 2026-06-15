@@ -38,6 +38,7 @@ class SliderState:
         self.value = 0.0
         self.min = 0.0
         self.max = 100.0
+        self.step = 1.0
         self.label = ""
         self.units = ""
         self.color = "#00ff88"
@@ -46,11 +47,13 @@ class SliderState:
         return {
             'index': self.index,
             'value': self.value,
-            'min': self.min,
-            'max': self.max,
+            'min_val': self.min,  # Frontend expects min_val
+            'max_val': self.max,  # Frontend expects max_val
+            'step': self.step,
             'label': self.label,
             'units': self.units,
-            'color': self.color
+            'color': self.color,
+            'orientation': 'VERT'  # Default to vertical
         }
 
 
@@ -222,6 +225,17 @@ class SCPIServer:
                     await broadcast_state(index)
                     return None
 
+                elif subcmd.startswith("STEP"):
+                    if "?" in subcmd:
+                        return str(slider.step)
+                    try:
+                        slider.step = float(cmd_upper.split()[1])
+                        await broadcast_state(index)
+                        return None
+                    except:
+                        state.error_queue.append("-220,Parameter error")
+                        return None
+
         state.error_queue.append(f"-113,Undefined header")
         return None
 
@@ -246,11 +260,18 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             # Handle slider changes from frontend
-            msg = json.parse(data)
-            if 'index' in msg and 'value' in msg:
-                index = msg['index']
-                if 1 <= index <= state.count and index in state.sliders:
-                    state.sliders[index].value = msg['value']
+            try:
+                msg = json.loads(data)
+                # Frontend sends {type: 'value_change', value: float, index?: int}
+                # If no index specified, assume index 1 (single slider mode)
+                if msg.get('type') == 'value_change' and 'value' in msg:
+                    index = msg.get('index', 1)
+                    if 1 <= index <= state.count and index in state.sliders:
+                        state.sliders[index].value = float(msg['value'])
+                        # Broadcast to other clients
+                        await broadcast_state(index)
+            except (json.JSONDecodeError, ValueError):
+                pass  # Ignore malformed messages
     except WebSocketDisconnect:
         connected_clients.remove(websocket)
 

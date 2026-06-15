@@ -1,0 +1,22 @@
+panel: PSU-DMM Demo
+instruments:
+  voltage-slider:
+    scpi_port: 5100
+    http_port: 8100
+    ws_port: 8100
+    type: slider
+    count: 1
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-1
+  voltage-display:
+    scpi_port: 5101
+    http_port: 8101
+    ws_port: 8101
+    type: numeric-display
+    count: 1
+    layout: ROW
+    indexing: 1-based
+    scpi_query_count: INST:COUNT?
+    scpi_index_range: 1-1

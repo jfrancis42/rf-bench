@@ -15,6 +15,18 @@
       font-weight: normal;
       font-style: normal;
     }
+    @font-face {
+      font-family: 'reNix';
+      src: url('fonts/reNix-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'fluoWrite';
+      src: url('fonts/fluoWrite-Regular.woff2') format('woff2');
+      font-weight: normal;
+      font-style: normal;
+    }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; width: 100%; overflow: hidden; }
@@ -82,6 +94,25 @@
       margin-top: 8px;
       min-height: 1em;
     }
+
+    /* Style-specific overrides */
+    .display-value.nixie {
+      font-family: 'reNix', 'Nixie One', 'Times New Roman', serif;
+      font-weight: normal;
+      color: #ff8833;
+      text-shadow: 0 0 15px rgba(255, 136, 51, 0.8),
+                   0 0 30px rgba(255, 136, 51, 0.6),
+                   0 0 45px rgba(255, 136, 51, 0.4);
+    }
+
+    .display-value.vfd {
+      font-family: 'fluoWrite', 'Orbitron', sans-serif;
+      font-weight: normal;
+      color: #00ffcc;
+      text-shadow: 0 0 15px rgba(0, 255, 204, 0.8),
+                   0 0 30px rgba(0, 255, 204, 0.6),
+                   0 0 45px rgba(0, 255, 204, 0.4);
+    }
   </style>
 </head>
 <body>
@@ -142,6 +173,14 @@
       if (state.color) {
         valueEl.style.color = state.color;
       }
+      if (state.style) {
+        // Apply style class: NIXIE, VFD, 7SEG, etc.
+        const styleClass = 'display-value ' + state.style.toLowerCase();
+        console.log('Setting className to:', styleClass);
+        valueEl.className = styleClass;
+      } else {
+        console.log('No style in state:', state);
+      }
       if (state.units !== undefined) {
         unitsEl.textContent = state.units;
       }
@@ -154,10 +193,12 @@
 
     // WebSocket connection
     function connect() {
-      ws = new WebSocket(`ws://${window.location.hostname}:${wsPort}/ws`);
+      // Use window.location.host (includes port) instead of constructing with wsPort param
+      // BenchView's injected JavaScript will intercept and rewrite this URL
+      ws = new WebSocket(`ws://${window.location.host}/ws`);
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('DISPLAY WebSocket connected');
         };
 
       ws.onmessage = (event) => {

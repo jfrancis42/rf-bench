@@ -11,6 +11,7 @@ SCPI Commands (1-based indexing):
   CONF<n>:UNIT <string>    → Set units
   CONF<n>:LAB <string>     → Set label
   CONF<n>:COL <color>      → Set color (hex)
+  CONF<n>:STYLE <style>    → Set display style: 7SEG, PLAIN, LED, NIXIE, VFD
 
   INST:COUNT <int>         → Set number of displays (1-4, default 1)
   INST:COUNT?              → Query display count
@@ -65,6 +66,7 @@ class DisplayState:
         self.units = ""
         self.label = ""
         self.color = "#00ff88"
+        self.style = "7SEG"  # 7SEG, PLAIN, LED, NIXIE, VFD
 
     def to_dict(self):
         return {
@@ -73,7 +75,8 @@ class DisplayState:
             'precision': self.precision,
             'units': self.units,
             'label': self.label,
-            'color': self.color
+            'color': self.color,
+            'style': self.style
         }
 
 
@@ -112,10 +115,13 @@ async def broadcast_state(index: int):
         return
 
     message = json.dumps(state.displays[index].to_dict())
+    print(f"Broadcasting to {len(connected_clients)} clients: {message}", flush=True)
     for client in connected_clients[:]:
         try:
             await client.send_text(message)
-        except:
+            print(f"  Sent to client", flush=True)
+        except Exception as e:
+            print(f"  Failed to send: {e}", flush=True)
             connected_clients.remove(client)
 
 
@@ -168,6 +174,7 @@ class SCPIServer:
             print(f"SCPI client disconnected: {addr}")
 
     async def process_command(self, cmd: str) -> str:
+        print(f"SCPI RX: {cmd}", flush=True)
         """Process SCPI command"""
         cmd_original = cmd
         cmd_upper = cmd.strip().upper()
@@ -285,6 +292,19 @@ class SCPIServer:
                         disp.color = cmd_original.split(maxsplit=1)[1] if len(cmd_original.split(maxsplit=1)) > 1 else "#00ff88"
                         await broadcast_state(index)
                         return None
+
+                elif subcmd.startswith("STYLE"):
+                    if "?" in subcmd:
+                        return disp.style
+                    else:
+                        style = cmd_upper.split(maxsplit=1)[1] if len(cmd_upper.split(maxsplit=1)) > 1 else "7SEG"
+                        if style in ["7SEG", "PLAIN", "LED", "NIXIE", "VFD"]:
+                            disp.style = style
+                            await broadcast_state(index)
+                            return None
+                        else:
+                            state.error_queue.append(f"-220,Invalid style: {style}")
+                            return None
 
         # Unknown command
         state.error_queue.append(f"-113,Undefined header: {cmd}")

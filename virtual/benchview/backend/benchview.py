@@ -207,6 +207,7 @@ class BenchView:
 
                         # Fix font URLs to use /static/ prefix
                         html = html.replace("url('fonts-", f"url('/instrument/{name}/static/fonts-")
+                        html = html.replace("url('fonts/", f"url('/instrument/{name}/static/fonts/")
 
                         # Rewrite WebSocket connection to use proxy path
                         injection = f"""
@@ -264,8 +265,8 @@ body {{
 /* Fix main value displays - scale with container */
 .display-value {{
     font-size: clamp(1.5rem, 6vw, 3.5rem) !important;
-    font-family: 'DSEG7', 'Orbitron', monospace !important;
-    font-weight: 900 !important;
+    /* Don't override font-family - let style classes (nixie, vfd, etc.) control it */
+    font-weight: 900;
 }}
 .display-label, .meter-label {{
     font-size: clamp(0.7rem, 2vw, 1rem) !important;
@@ -422,9 +423,11 @@ canvas {{
 
             port = self.port_assignments[name]['ws_port']
             backend_uri = f"ws://localhost:{port}/ws"
+            print(f"Connecting to backend WebSocket: {backend_uri}")
 
             try:
                 async with websockets.connect(backend_uri) as backend_ws:
+                    print(f"Backend WebSocket connected: {backend_uri}")
                     # Bidirectional proxy
                     import asyncio
 
@@ -432,18 +435,37 @@ canvas {{
                         try:
                             while True:
                                 data = await websocket.receive_text()
+                                print(f"forward_to_backend: Received from browser: {data[:100]}", flush=True)
                                 await backend_ws.send(data)
-                        except:
-                            pass
+                                print(f"forward_to_backend: Sent to backend", flush=True)
+                        except Exception as e:
+                            print(f"WebSocket forward_to_backend error: {e} - ignoring, keeping connection open", flush=True)
 
                     async def forward_to_client():
                         try:
+                            print(f"forward_to_client: Starting to listen for backend messages", flush=True)
                             async for message in backend_ws:
+                                print(f"forward_to_client: Received from backend: {message[:100]}", flush=True)
                                 await websocket.send_text(message)
-                        except:
-                            pass
+                                print(f"forward_to_client: Sent to browser", flush=True)
+                        except Exception as e:
+                            print(f"WebSocket forward_to_client error: {e}", flush=True)
+                        finally:
+                            print(f"forward_to_client: Exiting", flush=True)
 
-                    await asyncio.gather(forward_to_backend(), forward_to_client())
+                    # Run both tasks independently
+                    task1 = asyncio.create_task(forward_to_backend())
+                    task2 = asyncio.create_task(forward_to_client())
+
+                    # Wait for EITHER task to complete
+                    done, pending = await asyncio.wait([task1, task2], return_when=asyncio.FIRST_COMPLETED)
+
+                    # If forward_to_client exits (backend disconnected), we're done
+                    if task2 in done:
+                        task1.cancel()
+                    else:
+                        # forward_to_backend died (browser closed), but backend still sending - keep listening
+                        await task2
             except Exception as e:
                 await websocket.close(code=1011, reason=f"Backend error: {e}")
 
