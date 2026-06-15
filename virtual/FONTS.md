@@ -4,7 +4,12 @@ This document explains how to install third-party fonts for rf-bench virtual ins
 
 ## Why Manual Installation?
 
-The virtual instruments use high-quality third-party fonts that cannot be redistributed with this application due to licensing restrictions. All fonts are **free to download and use**, but you must obtain them from the original creators.
+Most virtual instruments use the **DSEG7** font family (included with rf-bench under the OFL license). However, two proprietary fonts cannot be redistributed due to licensing restrictions:
+
+- **Analog Digits** (Nixie/VFD styles) by SpeakTheSky
+- **Dot Matrix** (LCD style) by Moonbase Press
+
+Both are **free to download and use**, but you must obtain them from the original creators.
 
 ## Quick Start
 
@@ -24,7 +29,23 @@ cd virtual
 python install_fonts.py
 ```
 
-## Fonts Required
+## Fonts Included (No Installation Required)
+
+### DSEG 7-Segment Font Family
+
+**Creator:** keshikan  
+**License:** SIL Open Font License 1.1 (OFL)  
+**Download:** https://github.com/keshikan/DSEG/releases  
+**Used by:** Virtual Numeric Display (default 7SEG and LED styles)
+
+**Font files included:**
+- `DSEG7Classic-Regular.ttf` / `.woff` / `.woff2`
+
+This font is redistributed with rf-bench under the OFL license. No installation needed.
+
+---
+
+## Fonts Requiring Manual Installation
 
 ### Virtual Numeric Display
 
@@ -114,10 +135,11 @@ display.set_value(42.1234)
 
 These fonts are used under their respective licenses:
 
+- **DSEG7 (keshikan):** SIL Open Font License 1.1 — redistributed with rf-bench
 - **Analog Digits (SpeakTheSky):** Commercial use allowed, cannot redistribute font files
 - **Dot Matrix (Moonbase Press):** Free to use, see pickafont.com for terms
 
-Users of rf-bench must download fonts themselves from the original sources. The `install_fonts.py` script helps automate the extraction and placement, but does not distribute the fonts.
+**DSEG7** is included in the repository. **Analog Digits** and **Dot Matrix** must be downloaded by users from the original sources. The `install_fonts.py` script helps automate the extraction and placement, but does not distribute proprietary fonts.
 
 ## For Developers
 

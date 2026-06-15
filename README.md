@@ -2180,14 +2180,27 @@ The Virtual Text LCD instrument uses the **Dot Matrix** font by **Moonbase Press
 **Font used:**
 - **DotMatrix.TTF** — Classic dot-matrix LCD style
 
-Due to licensing restrictions, these fonts cannot be redistributed with this application. Users must download them directly from the original sources (free).
+### DSEG 7-Segment Font
 
-**Installation:**
+The Virtual Numeric Display instrument uses the **DSEG7** font family by **keshikan** for authentic 7-segment LED/LCD display rendering.
+
+**Font Creator:** keshikan  
+**Download:** https://github.com/keshikan/DSEG/releases  
+**License:** SIL Open Font License 1.1 (OFL) — free for commercial and non-commercial use
+
+**Font used:**
+- **DSEG7Classic-Regular** (TTF, WOFF, WOFF2) — Classic 7-segment style
+
+This font is redistributed with rf-bench under the terms of the OFL license. The Analog Digits and Dot Matrix fonts above cannot be redistributed and must be downloaded separately by users.
+
+**Installation (Analog Digits and Dot Matrix only — DSEG7 is already included):**
 
 ```bash
 cd virtual
 python3 install_fonts.py
 ```
+
+The installer will prompt you to locate the downloaded ZIP files for Analog Digits and Dot Matrix fonts. DSEG7 fonts are already present in the repository and do not require manual installation.
 
 The installer will guide you through downloading the font packs and extracting them to the correct locations. See `virtual/numeric-display/FONTS.md` for detailed instructions.
 
