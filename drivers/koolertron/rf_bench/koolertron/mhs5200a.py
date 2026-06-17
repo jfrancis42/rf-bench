@@ -194,6 +194,7 @@ class Waveform(IntEnum):
     TRIANGLE   = 2
     UP_SAW     = 3   # rising sawtooth
     DOWN_SAW   = 4   # falling sawtooth
+    TTL        = 5   # TTL digital output mode (maximized slew rate)
     ARB0       = 100
     ARB1       = 101
     ARB2       = 102

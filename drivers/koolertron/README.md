@@ -104,6 +104,64 @@ gen = MHS5200A(calibration=False)
 | Counter | EXT IN connector on rear; modes: frequency, count, period, +/− pulse width, duty cycle |
 | Sweep | Linear or logarithmic, configurable start/stop/time |
 | Memory | 10 setup slots (0..9; slot 0 is the power-on default) |
+| TTL connector | 10-pin header on rear panel (see below) |
+
+### TTL connector pinout
+
+The 10-pin header on the rear panel (labelled "TTL-Ext." in the manual, "TTL"
+on some unit panels) provides digital I/O and power:
+
+| Pin | Function | Notes |
+|-----|----------|-------|
+| 1   | TTL1     | Synchronized with CH1 (duty cycle follows CH1) |
+| 2   | GND      | |
+| 3   | TTL2     | Synchronized with CH2 (duty cycle follows CH2) |
+| 4   | GND      | |
+| 5   | TTL3     | Synchronized with CH1 (duty cycle follows CH1) |
+| 6   | GND      | |
+| 7   | TTL4     | Synchronized with CH1 (duty cycle follows CH1) |
+| 8   | +5V      | Power supply output |
+| 9   | TTL IN   | Frequency counter input (alternative to front-panel EXT IN) |
+| 10  | +5V      | Power supply output |
+
+#### TTL Input (pin 9)
+
+Selectable as the counter input source via `counter_setup(source_ttl=True)` or
+`measure_frequency_hz(source_ttl=True)`. Use this for measuring digital/logic-
+level signals where TTL threshold detection is more reliable than the analog
+front-panel input.
+
+#### TTL Outputs (pins 1, 3, 5, 7)
+
+Four independent TTL-level outputs synchronized with the main channels:
+
+- **TTL1, TTL3, TTL4**: All synchronized with **CH1**. Duty cycle determined by CH1 waveform.
+- **TTL2**: Synchronized with **CH2**. Duty cycle determined by CH2 waveform.
+
+**Phase relationships:** When CH1 and CH2 are synchronized (tracking mode), all
+four TTL outputs synchronize together with phase relationships determined by the
+CH1/CH2 phase difference setting. The manufacturer describes this as "four
+variable phase difference of TTL output."
+
+**Voltage levels:** LOW <0.3V, HIGH 1V–10V (MHS-5200A spec).
+
+**Use cases:**
+- Triggering multiple instruments synchronized to the main generator channels
+- Multi-phase clock generation when CH1/CH2 are phase-locked
+- Logic-level copies of waveforms for TTL/CMOS interfacing
+- Duty-cycle-matched sync outputs
+
+**Important:** These outputs mirror the main channel waveforms at TTL levels.
+They are **not independently controllable** via the serial protocol — their
+behavior is determined by CH1 and CH2 settings. To generate a pure TTL square
+wave on CH1/CH2 outputs (maximizing slew rate), use waveform code `w05` (CH1)
+or `w15` (CH2) via the serial protocol.
+
+**+5V pins (8, 10)** provide power for external logic. Current limit unknown.
+
+**Reference:** MHS-5200A Operating Manual (2015.05), Section 15: "4-channel TTL
+output function" and Section 10: "Having four variable phase difference of TTL
+output." Ships as "TTL-Ext. connector" accessory.
 
 ## API summary
 
@@ -126,7 +184,7 @@ gen = MHS5200A(calibration=False)
 | `set_frequency(ch, hz)` / `get_frequency(ch)` | Hz; pre-corrected by `frequency_ppm_offset` if cal loaded. Wire register: 0.01 Hz steps. |
 | `set_amplitude(ch, vpp)`  / `get_amplitude(ch)` | Vpp into 50 Ω (matches scope reading at 50 Ω; front panel shows 2× this open-circuit value). Wire register: 5 mV steps. NOT cal-corrected. |
 | `set_amplitude_dbm(ch, freq, dbm)` | Set amplitude as target dBm into 50 Ω at the given frequency. Frequency-aware; uses calibration if loaded. |
-| `set_waveform(ch, w)`   / `get_waveform(ch)`  | `Waveform` enum (SINE/SQUARE/TRIANGLE/UP_SAW/DOWN_SAW/ARB0..ARB15) |
+| `set_waveform(ch, w)`   / `get_waveform(ch)`  | `Waveform` enum (SINE/SQUARE/TRIANGLE/UP_SAW/DOWN_SAW/ARB0..ARB15). Special: `Waveform.TTL` (wire code `w05`/`w15`) switches to TTL digital output mode with maximized slew rate for fast edges. |
 | `set_duty_cycle(ch, %)` / `get_duty_cycle(ch)` | Percent (wire: 0.1 % steps) |
 | `set_offset(ch, signed)` / `get_offset(ch)` | Signed -120..+120 (wire: 0..240 with 120 = no offset) |
 | `set_phase(ch, deg)`    / `get_phase(ch)` | Degrees, 0..359 |
