@@ -31,6 +31,17 @@ Pick the backend at runtime with the script's `--vna {nanovna,hp}` flag.
 | [`mixed-mode-pdf/`](mixed-mode-pdf/) | 🧪 | 4-port single-ended `.s4p` → mixed-mode S-params (Sdd, Scc, Sdc, Scd) PDF + .s4p output. Standard Bockelman / Eisenstadt mode transform. |
 | [`crystal-bvd-pdf/`](crystal-bvd-pdf/) | 🧪 | Live VNA capture (or `.s2p` input) → Butterworth-Van Dyke parameter extraction (Lm, Cm, Rm, C0, Qm) with iterative C0 refinement; PDF + SPICE `.sub` subcircuit. |
 | [`vector-fit-spice/`](vector-fit-spice/) | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready behavioural Laplace subcircuit. LTspice or ngspice flavor. Drops measured S-params into any simulator. |
+| [`tdt-pdf/`](tdt-pdf/) | 🧪 | S21 IFFT → time-domain transmission. Finds lumped reflections INSIDE a 2-port DUT (bond-wire mismatches, internal element parasitics). |
+| [`bandpass-tdr-pdf/`](bandpass-tdr-pdf/) | 🧪 | Bandpass-mode TDR via analytic-signal IFFT — for sweeps that don't include DC (UHF-only, HPF-limited DUTs). |
+| [`renormalize-pdf/`](renormalize-pdf/) | 🧪 | Re-reference a .s2p from one Z₀ to another (50→75 Ω for CATV, 50→100 Ω for differential, 50→600 Ω for ladder line). |
+| [`rlgc-pul-pdf/`](rlgc-pul-pdf/) | 🧪 | Distributed-line per-unit-length R, L, G, C from S-params of two cable lengths + open/short. Companion to `tline-pdf` for full SPICE models. |
+| [`kramers-kronig-pdf/`](kramers-kronig-pdf/) | 🧪 | Causality check: Re/Im of a causal response are Hilbert transforms. Quantifies residual; useful for SOLT cal quality validation. |
+| [`q-cross-check/`](q-cross-check/) | 🧪 | Three independent Q methods (3 dB BW, Lorentzian fit, Smith circle) compared side-by-side; quantifies measurement uncertainty. |
+| [`cepstral-pdf/`](cepstral-pdf/) | 🧪 | Cepstral analysis of S11: separates discrete cable reflections (sharp cepstral peaks) from distributed losses (smooth baseline). |
+| [`multi-segment-sweep/`](multi-segment-sweep/) | 🧪 | Stitch many narrow NanoVNA sweeps into one wide-band Touchstone .s2p + PDF. Past the 401-point limit. |
+| [`stability-logger/`](stability-logger/) | 🧪 | Cron-friendly: appends one S11 capture's headline metrics to a CSV; tracks calibration / antenna drift over days–months. Optional `--alert-mag` for exit-code threshold. |
+| [`filter-tuning/`](filter-tuning/) | 🧪 | Live matplotlib window: continuously sweeps S21 against an optional target mask. For hand-tuning crystal / cavity / LC filters. |
+| [`wheeler-cap-pdf/`](wheeler-cap-pdf/) | 🧪 | Antenna radiation efficiency η = 1 − Q_free/Q_cap from two S11 captures (free-space and inside a Wheeler cap). |
 | [`antenna/`](antenna/) | 🧪 *(legacy, superseded)* | Full feed-point impedance: VSWR + R+X + Smith. Superseded by [`impedance-pdf/`](impedance-pdf/). Kept only for historical reference. |
 | `filter/` | ❌ *(legacy, superseded)* | Older HP-only filter-sweep stub. Use [`filter-pdf/`](filter-pdf/) (with optional `--phase` / `--group-delay`). |
 | `group-delay/` | ❌ *(legacy, superseded)* | Use [`group-delay-pdf/`](group-delay-pdf/) (standalone) or [`filter-pdf/ --group-delay`](filter-pdf/). |

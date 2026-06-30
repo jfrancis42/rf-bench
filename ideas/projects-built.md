@@ -113,6 +113,17 @@ method set so the same code runs on either backend.
 | `mixed-mode-pdf/` | 🧪 | post-processor (no VNA needed) | 4-port single-ended `.s4p` → mixed-mode S-params (Sdd / Scc / Sdc / Scd). Bockelman / Eisenstadt mode transform, selectable port-pair convention (1-2/3-4 or 1-3/2-4). PDF + mixed-mode .s4p. Authored 2026-06-30; self-tested with synthetic ideal diff pair. |
 | `crystal-bvd-pdf/` | 🧪 | NanoVNA-F or HP 8712B (or `.s2p` input) | Butterworth-Van Dyke crystal extraction. Live capture sweeps ±1 % around `--estimate`, fits Lm / Cm / Rm / C0 / Qm with iterative C0 refinement. Output: PDF + SPICE-paste-ready `.sub` subcircuit. Authored 2026-06-30; self-tested on synthetic 10 MHz crystal to 0.3 % parameter recovery. |
 | `vector-fit-spice/` | 🧪 | post-processor (no VNA needed) | Gustavsen Vector Fitting → behavioural Laplace subcircuit for LTspice or ngspice. Fits S11/S12/S21/S22 with N poles, exports `.sub` with full rational form. Authored 2026-06-30; self-tested on synthetic 2nd-order BPF (6 poles → 0.23 dB RMS fit error). |
+| `tdt-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 IFFT → time-domain transmission. Finds reflections INSIDE a 2-port DUT. Authored 2026-06-30. |
+| `bandpass-tdr-pdf/` | 🧪 | NanoVNA-F or HP 8712B | Bandpass-mode TDR via analytic-signal IFFT, for sweeps that don't start near DC. Authored 2026-06-30. |
+| `renormalize-pdf/` | 🧪 | post-processor (no VNA needed) | Re-reference a .s2p from one Z₀ to another (50→75 Ω CATV, 50→100 Ω differential, 50→600 Ω ladder). Authored 2026-06-30; self-tested on a known 75-Ω termination. |
+| `rlgc-pul-pdf/` | 🧪 | post-processor (4 .s2p files) | Per-unit-length R, L, G, C from S-params of two cable lengths + OSL pair. Distributed-line model for SPICE. Authored 2026-06-30. |
+| `kramers-kronig-pdf/` | 🧪 | post-processor | Causality check via Hilbert-transform reconstruction; quantifies residual as cal-quality diagnostic. Authored 2026-06-30. |
+| `q-cross-check/` | 🧪 | post-processor | Three independent Q methods (3 dB BW, Lorentzian fit, Smith-chart circle) cross-checked; measurement-uncertainty estimator. Authored 2026-06-30. |
+| `cepstral-pdf/` | 🧪 | post-processor | Cepstral analysis: separates discrete reflections (peaks) from distributed loss (baseline). Authored 2026-06-30. |
+| `multi-segment-sweep/` | 🧪 | NanoVNA-F or HP 8712B | Wideband sweep stitching past the NanoVNA's 401-point cap. Authored 2026-06-30. |
+| `stability-logger/` | 🧪 | NanoVNA-F or HP 8712B | Cron-friendly per-run CSV append + optional trend-line PDF; alert exit code on threshold crossing. Authored 2026-06-30. |
+| `filter-tuning/` | 🧪 | NanoVNA-F or HP 8712B (interactive) | Live matplotlib window with S21 trace continuously updated against optional target mask. Authored 2026-06-30. |
+| `wheeler-cap-pdf/` | 🧪 | post-processor (two .s1p / .s2p) | Antenna radiation efficiency η = 1 - Q_free/Q_cap from two captures. Authored 2026-06-30. |
 | `antenna/` | ❌ *(superseded)* | — | Legacy HP-only feed-point impedance. **Use `impedance-pdf/` instead.** Kept for historical reference. |
 | `filter/` | ❌ *(superseded)* | — | Older HP-only filter S21 stub. **Use `filter-pdf/`** (add `--phase`/`--group-delay` for the HP-equivalent capabilities). |
 | `group-delay/` | ❌ *(superseded)* | — | **Use `group-delay-pdf/` (standalone) or `filter-pdf/ --group-delay`.** |

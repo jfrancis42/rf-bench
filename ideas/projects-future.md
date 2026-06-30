@@ -180,21 +180,20 @@ LMR-400, Heliax-1/2, etc.) and optional pass/fail target. The "save to
 is still TODO — currently each cable check is a one-shot PDF.
 
 #### Real-time filter tuning aid
-`projects/vna/filter-tuning/` — 💭 not started.
+`projects/vna/filter-tuning/` — 🧪 **built 2026-06-30** (live matplotlib
+window with target-mask overlay; audible-beep feature still pending).
 
 NanoVNA-F runs continuously on the bench; the host overlays target
-filter response on the live S21 trace. Audible beep when each pole
-crosses target. Useful when tuning crystal / cavity / LC filters by
-hand — eyes on the filter knobs, ears on the host.
+filter response on the live S21 trace. Useful when tuning crystal /
+cavity / LC filters by hand — eyes on the filter knobs.
 
 #### Multi-segment wideband sweep
-`projects/vna/multi-segment/` — 💭 not started.
+`projects/vna/multi-segment-sweep/` — 🧪 **built 2026-06-30**.
 
 The NanoVNA caps at 401 points per sweep. For span / point combinations
-that exceed that, stitch contiguous segments using
-`NanoVNA.iter_segments()`. Trade-off: SOLT calibration discontinuity at
-segment edges; the project flags edges and offers cubic-spline
-interpolation across the seam, or per-segment calibration.
+that exceed that, stitch contiguous segments. Trade-off: SOLT
+calibration discontinuity at segment edges (drawn as faint vertical
+lines on the output PDF so you can see them).
 
 #### NanoVNA-vs-SSA amplitude cross-check
 `projects/vna/vs-ssa-cross-check/` — 💭 not started.
@@ -214,12 +213,14 @@ problem-cable highlights, recommended fixes. NanoVNA-F's built-in
 display provides on-site go/no-go; the host report adds analytics.
 
 #### Day-zero baseline & drift monitor
-`projects/vna/doe-iso-baseline/` — 💭 not started.
-
-Sweep a known SOLT cal-kit's verification standards (mismatch
-attenuator, sliding load, beadless airline if available). Record
-systematic residual error at each frequency. Re-run nightly via cron;
-alert when drift exceeds threshold. Watches cal stability over months.
+`projects/vna/stability-logger/` — 🧪 **built 2026-06-30** as a
+general drift logger. Originally proposed as a verification-standard
+monitor (`doe-iso-baseline/`); the built version is more general — it
+appends one S11 capture's headline metrics to a CSV each invocation,
+optionally writes a trend-line PDF, and returns exit-code 2 when a
+configurable alert threshold is crossed. Use it on a precision LOAD
+for SOLT-drift monitoring; use it on the antenna feedpoint for
+seasonal drift tracking.
 
 #### Small-signal amplifier S-parameter vs bias contour
 `projects/vna/amplifier-curve/` — 💭 not started.
@@ -327,14 +328,14 @@ the `--gate-start-m` / `--gate-end-m` flags on `tdr-pdf/`.)**
 S11. Finds lumped reflections **inside** a 2-port DUT — bonding-wire
 mismatches in an amplifier, board-trace discontinuities, internal
 filter element parasitics. The HP 8712B has it natively as
-`:CALC:TRAN:STATE ON`; NanoVNA needs host-side compute. — 💭 not
-started.
+`:CALC:TRAN:STATE ON`; NanoVNA needs host-side compute. **(✅ BUILT
+2026-06-30 as `projects/vna/tdt-pdf/`.)**
 
 **Bandpass-mode TDR.** For sweeps that don't start at DC (most
 non-NanoVNA-F gear). The current `tdr-pdf` script uses low-pass
 mode; bandpass mode uses the analytic signal (Hilbert transform of
-the band-shifted spectrum) instead. ~50 extra lines. — 💭 not
-started.
+the band-shifted spectrum) instead. **(✅ BUILT 2026-06-30 as
+`projects/vna/bandpass-tdr-pdf/`.)**
 
 #### Calibration and reference-plane tricks
 
@@ -354,7 +355,8 @@ captured. — 💭 not started.
 **Renormalization.** Convert measured 50 Ω S-params to S-params *at
 any reference impedance* — 75 Ω (CATV / SDI), 100 Ω (differential
 pairs), 600 Ω (open-wire ladder line). One-line numpy. Lets a 50-Ω
-VNA characterize a 75-Ω device honestly. — 💭 not started.
+VNA characterize a 75-Ω device honestly. **(✅ BUILT 2026-06-30 as
+`projects/vna/renormalize-pdf/`.)**
 
 #### Multi-port emulation with a 2-port VNA
 
@@ -394,26 +396,27 @@ anything on this list. **(✅ BUILT 2026-06-30 as
 S-params of two known lengths of the same line, solve for
 distributed R, L, G, C(f). Yields skin-effect coefficient,
 dielectric loss tangent, propagation constant. Extension of
-`tline-pdf/` math. — 💭 not started.
+`tline-pdf/` math. **(✅ BUILT 2026-06-30 as
+`projects/vna/rlgc-pul-pdf/`.)**
 
 #### Statistical / quality work
 
 **Stability logging.** Sweep a known reference standard every N
 minutes via cron; track |S11| variance over hours / days.
-Quantifies calibration drift; alerts when it exceeds spec. — 💭
-not started.
+Quantifies calibration drift; alerts when it exceeds spec.
+**(✅ BUILT 2026-06-30 as `projects/vna/stability-logger/`.)**
 
 **Causality check via Kramers-Kronig.** Re(S(ω)) and Im(S(ω)) of
 any causal system are Hilbert transforms of each other. Compute one
 from the other and compare to the measurement. Non-zero residual →
 either non-causal measurement (= calibration error) or a non-linear
-DUT. — 💭 not started.
+DUT. **(✅ BUILT 2026-06-30 as `projects/vna/kramers-kronig-pdf/`.)**
 
 **Q-extraction triple cross-check.** Three independent Q methods —
 3 dB bandwidth, Lorentzian fit, and Q-circle on the Smith chart —
 should all agree to within a percent or two. Where they disagree,
 the measurement is suspect. Useful for tuning high-Q crystals where
-1 % matters. — 💭 not started.
+1 % matters. **(✅ BUILT 2026-06-30 as `projects/vna/q-cross-check/`.)**
 
 #### Antenna and propagation science
 
@@ -421,7 +424,8 @@ the measurement is suspect. Useful for tuning high-Q crystals where
 space, then re-measure inside a conducting cap (which suppresses
 radiation). Comparison gives radiation efficiency vs ohmic
 efficiency. NanoVNA-portable; finally tells you whether that tiny
-mobile whip is actually radiating. — 💭 not started.
+mobile whip is actually radiating. **(✅ BUILT 2026-06-30 as
+`projects/vna/wheeler-cap-pdf/`.)**
 
 **Antenna factor calibration.** Pair the VNA with a calibrated
 noise source to derive antenna factor in dB(m⁻¹). Lets you use a
@@ -456,7 +460,8 @@ started.
 **Cepstral analysis of S11.** log-magnitude FFT separates discrete
 cable reflections (sharp cepstral peaks) from distributed losses
 (smooth cepstral background). Useful when TDR can't separate
-closely-spaced reflections. — 💭 not started.
+closely-spaced reflections. **(✅ BUILT 2026-06-30 as
+`projects/vna/cepstral-pdf/`.)**
 
 **Mode decomposition in oversize waveguide.** When frequency goes
 above a cable's TE₁₁ cutoff, S-params describe multi-mode

@@ -72,6 +72,17 @@
 > | `vna/mixed-mode-pdf` | 🧪 | Single-ended .s4p → mixed-mode S-params (Sdd, Scc, Sdc, Scd) PDF + .s4p; Bockelman / Eisenstadt mode transform. |
 > | `vna/crystal-bvd-pdf` | 🧪 | Crystal Butterworth-Van Dyke extraction (Lm, Cm, Rm, C0, Qm); live capture or .s2p input; PDF + SPICE .sub. |
 > | `vna/vector-fit-spice` | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready Laplace subcircuit (LTspice or ngspice). |
+> | `vna/tdt-pdf` | 🧪 | S21 IFFT → time-domain transmission; finds lumped reflections inside a 2-port DUT. |
+> | `vna/bandpass-tdr-pdf` | 🧪 | Bandpass-mode TDR for sweeps that don't include DC. |
+> | `vna/renormalize-pdf` | 🧪 | Re-reference a .s2p from one Z₀ to another. |
+> | `vna/rlgc-pul-pdf` | 🧪 | Distributed-line R, L, G, C from S-params of two lengths + OSL. |
+> | `vna/kramers-kronig-pdf` | 🧪 | Causality check; Hilbert-transform residual quantifies measurement quality. |
+> | `vna/q-cross-check` | 🧪 | Three Q-extraction methods compared side-by-side. |
+> | `vna/cepstral-pdf` | 🧪 | Cepstral analysis of S11 for resolving closely-spaced reflections. |
+> | `vna/multi-segment-sweep` | 🧪 | Wideband stitching past the NanoVNA's 401-point limit. |
+> | `vna/stability-logger` | 🧪 | Cron-friendly drift logger; CSV + optional alert exit code. |
+> | `vna/filter-tuning` | 🧪 | Live S21 vs target mask for hand-tuning filters. |
+> | `vna/wheeler-cap-pdf` | 🧪 | Antenna radiation efficiency from free-space vs inside-cap S11. |
 > | legacy `vna/antenna`, `filter`, `group-delay`, `impedance`, `tline`, `sparams` | ❌ *(superseded)* | Replaced by the `*-pdf/` projects above; kept only for historical reference. |
 > | `vna/transistor` | ❌ | Still HP-only — parametric bias-swept S-params don't fit the NanoVNA DUT-reversal workflow. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
@@ -2149,8 +2160,19 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 | `projects/vna/mixed-mode-pdf/` | 🧪 | 4-port single-ended `.s4p` → mixed-mode (Sdd / Scc / Sdc / Scd) PDF + .s4p. |
 | `projects/vna/crystal-bvd-pdf/` | 🧪 | Crystal Butterworth-Van Dyke extraction (Lm, Cm, Rm, C0, Qm); live capture or `.s2p` input; PDF + SPICE `.sub`. |
 | `projects/vna/vector-fit-spice/` | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready Laplace subcircuit (LTspice or ngspice). |
+| `projects/vna/tdt-pdf/` | 🧪 | S21 → time-domain transmission. Reflections inside a 2-port DUT. |
+| `projects/vna/bandpass-tdr-pdf/` | 🧪 | Bandpass-mode TDR for sweeps that don't include DC. |
+| `projects/vna/renormalize-pdf/` | 🧪 | Re-reference a .s2p between system impedances (50→75/100/600 Ω). |
+| `projects/vna/rlgc-pul-pdf/` | 🧪 | Per-unit-length R/L/G/C from two cable lengths + OSL on one. |
+| `projects/vna/kramers-kronig-pdf/` | 🧪 | Causality check via Hilbert transform; cal-quality diagnostic. |
+| `projects/vna/q-cross-check/` | 🧪 | Three Q-extraction methods compared side-by-side. |
+| `projects/vna/cepstral-pdf/` | 🧪 | Cepstral analysis of S11. |
+| `projects/vna/multi-segment-sweep/` | 🧪 | Stitch many narrow VNA sweeps into one wide-band capture. |
+| `projects/vna/stability-logger/` | 🧪 | Cron-friendly long-running CSV log + alert threshold. |
+| `projects/vna/filter-tuning/` | 🧪 | Live S21 with target-mask overlay; for hand-tuning filters. |
+| `projects/vna/wheeler-cap-pdf/` | 🧪 | Antenna efficiency η from free-space vs Wheeler-cap captures. |
 
-All **nineteen** scripts share the same swappable-VNA-API pattern and the same
+All **thirty** scripts share the same swappable-VNA-API pattern and the same
 CLI shape (`--vna {nanovna,hp} --start MHZ --stop MHZ --label ... --output FILE.pdf`).
 See [`projects/vna/README.md`](projects/vna/README.md) for the full per-project status table,
 and each project's README for a "NanoVNA vs HP" section documenting where one VNA
