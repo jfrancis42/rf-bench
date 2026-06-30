@@ -8,16 +8,16 @@
 | `rf_bench.utils` | `rf-bench-drivers-utils` | 0.1.0 | ✅ | Pure RF math — no instruments |
 | `rf_bench.yertai` | `rf-bench-drivers-yertai` | 0.1.0 | ✅ | ET5406A+ DC load. Wraps philpagel/ET54.py with field-order fix |
 | `rf_bench.gpsd` | `rf-bench-drivers-gpsd` | 0.1.1 | ✅ | gpsd JSON/TCP client; tested with u-blox |
-| `rf_bench.koolertron` | (not yet on PyPI) | 0.1.0 local | ✅ | MHS-5225A, tested 2026-06-08 — ready to publish |
+| `rf_bench.koolertron` | `rf-bench-drivers-koolertron` | 0.2.0 | ✅ | MHS-5225A, tested 2026-06-08; 0.2.0 adds arbitrary-waveform upload |
 | `rf_bench.rtlsdr` | `rf-bench-drivers-rtlsdr` | 0.1.2 | ✅ | Thin pyrtlsdr wrapper + PPM cal cache |
-| `rf_bench.nanovna` | (not yet on PyPI) | 0.1.0 local | ✅ | NanoVNA-F tested 2026-06-30; 17 API smoke tests pass; API swappable with `rf_bench.hp.HP8712B` |
+| `rf_bench.nanovna` | `rf-bench-drivers-nanovna` | 0.1.0 | ✅ | NanoVNA-F tested 2026-06-30; 17 API smoke tests pass; API swappable with `rf_bench.hp.HP8712B` |
 | `rf_bench.flipper` | `rf-bench-drivers-flipper` | 0.2.1 | 🔶 | Sub-GHz OOK + 2-FSK only; IR/RFID/NFC untested |
 | `rf_bench.buspirate` | `rf-bench-drivers-buspirate` | 0.1.0 | 🧪 | Published, untested in rf-bench context |
 | `rf_bench.kiwisdr` | (not yet on PyPI) | 0.1.0 local | 🧪 | Code complete; IP TBD |
 | `rf_bench.sunsdr` | (not yet on PyPI) | 0.2.0 local | 🧪 | Code complete; IP TBD |
 | `rf_bench.fx2lafw` | (not yet on PyPI) | 0.1.0 local | ✅ | FX2LAFW 8-ch logic analyzer; sigrok-cli subprocess; ready to publish |
 | `rf_bench.relay` | (not on PyPI) | local | ❌ | Hardware ordered 2026-06-03 |
-| `rf_bench.arduino_relay_board` | (not yet on PyPI) | 0.1.0 local | ✅ | Arduino Uno + Vilros Ethernet R3 (W5100), 4-ch network relay, TCP :5025 — tested 2026-06-25 |
+| `rf_bench.arduino_relay_board` | `rf-bench-drivers-arduino-relay-board` | 0.1.0 | ✅ | Arduino Uno + Vilros Ethernet R3 (W5100), 4-ch network relay, TCP :5025 — tested 2026-06-25 |
 | `rf_bench.hp` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
 | `rf_bench.solartron` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
 

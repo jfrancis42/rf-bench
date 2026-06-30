@@ -9,7 +9,7 @@ Python driver packages for bench instruments. Each is published to PyPI separate
 | `yaesu/` | `rf_bench.yaesu` | `rf-bench-drivers-yaesu` | ✅ |
 | `utils/` | `rf_bench.utils` | `rf-bench-drivers-utils` | ✅ |
 | `yertai/` | `rf_bench.yertai` | `rf-bench-drivers-yertai` | ✅ |
-| `koolertron/` | `rf_bench.koolertron` | not yet | ✅ tested |
+| `koolertron/` | `rf_bench.koolertron` | `rf-bench-drivers-koolertron` 0.2.0 | ✅ tested |
 | `buspirate/` | `rf_bench.buspirate` | `rf-bench-drivers-buspirate` | 🧪 |
 | `flipper/` | `rf_bench.flipper` | `rf-bench-drivers-flipper` | 🔶 |
 | `rtlsdr/` | `rf_bench.rtlsdr` | `rf-bench-drivers-rtlsdr` | ✅ |
@@ -18,9 +18,9 @@ Python driver packages for bench instruments. Each is published to PyPI separate
 | `sunsdr/` | `rf_bench.sunsdr` | not yet | 🧪 |
 | `fx2lafw/` | `rf_bench.fx2lafw` | not yet | 🧪 |
 | `relay/` | `rf_bench.relay` | not yet | ❌ hw ordered |
-| `arduino-relay-board/` | `rf_bench.arduino_relay_board` | not yet | ✅ tested |
+| `arduino-relay-board/` | `rf_bench.arduino_relay_board` | `rf-bench-drivers-arduino-relay-board` 0.1.0 | ✅ tested |
 | `hp/` | `rf_bench.hp` | not yet | ❌ pending KISS-488 |
-| `nanovna/` | `rf_bench.nanovna` | not yet | ✅ tested 2026-06-30 (API-swappable with `rf_bench.hp.HP8712B`) |
+| `nanovna/` | `rf_bench.nanovna` | `rf-bench-drivers-nanovna` 0.1.0 | ✅ tested 2026-06-30 (API-swappable with `rf_bench.hp.HP8712B`) |
 | `solartron/` | `rf_bench.solartron` | not yet | ❌ pending KISS-488 |
 | `virtual-*/` | `rf_bench.virtual` | not yet | ✅ all built |
 

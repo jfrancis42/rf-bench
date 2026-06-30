@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rf-bench-drivers-koolertron"
-version = "0.1.0"
+version = "0.2.0"
 description = "Koolertron / MHinstek MHS-5200A series dual-channel DDS signal generator + frequency counter driver (covers KKmoon and other rebrands)"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }

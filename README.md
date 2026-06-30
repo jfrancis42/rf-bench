@@ -29,9 +29,10 @@
 > | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
 > | `rf-bench-drivers-gpsd` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-gpsd)](https://pypi.org/project/rf-bench-drivers-gpsd/) | ✅ | gpsd GPS client 0.1.1 — tested with u-blox receiver; lat/lon/alt/speed/heading/DOP |
 > | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
-> | `rf-bench-drivers-nanovna` | not on PyPI | ✅ | NanoVNA-F / -H / -H4 — ASCII shell over USB CDC; 17 API smoke tests pass on NanoVNA-F (2026-06-30); API-swappable with `rf-bench-drivers-hp` |
+> | `rf-bench-drivers-nanovna` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-nanovna)](https://pypi.org/project/rf-bench-drivers-nanovna/) | ✅ | NanoVNA-F / -H / -H4 — ASCII shell over USB CDC; tested against NanoVNA-F 2026-06-30; API-swappable with `rf-bench-drivers-hp` |
 > | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
-> | `rf-bench-drivers-koolertron` | not on PyPI yet | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A |
+> | `rf-bench-drivers-koolertron` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-koolertron)](https://pypi.org/project/rf-bench-drivers-koolertron/) | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A; 0.2.0 adds arbitrary-waveform upload |
+> | `rf-bench-drivers-arduino-relay-board` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-arduino-relay-board)](https://pypi.org/project/rf-bench-drivers-arduino-relay-board/) | ✅ | Arduino + W5100/W5500 4-channel Ethernet relay board, TCP :5025 — tested 2026-06-25 against 10.1.1.36 |
 >
 > **Projects** (in `projects/`) follow the same grading. Highlights:
 >
@@ -301,7 +302,9 @@ pip install rf-bench-drivers-yaesu     # Yaesu FT-891
 pip install rf-bench-drivers-utils     # RF math utilities (no instruments)
 pip install rf-bench-drivers-yertai    # Yertai ET5406A+ DC load
 pip install rf-bench-drivers-gpsd      # gpsd GPS client
-pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — not on PyPI yet
+pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand)
+pip install rf-bench-drivers-nanovna     # NanoVNA family (USB CDC, ASCII shell) — API-swappable with rf-bench-drivers-hp
+pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch Ethernet relay board
 ```
 
 **Dependency:** [NumPy](https://numpy.org/) (for `rf_bench.utils` and the
