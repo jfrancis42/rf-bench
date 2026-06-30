@@ -580,7 +580,6 @@ Author: Jeff Francis (N0GQ) <gjfrancis@protonmail.com>
 
 ## See Also
 
-- `~/Dropbox/build/rf-bench/README` — Full rf-bench documentation
 - `~/Dropbox/build/rf-bench/ideas/virtual-instrument-projects.md` — Integration project ideas
 - `~/Dropbox/build/rf-bench/ideas/virtual-panels.md` — Panel types and architecture
 - `drivers/virtual-*/README.md` — Individual driver documentation

@@ -129,5 +129,4 @@ Users of this application must download the fonts themselves from the official i
 ## See Also
 
 - `README.md` - Main virtual numeric display documentation
-- `README` - Architecture and development notes
 - `/drivers/virtual-numeric-display/README.md` - Python driver API

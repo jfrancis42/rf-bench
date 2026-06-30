@@ -8,10 +8,10 @@ coefficient, and writes a single-page PDF chart.
 
 Driver selection
 ----------------
-Both drivers expose the same core method set (see
-``rf-bench/README`` "VNA API compatibility"). The default is the
-NanoVNA on ``/dev/ttyACM1``; ``--vna hp`` selects the HP 8712B over
-KISS-488 instead.
+Both drivers expose the same core method set (see the VNA API
+compatibility section in ``projects/vna/README.md``). The default is
+the NanoVNA on ``/dev/ttyACM1``; ``--vna hp`` selects the HP 8712B
+over KISS-488 instead.
 
 Math
 ----
@@ -41,6 +41,11 @@ import argparse
 import sys
 from datetime import datetime
 from typing import Optional
+
+# Suppress mixed-install matplotlib Axes3D import warning (harmless;
+# happens when system-package and pip-installed matplotlib are both present).
+import warnings
+warnings.filterwarnings("ignore", message="Unable to import Axes3D")
 
 import matplotlib
 matplotlib.use("Agg")

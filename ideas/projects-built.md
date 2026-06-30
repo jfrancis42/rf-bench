@@ -98,20 +98,24 @@ method set so the same code runs on either backend.
 | `smith-pdf/` | ✅ | NanoVNA-F or HP 8712B | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm / 23 cm / HF. |
 | `return-loss-pdf/` | 🧪 | NanoVNA-F or HP 8712B | S11 → return-loss-dB PDF with equivalent-VSWR secondary axis. Better than swr-pdf for sub-2:1 fine-tuning. Authored 2026-06-30; not yet run against hardware. |
 | `cable-loss-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 THRU → coax insertion-loss PDF; optional dB/100 ft panel with manufacturer-curve overlay (RG-58/-213/LMR-400/etc.) and pass/fail target line. Authored 2026-06-30. |
-| `filter-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. Authored 2026-06-30. |
+| `filter-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. Optional `--phase` and `--group-delay` panels. Authored 2026-06-30. |
+| `group-delay-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | Standalone S21 group-delay tool (\|S21\| / ∠S21 / τ_g panels). For amp / cable / matching-network work where filter-pdf bandwidth detection is irrelevant. Authored 2026-06-30. |
+| `impedance-pdf/` | 🧪 | NanoVNA-F or HP 8712B | Full one-port diagnostic: R+jX, \|Z\|+∠Z, VSWR, Smith locus, optional X=0 resonance hunter. Supersedes legacy `antenna/` and `impedance/`. Authored 2026-06-30. |
+| `tline-pdf/` | 🧪 | NanoVNA-F or HP 8712B | Transmission-line characterisation: VF, loss/m, optional Z₀(f) via OSL-S11 two-pass method. Two methods: `--method s21` (fast, Z₀ assumed 50) and `--method osl-s11` (derives Z₀ for unknown lines). Supersedes legacy `tline/`. Authored 2026-06-30. |
+| `sparams-pdf/` | 🧪 | NanoVNA-F (DUT-reversal, two-pass) or HP 8712B (native 4-S-param) | Full 2-port S-parameters + Touchstone .s2p. NanoVNA captures S11+S21 forward, then prompts to physically reverse the DUT for S22+S12. HP captures all four natively. Supersedes legacy `sparams/`. Authored 2026-06-30. |
 | `choke-pdf/` | 🧪 | NanoVNA-F or HP 8712B (series-through fixture) | Common-mode choke |Z| / R / X PDF using the K6JCA / DXE series-through method (Z = 2·Z0·(1−S21)/S21). Authored 2026-06-30. |
 | `toroid-sniff/` | 🧪 | NanoVNA-F or HP 8712B (series-through) | Wound-toroid L / Al / Q PDF with a mix-consistency hint (43 / 31 / 61 / 77 / 2 / 6) based on Q-peak frequency. Authored 2026-06-30. |
 | `balun-pdf/` | 🧪 | NanoVNA-F or HP 8712B (two-pass) | Balun characterisation: RL + insertion loss + amplitude balance + phase balance, captured as two passes (swap A↔B with the other leg in 50 Ω). 0° / 180° nominal phase per balun topology. Authored 2026-06-30. |
 | `resonance-finder/` | 🧪 | NanoVNA-F or HP 8712B | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. Authored 2026-06-30. |
 | `connector-check/` | 🧪 | NanoVNA-F or HP 8712B | Per-amateur-band PASS / FAIL return-loss check vs configurable threshold. PDF + JSON; non-zero exit on FAIL. Authored 2026-06-30. |
 | `tdr-pdf/` | 🧪 | NanoVNA-F or HP 8712B | Host-side IFFT time-domain reflectometer (step + impulse), cable-VF presets (RG-58/-213/LMR-400/etc.), fault auto-classification (open-like / short-like / mismatch). Authored 2026-06-30. |
-| `antenna/` | 🧪 | HP 8712B (pending) or NanoVNA | Full feed-point impedance: VSWR + R+X + Smith. Resonance finder. Currently HP-only in code; aligning to swappable API is a known TODO. |
-| `filter/` | ❌ | HP 8712B (pending) | Older filter S21 stub. Use `filter-pdf/` instead. |
-| `group-delay/` | ❌ | HP 8712B (pending) | Group delay vs frequency. |
-| `impedance/` | ❌ | HP 8712B (pending) | One-port impedance characterization. |
-| `sparams/` | ❌ | HP 8712B (pending) | Full S-parameter capture (Touchstone). |
-| `tline/` | ❌ | HP 8712B (pending) | Transmission line characterization. |
-| `transistor/` | ❌ | HP 8712B (pending) | RF transistor S-parameter extraction. |
+| `antenna/` | ❌ *(superseded)* | — | Legacy HP-only feed-point impedance. **Use `impedance-pdf/` instead.** Kept for historical reference. |
+| `filter/` | ❌ *(superseded)* | — | Older HP-only filter S21 stub. **Use `filter-pdf/`** (add `--phase`/`--group-delay` for the HP-equivalent capabilities). |
+| `group-delay/` | ❌ *(superseded)* | — | **Use `group-delay-pdf/` (standalone) or `filter-pdf/ --group-delay`.** |
+| `impedance/` | ❌ *(superseded)* | — | **Use `impedance-pdf/`.** |
+| `sparams/` | ❌ *(superseded)* | — | **Use `sparams-pdf/`** — it handles the NanoVNA DUT-reversal trick automatically. |
+| `tline/` | ❌ *(superseded)* | — | **Use `tline-pdf/`** (NanoVNA-friendly with two methods). |
+| `transistor/` | ❌ | HP 8712B (pending) | **Still HP-only.** Parametric bias-swept S-params require all four S-params at every bias point; the DUT-reversal trick is impractical at that scale. |
 
 ### projects/spectrum
 
@@ -259,11 +263,11 @@ cancels an in-flight pulse.
 
 ### projects/esp32
 
-ESP32-based SCPI-over-WiFi controllers. Each project connects to WiFi, exposes SCPI commands on TCP port 5025 (industry standard), and controls external hardware via GPIO/I2C/SPI/UART. Common pattern across all projects: Arduino IDE sketch (~400-600 lines), WiFi credentials embedded in source, IEEE 488.2 common commands (*IDN?, *RST, SYST:ERR?), domain-specific SCPI subsystem. Each project directory contains: `.ino` sketch, `README.md` (user guide with wiring, commands, examples), `README` (developer notes), `test_*.py` (Python demo).
+ESP32-based SCPI-over-WiFi controllers. Each project connects to WiFi, exposes SCPI commands on TCP port 5025 (industry standard), and controls external hardware via GPIO/I2C/SPI/UART. Common pattern across all projects: Arduino IDE sketch (~400-600 lines), WiFi credentials embedded in source, IEEE 488.2 common commands (*IDN?, *RST, SYST:ERR?), domain-specific SCPI subsystem. Each project directory contains: `.ino` sketch, `README.md` (user guide with wiring, commands, examples), `test_*.py` (Python demo).
 
 **Status codes:** ✅ = tested on hardware; 🔨 = built to documentation (not yet tested); 💭 = idea only.
 
-**All 35 ESP32 SCPI projects are now built to documentation (🔨)**. Each includes complete `.ino` firmware, `README.md` user guide, and `README` developer documentation. Hardware testing pending.
+**All 35 ESP32 SCPI projects are now built to documentation (🔨)**. Each includes complete `.ino` firmware and a `README.md` user guide. Hardware testing pending.
 
 | Project | Status | Hardware | SCPI Subsystem | Use Case |
 |---------|--------|----------|----------------|----------|

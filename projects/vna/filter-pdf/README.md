@@ -36,6 +36,11 @@ python filter_pdf.py --start 0.5 --stop 200 \
 # BCB-rejection HPF: sweep AM band and the lower HF region together
 python filter_pdf.py --start 0.5 --stop 5 \
     --label "BCB reject HPF" --output bcb_reject.pdf
+
+# Same SSB crystal filter as above, but add phase + group-delay panels:
+python filter_pdf.py --start 9.998 --stop 10.002 --points 401 --average 4 \
+    --phase --group-delay \
+    --label "9 MHz Inrad SSB filter" --output inrad_phasegd.pdf
 ```
 
 Optional flags:
@@ -46,6 +51,9 @@ Optional flags:
 - `--points N` — sweep points (NanoVNA max 401, HP max 801; default 401)
 - `--average N` — software-average N sweeps
 - `--power DBM` — HP source power; ignored on NanoVNA
+- `--phase` — adds an unwrapped-phase panel below the magnitude panel
+- `--group-delay` — adds a group-delay panel (τ_g = −dφ/dω, nanoseconds);
+  in-band min / max / peak-to-peak summary is printed and overlaid on the panel
 
 ## Output
 
@@ -62,6 +70,31 @@ Single-page PDF with:
   - Passband peak-to-peak ripple (within the -3 dB band)
   - Shape factor (-60 dB BW ÷ -6 dB BW) — classic SSB-filter spec
   - Stopband floor in dB and frequency
+
+## On the optional `--phase` / `--group-delay` panels
+
+Both panels are derived from the complex S21 the VNA already returns —
+no extra capture step. They work identically on the NanoVNA and on
+the HP 8712B.
+
+- The **phase panel** plots `np.unwrap(np.angle(S21))` in degrees.
+  Useful for confirming the filter is roughly linear-phase in the
+  passband (a Bessel filter looks like a sloped straight line; a
+  classic Cauer/elliptic looks like a sloped line with ripple).
+- The **group-delay panel** plots `−dφ/dω` in nanoseconds. The trace
+  is drawn faintly across the whole sweep and bolded inside the
+  detected −3 dB passband, because group delay outside the passband
+  is dominated by phase noise and is essentially meaningless. The
+  in-band minimum, maximum, and peak-to-peak ripple are reported.
+- **NanoVNA caveat:** the NanoVNA has no hardware averaging and a
+  coarser noise floor than the HP. The differentiation in group-delay
+  amplifies that noise. Use `--average 4` or higher when computing
+  group delay; the HP's hardware averaging is tighter still, so once
+  it's online you'll get cleaner GD traces from it.
+- **NanoVNA bonus on the high end:** because the NanoVNA-F reaches
+  1.5 GHz fundamental (HP 8712B stops at 1.3 GHz), VHF/UHF filter
+  group-delay work above ~1.3 GHz is **NanoVNA-only** until a higher-
+  range VNA arrives.
 
 ## Notes
 

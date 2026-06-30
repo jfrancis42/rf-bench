@@ -28,7 +28,7 @@ SPI modes:
     2: CPOL=1, CPHA=0 (sample falling, shift rising)
     3: CPOL=1, CPHA=1 (sample rising, shift falling)
 
-Author: jfrancis / jfrancis
+Author: jfrancis
 License: GPL-3.0-or-later
 """
 

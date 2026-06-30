@@ -204,7 +204,7 @@ Done.
 - Script automatically disables heater when complete or interrupted (Ctrl-C)
 - DMM must be configured for 4-wire RTD measurement
 - DS18B20 sensors must be on OneWire bus of scpi-temp ESP32
-- Heater PID parameters should be tuned conservatively (see README)
+- Heater PID parameters should be tuned conservatively
 - For best results, allow chamber to pre-heat and stabilize before profiling
 - Reference thermometer should be positioned in center of chamber
 - All timestamps are in local system time

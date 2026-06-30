@@ -31,6 +31,11 @@ import sys
 from datetime import datetime
 from typing import Optional
 
+# Suppress mixed-install matplotlib Axes3D import warning (harmless;
+# happens when system-package and pip-installed matplotlib are both present).
+import warnings
+warnings.filterwarnings("ignore", message="Unable to import Axes3D")
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -67,6 +72,7 @@ def maybe_set_power(vna, dbm: Optional[float], vna_kind: str) -> None:
 
 
 def measure_s21(vna, start_hz, stop_hz, points, averaging):
+    """Return (freqs_hz, s21_complex). Magnitude/phase derived downstream."""
     vna.setup_sweep(start_hz, stop_hz, points)
     vna.set_parameter("S21")
     ok = vna.single_sweep()
@@ -79,8 +85,21 @@ def measure_s21(vna, start_hz, stop_hz, points, averaging):
             f"VNA returned mismatched array lengths "
             f"(freqs={len(freqs)}, s21={len(s21)})"
         )
-    s21_db = 20.0 * np.log10(np.clip(np.abs(s21), 1e-12, None))
-    return freqs, s21_db
+    return freqs, s21
+
+
+def compute_group_delay_ns(freqs_hz: np.ndarray,
+                           s21: np.ndarray) -> np.ndarray:
+    """
+    Group delay τ_g(f) = −dφ/dω, in nanoseconds.
+
+    Uses np.unwrap on the S21 phase, then a central-difference
+    derivative (np.gradient) against angular frequency. Length is
+    preserved (gradient does forward/back-diff at the edges).
+    """
+    phase = np.unwrap(np.angle(s21))
+    omega = 2.0 * np.pi * freqs_hz
+    return -np.gradient(phase, omega) * 1e9
 
 
 # ---------------------------------------------------------------------------
@@ -203,11 +222,20 @@ BW_STYLES = {
 }
 
 
-def plot_pdf(freqs_hz, s21_db, metrics, label, driver_name, idn, output_path):
+def plot_pdf(freqs_hz, s21_db, metrics, label, driver_name, idn, output_path,
+             phase_deg=None, group_delay_ns=None):
     freqs_mhz = freqs_hz / 1e6
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    fig, ax = plt.subplots(figsize=(11, 7.5))
+    show_phase = phase_deg is not None
+    show_gd    = group_delay_ns is not None
+    n_panels = 1 + (1 if show_phase else 0) + (1 if show_gd else 0)
+
+    fig, axes = plt.subplots(n_panels, 1, figsize=(11, 4.5 * n_panels + 1.5),
+                             sharex=True)
+    if n_panels == 1:
+        axes = [axes]
+    ax = axes[0]
 
     ax.plot(freqs_mhz, s21_db, color="#1f77b4", linewidth=1.4, label="|S21|")
 
@@ -247,7 +275,8 @@ def plot_pdf(freqs_hz, s21_db, metrics, label, driver_name, idn, output_path):
         )
 
     ax.set_xlim(float(freqs_mhz[0]), float(freqs_mhz[-1]))
-    ax.set_xlabel("Frequency (MHz)")
+    if not (show_phase or show_gd):
+        ax.set_xlabel("Frequency (MHz)")
     ax.set_ylabel("|S21| (dB)")
     ax.grid(True, which="both", alpha=0.35)
     ax.legend(loc="upper right", fontsize=8, framealpha=0.92)
@@ -290,6 +319,53 @@ def plot_pdf(freqs_hz, s21_db, metrics, label, driver_name, idn, output_path):
         title_lines.append(idn[:120])
     ax.set_title("\n".join(title_lines), fontsize=10)
 
+    # ── Optional phase panel ─────────────────────────────────────────────
+    panel_idx = 1
+    if show_phase:
+        ap = axes[panel_idx]
+        ap.plot(freqs_mhz, phase_deg, color="#9467bd", linewidth=1.2,
+                label="∠S21 (unwrapped)")
+        ap.set_ylabel("Phase (°)")
+        ap.grid(True, which="both", alpha=0.35)
+        ap.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        if panel_idx == n_panels - 1:
+            ap.set_xlabel("Frequency (MHz)")
+        panel_idx += 1
+
+    # ── Optional group-delay panel ───────────────────────────────────────
+    if show_gd:
+        ag = axes[panel_idx]
+        # Restrict GD annotation to the -3 dB passband if available, where
+        # group delay is meaningful. Outside the passband, GD is dominated
+        # by phase noise and is essentially meaningless.
+        if 3.0 in metrics["bandwidths"]:
+            b = metrics["bandwidths"][3.0]
+            pb = (freqs_mhz >= b["lo_mhz"]) & (freqs_mhz <= b["hi_mhz"])
+        else:
+            pb = np.ones_like(freqs_mhz, dtype=bool)
+        ag.plot(freqs_mhz, group_delay_ns, color="#2ca02c", linewidth=1.1,
+                alpha=0.45, label="Group delay (all)")
+        ag.plot(freqs_mhz[pb], group_delay_ns[pb], color="#2ca02c",
+                linewidth=1.6, label="Group delay (in -3 dB passband)")
+        if np.any(pb):
+            gd_pb = group_delay_ns[pb]
+            gd_min = float(np.min(gd_pb))
+            gd_max = float(np.max(gd_pb))
+            gd_pp  = gd_max - gd_min
+            ag.text(
+                0.005, 0.97,
+                f"In-band GD: min {gd_min:.2f}  max {gd_max:.2f}  "
+                f"peak-to-peak {gd_pp:.2f} ns",
+                transform=ag.transAxes, fontsize=8, family="monospace",
+                va="top", ha="left",
+                bbox=dict(facecolor="white", edgecolor="#cccccc",
+                          alpha=0.9, pad=3),
+            )
+        ag.set_xlabel("Frequency (MHz)")
+        ag.set_ylabel("Group delay (ns)")
+        ag.grid(True, which="both", alpha=0.35)
+        ag.legend(loc="upper right", fontsize=8, framealpha=0.92)
+
     fig.tight_layout()
     fig.savefig(output_path, format="pdf")
     plt.close(fig)
@@ -311,6 +387,10 @@ def main() -> int:
     p.add_argument("--points", type=int, default=DEFAULT_POINTS, metavar="N")
     p.add_argument("--average", type=int, default=1, metavar="N")
     p.add_argument("--power", type=float, default=None, metavar="DBM")
+    p.add_argument("--phase", action="store_true",
+                   help="Add a panel showing unwrapped S21 phase (°)")
+    p.add_argument("--group-delay", action="store_true",
+                   help="Add a panel showing group delay (ns) = -dφ/dω")
     p.add_argument("--label", default="filter")
     p.add_argument("--output", required=True, metavar="FILE.pdf")
     args = p.parse_args()
@@ -334,10 +414,18 @@ def main() -> int:
         print(f"  IDN          : {idn[:120]}")
         maybe_set_power(vna, args.power, args.vna)
 
-        freqs_hz, s21_db = measure_s21(
+        freqs_hz, s21 = measure_s21(
             vna, args.start * 1e6, args.stop * 1e6, args.points, args.average,
         )
+        s21_db = 20.0 * np.log10(np.clip(np.abs(s21), 1e-12, None))
         metrics = analyze_filter(freqs_hz, s21_db)
+
+        phase_deg = None
+        gd_ns     = None
+        if args.phase:
+            phase_deg = np.degrees(np.unwrap(np.angle(s21)))
+        if args.group_delay:
+            gd_ns = compute_group_delay_ns(freqs_hz, s21)
 
         print(f"  Peak         : {metrics['peak_db']:+.2f} dB @ "
               f"{metrics['peak_freq_mhz']:.4f} MHz")
@@ -354,12 +442,25 @@ def main() -> int:
             print(f"  Stopband     : {metrics['stopband_floor_db']:+.1f} dB @ "
                   f"{metrics['stopband_floor_freq_mhz']:.3f} MHz")
 
+        if gd_ns is not None and 3.0 in metrics["bandwidths"]:
+            b = metrics["bandwidths"][3.0]
+            freqs_mhz = freqs_hz / 1e6
+            pb_mask = (freqs_mhz >= b["lo_mhz"]) & (freqs_mhz <= b["hi_mhz"])
+            if np.any(pb_mask):
+                gd_pb = gd_ns[pb_mask]
+                print(f"  Group delay  : min {gd_pb.min():.2f} ns, "
+                      f"max {gd_pb.max():.2f} ns, "
+                      f"p-p {gd_pb.max() - gd_pb.min():.2f} ns "
+                      f"(in -3 dB passband)")
+
         plot_pdf(
             freqs_hz, s21_db, metrics,
             label=args.label,
             driver_name=args.vna.upper(),
             idn=idn,
             output_path=args.output,
+            phase_deg=phase_deg,
+            group_delay_ns=gd_ns,
         )
         print(f"  Wrote PDF    → {args.output}")
         return 0

@@ -22,7 +22,7 @@ Test vector CSV format:
     read,0x50,,100000,Read from EEPROM
     scan,,,100000,Address scan 0x00-0x7F
 
-Author: jfrancis / jfrancis
+Author: jfrancis
 License: GPL-3.0-or-later
 """
 

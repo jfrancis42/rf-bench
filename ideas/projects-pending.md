@@ -2,35 +2,48 @@
 
 ### HP 8712B VNA
 
-**Status changed 2026-06-30:** the swappable VNA API is now exercised by
-eleven projects that run today on the NanoVNA-F. See
-[`projects-built.md`](projects-built.md) for the current list
-(`swr-pdf`, `smith-pdf`, `return-loss-pdf`, `cable-loss-pdf`,
-`filter-pdf`, `choke-pdf`, `toroid-sniff`, `balun-pdf`,
-`resonance-finder`, `connector-check`, `tdr-pdf`). Each will gain HP
-support automatically once the KISS-488 adapter arrives — the scripts
-are written against the shared method set.
+**Status changed 2026-06-30 (revised):** the swappable VNA API is now
+exercised by **fifteen** projects that run today on the NanoVNA-F.
+See [`projects-built.md`](projects-built.md) for the current list:
 
-The truly HP-only projects below remain blocked on KISS-488. They
-need full two-port S-parameters (S12 / S22) or absolute calibrated
-power, neither of which the 1.5-port NanoVNA-F can provide.
+- One-port S11: `swr-pdf`, `smith-pdf`, `return-loss-pdf`,
+  `connector-check`, `resonance-finder`, **`impedance-pdf`**
+- Two-port S21: `cable-loss-pdf`, `filter-pdf` (now with optional
+  `--phase` / `--group-delay`), **`group-delay-pdf`**, `choke-pdf`,
+  `toroid-sniff`, `balun-pdf`, **`tline-pdf`**, **`sparams-pdf`**
+- Time-domain: `tdr-pdf`
 
-(`projects/vna/sparams/`, `group-delay/`, `impedance/`,
-`transistor/`, `tline/`, `filter/`, `antenna/` — all ❌, blocked on
-KISS-488 adapter.)
+(Bold = added on the 2026-06-30 second-pass port. See per-project
+READMEs for "NanoVNA vs HP" capability/limitation notes.)
 
-The HP 8712B adds **phase** to every measurement that the SSA scalar VNA
-already does, plus full SOLT calibration with absolute-dBm source.
+Each will gain HP support automatically once the KISS-488 adapter
+arrives — the scripts are written against the shared method set. The
+two-pass NanoVNA-specific workflows (`sparams-pdf` DUT-reversal,
+`balun-pdf` leg-swap, `tline-pdf` osl-s11 open/short) collapse to
+single-pass captures on the HP via `--vna hp`.
 
-| Project | Notes |
-|---------|-------|
-| `sparams/` | Full S11/S21/S12/S22 magnitude + phase; Touchstone .s2p export. NanoVNA-F is 1.5-port — needs HP for S12/S22. |
-| `group-delay/` | τ_g(f) = −dφ/dω from S21 phase; built-in `GDELAY` mode for cross-check. (Could be approximated on the NanoVNA via differentiation of S21 phase from `get_s_data()`; no project yet.) |
-| `impedance/` | Z = R + jX from calibrated S11; Smith chart + Cartesian R/X plots. (Note: `choke-pdf` already does this for series-through Z; this is the parallel one-port version.) |
-| `transistor/` | S-parameters + MAG / K-factor / stability circles / unilateral figure of merit. Needs S12/S22, so HP-only. |
-| `tline/` | Velocity factor, Z₀, attenuation α(f), propagation constant — from open-then-shorted S11 measurements at known length. Could run on NanoVNA-F. |
-| `filter/` | Older filter-sweep stub; `filter-pdf/` (🧪 built 2026-06-30) supersedes it for the common case. Keep only if you want the HP's calibrated dBm absolute-level readout. |
-| `antenna/` | Feed-point Z = R + jX vs frequency. Could run on NanoVNA-F once ported to the swappable API (known TODO). |
+**Still genuinely HP-only:**
+
+The only legacy project the swappable API can't subsume cleanly:
+
+| Project | Why HP-only |
+|---------|-------------|
+| `transistor/` | Parametric S-param sweeps at every bias point. The DUT-reversal trick that gives the NanoVNA full 2-port operation in `sparams-pdf/` is impractical at every bias point of a bias sweep (an operator would have to flip the DUT 20×). HP captures all four natively, makes the bias sweep feasible. |
+
+The remaining legacy directories (`antenna/`, `filter/`,
+`group-delay/`, `impedance/`, `sparams/`, `tline/`) are **superseded**
+by their `*-pdf/` equivalents above. They're kept on disk only for
+historical reference and to remind us not to invest more time in
+them.
+
+**HP-vs-NanoVNA limitations callouts** are now part of every
+swappable-API project's README. Per-project sections (search for
+"NanoVNA vs HP" in each README) call out where one VNA is better:
+dynamic range, calibration directivity, native S12/S22, hardware
+averaging, phase noise, frequency range. The HP wins on dynamic
+range / accuracy / measurement speed; the NanoVNA wins on
+portability, top-end frequency reach (1.5 GHz fundamental vs 1.3 GHz),
+low-end frequency reach (50 kHz vs 300 kHz), and cost.
 
 **Bring-up plan** — once KISS-488 is installed:
 1. Set HP 8712B GPIB address ≠ 16 (Solartron defaults to 16 too).
@@ -38,7 +51,10 @@ already does, plus full SOLT calibration with absolute-dBm source.
 3. Single-frequency S11 spot measurement before attempting a sweep.
 4. Run a SOLT cal sequence (manual, no automation yet).
 5. Save cal to `~/.8712b_cal.json`.
-6. Run `sparams/` against a known good filter as a regression test.
+6. Run `sparams-pdf/ --vna hp` against a known good filter as a
+   regression test; verify the .s2p matches a NanoVNA `--vna nanovna`
+   capture of the same filter (after the DUT-reversal step) to within
+   the expected dynamic-range delta.
 
 ### Solartron 7151
 

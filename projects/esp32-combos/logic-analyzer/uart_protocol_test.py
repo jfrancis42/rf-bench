@@ -24,7 +24,7 @@ Test vector CSV format:
 
 Parity options: NONE, EVEN, ODD, MARK, SPACE
 
-Author: jfrancis / jfrancis
+Author: jfrancis
 License: GPL-3.0-or-later
 """
 

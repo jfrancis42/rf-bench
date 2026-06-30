@@ -57,14 +57,19 @@
 > | `vna/smith-pdf` | ✅ | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm, 23 cm, and HF. |
 > | `vna/return-loss-pdf` | 🧪 | S11 → return-loss-dB PDF with equivalent-VSWR secondary axis. Better than swr-pdf for sub-2:1 fine-tuning. |
 > | `vna/cable-loss-pdf` | 🧪 | S21 THRU → cable insertion-loss PDF; optional dB/100 ft panel with manufacturer overlay (RG-58/-213/LMR-400 etc.) and pass/fail target line. |
-> | `vna/filter-pdf` | 🧪 | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. |
+> | `vna/filter-pdf` | 🧪 | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. Optional `--phase` / `--group-delay` panels. |
+> | `vna/group-delay-pdf` | 🧪 | Standalone S21 group-delay tool — \|S21\|, ∠S21, τ_g = −dφ/dω in ns. |
+> | `vna/impedance-pdf` | 🧪 | One-port multi-panel diagnostic: R+jX, \|Z\|+∠Z, VSWR, Smith locus, optional X=0 resonance hunter. Supersedes legacy `antenna/` + `impedance/`. |
+> | `vna/tline-pdf` | 🧪 | Transmission-line characterisation: VF, loss/m, optional Z₀(f) via OSL-S11 two-pass method. |
+> | `vna/sparams-pdf` | 🧪 | Full 2-port S-params + Touchstone .s2p. NanoVNA via DUT-reversal trick; HP native. |
 > | `vna/choke-pdf` | 🧪 | Series-through |Z| / R / X PDF for common-mode chokes (K6JCA / DXE method). |
 > | `vna/toroid-sniff` | 🧪 | Series-through L / Al / Q for a wound toroid; suggests ferrite/iron mix based on Q-peak frequency. |
 > | `vna/balun-pdf` | 🧪 | Two-pass S11+S21 balun characterisation: return loss + insertion loss + amplitude/phase balance. |
 > | `vna/resonance-finder` | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
 > | `vna/connector-check` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL for shell scripting. |
 > | `vna/tdr-pdf` | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. |
-> | `vna/antenna` and friends | 🧪 | Full feed-point impedance + Smith chart; HP-only in code today (porting to swappable API is a known TODO). Other `vna/*` subdirs await KISS-488 adapter. |
+> | legacy `vna/antenna`, `filter`, `group-delay`, `impedance`, `tline`, `sparams` | ❌ *(superseded)* | Replaced by the `*-pdf/` projects above; kept only for historical reference. |
+> | `vna/transistor` | ❌ | Still HP-only — parametric bias-swept S-params don't fit the NanoVNA DUT-reversal workflow. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
 
 ---
@@ -2090,7 +2095,6 @@ ESP32-based SCPI-over-WiFi controllers in `projects/esp32/`. Each project expose
 Each project directory contains:
 - `.ino` Arduino sketch (WiFi, SCPI parser, hardware control)
 - `README.md` (wiring, commands, Python examples, use cases)
-- `README` (architecture, GPIO assignments, limitations, future enhancements)
 - `test_*.py` (Python demo script)
 
 **Integration:** Standard SCPI via raw TCP socket or pyvisa. Example:
@@ -2126,7 +2130,11 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 | `projects/vna/smith-pdf/` | ✅ | S11 → frequency-coloured Smith-chart PDF. |
 | `projects/vna/return-loss-pdf/` | 🧪 | S11 → RL-dB PDF with equivalent-VSWR secondary axis (better than swr-pdf for sub-2:1 fine-tuning). |
 | `projects/vna/cable-loss-pdf/` | 🧪 | S21 THRU → cable insertion-loss PDF; optional dB/100 ft panel with manufacturer overlay (RG-58/-213/LMR-400 etc.) and pass/fail target. |
-| `projects/vna/filter-pdf/` | 🧪 | S21 → filter response with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. |
+| `projects/vna/filter-pdf/` | 🧪 | S21 → filter response with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. Optional `--phase` and `--group-delay` panels. |
+| `projects/vna/group-delay-pdf/` | 🧪 | Standalone τ_g = −dφ/dω tool for amplifiers / cables / matching networks (\|S21\| + ∠S21 + GD panels). |
+| `projects/vna/impedance-pdf/` | 🧪 | Multi-panel one-port diagnostic: R+jX, \|Z\|+∠Z, VSWR, Smith locus, optional X=0 resonance hunter. **Supersedes** legacy `antenna/` + `impedance/`. |
+| `projects/vna/tline-pdf/` | 🧪 | Transmission-line characterisation: VF, loss/m, optional Z₀(f) via OSL-S11. **Supersedes** legacy `tline/`. |
+| `projects/vna/sparams-pdf/` | 🧪 | Full 2-port S-parameters PDF + Touchstone .s2p. NanoVNA via DUT-reversal; HP 8712B native. **Supersedes** legacy `sparams/`. |
 | `projects/vna/choke-pdf/` | 🧪 | Series-through \|Z\| / R / X for common-mode chokes (K6JCA / DXE method). |
 | `projects/vna/toroid-sniff/` | 🧪 | Wound-toroid L / Al / Q + mix-consistency hint (43 / 31 / 61 / 77 / 2 / 6). |
 | `projects/vna/balun-pdf/` | 🧪 | Two-pass S11+S21 balun characterisation: RL + insertion loss + amplitude/phase balance. |
@@ -2134,9 +2142,17 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 | `projects/vna/connector-check/` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL. |
 | `projects/vna/tdr-pdf/` | 🧪 | Host-side IFFT TDR (step + impulse), cable-VF presets, fault auto-classification. |
 
-All eleven scripts share the same swappable-VNA-API pattern and the same
+All **fifteen** scripts share the same swappable-VNA-API pattern and the same
 CLI shape (`--vna {nanovna,hp} --start MHZ --stop MHZ --label ... --output FILE.pdf`).
-See [`projects/vna/README.md`](projects/vna/README.md) for the full per-project status table.
+See [`projects/vna/README.md`](projects/vna/README.md) for the full per-project status table,
+and each project's README for a "NanoVNA vs HP" section documenting where one VNA
+is better than the other (dynamic range, native S12/S22, frequency reach, etc.).
+
+The legacy directories `antenna/`, `filter/`, `group-delay/`, `impedance/`,
+`tline/`, `sparams/` are all **superseded** by their `*-pdf/` counterparts and
+are kept on disk only for historical reference. The single remaining HP-only
+project is `transistor/` — parametric bias-swept S-parameters are not practical
+with the NanoVNA's DUT-reversal workflow.
 
 ---
 
