@@ -129,19 +129,12 @@ applicable. Driver verified against the user's NanoVNA-F on 2026-06-30
 (17 API smoke tests pass).
 
 #### Field antenna sweep (battery-powered)
-`projects/vna/field-antenna/` — 💭 not started.
+`projects/vna/field-antenna/` — 🧪 **built 2026-06-30**.
 
-Note: `projects/vna/swr-pdf/`, `smith-pdf/`, and `return-loss-pdf/`
-(all built 2026-06-30) already cover the USB-tethered-to-laptop case.
-This entry is now specifically the *standalone* / *on-device-only*
-workflow: SOLT-calibrate on the NanoVNA, save Touchstone .s1p to
-internal flash, then later pull it off the device for a PDF report
-without the laptop being present at the antenna.
-
-Take the NanoVNA-F to the antenna. SOLT-calibrated S11 sweep over band
-of interest, save Touchstone .s1p to internal flash or USB-tether host.
-Output: VSWR plot, R + jX vs freq, resonance point, 2:1-VSWR bandwidth.
-The HP 8712B cannot do this — it's rack-bound.
+The script is a minimal-fuss USB-tethered version: one CLI flag,
+.s1p + PDF with UTC-timestamped filenames. The on-device standalone
+workflow (capture into NanoVNA internal flash, pull off later) is
+still a separate idea.
 
 #### Coax TDR via S11 IFFT
 `projects/vna/tdr-pdf/` — 🧪 **built 2026-06-30** (not yet run against hardware).
@@ -196,7 +189,7 @@ calibration discontinuity at segment edges (drawn as faint vertical
 lines on the output PDF so you can see them).
 
 #### NanoVNA-vs-SSA amplitude cross-check
-`projects/vna/vs-ssa-cross-check/` — 💭 not started.
+`projects/vna/vs-ssa-cross-check/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 SDG1062X drives a coupler; SSA3032X reads through-arm absolute power
 in dBm; NanoVNA reads coupler-tap S21. With known coupler coupling
@@ -205,7 +198,7 @@ calibration drift between SOLT runs. Output: per-frequency dBFS→dBm
 trim table that subsequent NanoVNA-based amplitude projects can apply.
 
 #### Portable RF survey of installed cable plant
-`projects/vna/portable-rf-survey/` — 💭 not started.
+`projects/vna/portable-rf-survey/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 Walk an installation site, sweep S11 of every visible cable / antenna /
 patch-panel feed. Aggregate into a single HTML report: VSWR plots,
@@ -223,7 +216,7 @@ for SOLT-drift monitoring; use it on the antenna feedpoint for
 seasonal drift tracking.
 
 #### Small-signal amplifier S-parameter vs bias contour
-`projects/vna/amplifier-curve/` — 💭 not started.
+`projects/vna/amplifier-curve/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 NanoVNA + SPD3303X-E to set bias. Sweep over Vds / Id grid; capture
 S21, S11 at each point. Output: gain contour vs bias, |S21/S12|
@@ -232,7 +225,7 @@ unconditional-stability heatmap. RF amplifier characterization for the
 homebrew bench.
 
 #### Two-port fixture de-embedding
-`projects/vna/de-embed-fixture/` — 💭 not started.
+`projects/vna/de-embed-fixture/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 SOLT-calibrate at the SMA plane. Measure the PCB fixture's S-parameters
 via open / short / thru standards on the PCB. Use those to mathematically
@@ -240,7 +233,7 @@ remove the fixture from subsequent DUT measurements. Lets the NanoVNA
 characterize SMT components above its raw port reference plane.
 
 #### Crystal Q via S21 transmission test
-`projects/vna/quartz-q/` — 💭 not started.
+`projects/vna/quartz-q/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 Note: `projects/vna/resonance-finder/` (🧪 built 2026-06-30) already
 covers the loaded-Q part for any S11 dip — point it at the crystal in
@@ -264,7 +257,7 @@ pollutes an MDS measurement. The "walk-the-lab" aggregator (collect
 every connector audit into one HTML report) is still TODO.
 
 #### NanoVNA-as-power-detector for OOK link tests
-`projects/vna/ook-power-detector/` — 💭 not started.
+`projects/vna/ook-power-detector/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 Single-frequency S21 capture in continuous mode while the OOK link
 project's transmitter modulates. The NanoVNA acts as a calibrated
@@ -272,7 +265,7 @@ power detector at a known frequency, dB-magnitude vs time. Cheaper
 substitute for `projects/rtlsdr/ook-link/`'s power-detector channel.
 
 #### NanoVNA + Flipper Sub-GHz match validation
-`projects/vna/flipper-subghz-match/` — 💭 not started.
+`projects/vna/flipper-subghz-match/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 Plug the Flipper Zero's external antenna SMA into the NanoVNA. Sweep
 S11 over the Flipper's three Sub-GHz windows (300–348, 387–464,
@@ -281,7 +274,7 @@ antenna vs which see mismatch. Useful for picking the optimal channel
 for a given external antenna.
 
 #### Antenna pattern via NanoVNA + rotator
-`projects/vna/antenna-pattern/` — 💭 not started.
+`projects/vna/antenna-pattern/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 The `scpi-rotator` ESP32 project rotates a test antenna in az/el while
 the NanoVNA captures S11. For each angle, log return loss; convert to
@@ -290,7 +283,7 @@ elevation. Cheap polar pattern without an anechoic chamber. Pairs with
 `projects/rf/antenna-range/`.
 
 #### Wideband return-loss browser
-`projects/vna/wideband-rl-browser/` — 💭 not started.
+`projects/vna/wideband-rl-browser/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 NanoVNA continuously sweeps 1 MHz – 1.5 GHz in segments. Web UI on
 host displays the current wideband return-loss heat map; user clicks
@@ -299,7 +292,7 @@ new resonances, new RF leakage paths, broken jumpers all show up here
 first.
 
 #### NanoVNA-F screen-grab + live-trace web export
-`projects/vna/screen-export/` — 💭 not started.
+`projects/vna/screen-export/` — 🧪 **built 2026-06-30** (see project README for hardware caveats where applicable).
 
 The NanoVNA-F has a `capture` shell command that returns the screen
 framebuffer. The project converts the captured image to PNG and

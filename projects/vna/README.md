@@ -42,6 +42,24 @@ Pick the backend at runtime with the script's `--vna {nanovna,hp}` flag.
 | [`stability-logger/`](stability-logger/) | 🧪 | Cron-friendly: appends one S11 capture's headline metrics to a CSV; tracks calibration / antenna drift over days–months. Optional `--alert-mag` for exit-code threshold. |
 | [`filter-tuning/`](filter-tuning/) | 🧪 | Live matplotlib window: continuously sweeps S21 against an optional target mask. For hand-tuning crystal / cavity / LC filters. |
 | [`wheeler-cap-pdf/`](wheeler-cap-pdf/) | 🧪 | Antenna radiation efficiency η = 1 − Q_free/Q_cap from two S11 captures (free-space and inside a Wheeler cap). |
+| [`field-antenna/`](field-antenna/) | 🧪 | Minimal at-the-antenna capture: one CLI flag → .s1p + PDF with UTC-timestamped filenames. |
+| [`de-embed-fixture/`](de-embed-fixture/) | 🧪 | Wrapper around `sparams-pdf` that captures a fixture-alone .s2p (DUT replaced by THRU) ready for `de-embed-pdf`. |
+| [`quartz-q/`](quartz-q/) | 🧪 | S21-only crystal Q (3 dB BW method); faster than the full BVD fit for batch sorting. |
+| [`screen-export/`](screen-export/) | 🧪 | NanoVNA LCD framebuffer (`capture` shell command) → PNG. **Untested: firmware-dependent.** |
+| [`ook-power-detector/`](ook-power-detector/) | 🧪 | Fix the VNA to one frequency and sample S21 repeatedly; CSV log + optional envelope-vs-time PDF. |
+| [`portable-rf-survey/`](portable-rf-survey/) | 🧪 | Batch-survey many DUTs from a JSON config; one PDF per DUT + HTML index. |
+| [`wideband-rl-browser/`](wideband-rl-browser/) | 🧪 | Multi-segment full-range S11 → interactive Plotly HTML (static SVG fallback). |
+| [`antenna-pattern/`](antenna-pattern/) | 🧪 | Polar pattern via VNA + SCPI-rotator; CSV + polar PDF. **Untested.** |
+| [`vs-ssa-cross-check/`](vs-ssa-cross-check/) | 🧪 | Build NanoVNA S21 → absolute-dBm offset table using SSA as reference. **Untested.** |
+| [`flipper-subghz-match/`](flipper-subghz-match/) | 🧪 | S11 of the Flipper Zero's external Sub-GHz antenna across all 3 ISM bands. |
+| [`amplifier-curve/`](amplifier-curve/) | 🧪 | S-params vs DC bias contour using SPD3303X-E. **Untested.** |
+| [`antenna-factor-pdf/`](antenna-factor-pdf/) | 🧪 | Antenna factor AF (dB/m) derivation from S11 + datasheet gain. **Untested.** |
+| [`atten-cal/`](atten-cal/) | 🧪 | Per-code, per-frequency calibration of a digital step attenuator → JSON table. |
+| [`coupler-power-meter/`](coupler-power-meter/) | 🧪 | Absolute-dBm offset via directional coupler + SSA xref. **Untested.** |
+| [`nec-verify/`](nec-verify/) | 🧪 | Overlay measured S11 vs 4nec2 simulation; diagnose model error. **Untested.** |
+| [`mode-decomp-pdf/`](mode-decomp-pdf/) | 🧪 | Spatial-FFT mode decomposition of S-params (overmoded waveguide). **Niche.** |
+| [`freq-comb-sweep/`](freq-comb-sweep/) | 🧪 | S21 capture at a discrete frequency list (WSPR/FT8 spots, harmonic-mixer tones). |
+| [`sparams-4port-from-2port/`](sparams-4port-from-2port/) | 🧪 | Stitch six 2-port captures into a single 4-port .s4p (with diagonal averaging). |
 | [`antenna/`](antenna/) | 🧪 *(legacy, superseded)* | Full feed-point impedance: VSWR + R+X + Smith. Superseded by [`impedance-pdf/`](impedance-pdf/). Kept only for historical reference. |
 | `filter/` | ❌ *(legacy, superseded)* | Older HP-only filter-sweep stub. Use [`filter-pdf/`](filter-pdf/) (with optional `--phase` / `--group-delay`). |
 | `group-delay/` | ❌ *(legacy, superseded)* | Use [`group-delay-pdf/`](group-delay-pdf/) (standalone) or [`filter-pdf/ --group-delay`](filter-pdf/). |
