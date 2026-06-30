@@ -118,6 +118,163 @@ post-process maps time → frequency from sweep parameters. Less precise
 than SDG-driven software-stepped sweep but ~10× faster for one-shot scalar
 plots.
 
+### Future-nanovna
+
+Projects exploiting the NanoVNA-F's specific characteristics — cheap,
+battery-powered, USB-portable, screen-equipped — that the rack-bound
+HP 8712B cannot match. All target the swappable VNA API
+(`rf_bench.nanovna.NanoVNA` ↔ `rf_bench.hp.HP8712B`), so the same script
+runs on either VNA — falling back to the HP for full S22/S12 work where
+applicable. Driver verified against the user's NanoVNA-F on 2026-06-30
+(17 API smoke tests pass).
+
+#### Field antenna sweep (battery-powered)
+`projects/vna/field-antenna/` — 💭 not started.
+
+Take the NanoVNA-F to the antenna. SOLT-calibrated S11 sweep over band
+of interest, save Touchstone .s1p to internal flash or USB-tether host.
+Output: VSWR plot, R + jX vs freq, resonance point, 2:1-VSWR bandwidth.
+The HP 8712B cannot do this — it's rack-bound.
+
+#### Coax TDR via S11 IFFT
+`projects/vna/coax-tdr/` — 💭 not started.
+
+Wideband S11 sweep → IFFT → impulse response. Identifies discontinuities
+(open, short, kink, water ingress, connector quality) at known velocity
+factor. Both VNAs can do it; NanoVNA-F is cheaper to bring to a tower base.
+
+#### Balun / common-mode-choke characterizer
+`projects/vna/balun-test/` — 💭 not started.
+
+Identifies bands where a current balun / choke is effective (impedance ≥
+feedline Z) vs transparent. Sweep S11, plot vs HF / VHF / UHF bands.
+
+#### Cable loss + electrical-length library
+`projects/vna/cable-loss-cal/` — 💭 not started.
+
+Build `~/.rf-bench/cables.yaml` indexed by cable serial number / label.
+Each entry: per-frequency loss table, electrical length, fixture
+calibration date. Projects needing calibrated power at the DUT
+(transmitter tests, NF, MDS) look up the cable and de-embed automatically.
+Stops "cal-once-then-forget" loss errors from poisoning measurements.
+
+#### Real-time filter tuning aid
+`projects/vna/filter-tuning/` — 💭 not started.
+
+NanoVNA-F runs continuously on the bench; the host overlays target
+filter response on the live S21 trace. Audible beep when each pole
+crosses target. Useful when tuning crystal / cavity / LC filters by
+hand — eyes on the filter knobs, ears on the host.
+
+#### Multi-segment wideband sweep
+`projects/vna/multi-segment/` — 💭 not started.
+
+The NanoVNA caps at 401 points per sweep. For span / point combinations
+that exceed that, stitch contiguous segments using
+`NanoVNA.iter_segments()`. Trade-off: SOLT calibration discontinuity at
+segment edges; the project flags edges and offers cubic-spline
+interpolation across the seam, or per-segment calibration.
+
+#### NanoVNA-vs-SSA amplitude cross-check
+`projects/vna/vs-ssa-cross-check/` — 💭 not started.
+
+SDG1062X drives a coupler; SSA3032X reads through-arm absolute power
+in dBm; NanoVNA reads coupler-tap S21. With known coupler coupling
+factor, both readings should agree. Deviation reveals NanoVNA amplitude
+calibration drift between SOLT runs. Output: per-frequency dBFS→dBm
+trim table that subsequent NanoVNA-based amplitude projects can apply.
+
+#### Portable RF survey of installed cable plant
+`projects/vna/portable-rf-survey/` — 💭 not started.
+
+Walk an installation site, sweep S11 of every visible cable / antenna /
+patch-panel feed. Aggregate into a single HTML report: VSWR plots,
+problem-cable highlights, recommended fixes. NanoVNA-F's built-in
+display provides on-site go/no-go; the host report adds analytics.
+
+#### Day-zero baseline & drift monitor
+`projects/vna/doe-iso-baseline/` — 💭 not started.
+
+Sweep a known SOLT cal-kit's verification standards (mismatch
+attenuator, sliding load, beadless airline if available). Record
+systematic residual error at each frequency. Re-run nightly via cron;
+alert when drift exceeds threshold. Watches cal stability over months.
+
+#### Small-signal amplifier S-parameter vs bias contour
+`projects/vna/amplifier-curve/` — 💭 not started.
+
+NanoVNA + SPD3303X-E to set bias. Sweep over Vds / Id grid; capture
+S21, S11 at each point. Output: gain contour vs bias, |S21/S12|
+estimate (NanoVNA-only proxy for MAG — true MAG needs HP for S12),
+unconditional-stability heatmap. RF amplifier characterization for the
+homebrew bench.
+
+#### Two-port fixture de-embedding
+`projects/vna/de-embed-fixture/` — 💭 not started.
+
+SOLT-calibrate at the SMA plane. Measure the PCB fixture's S-parameters
+via open / short / thru standards on the PCB. Use those to mathematically
+remove the fixture from subsequent DUT measurements. Lets the NanoVNA
+characterize SMT components above its raw port reference plane.
+
+#### Crystal Q via S21 transmission test
+`projects/vna/quartz-q/` — 💭 not started.
+
+Low-impedance shunt fixture across the crystal under test; NanoVNA
+S21 sweep through the series-resonance minimum. 3 dB bandwidth gives
+loaded Q; with known fixture impedance, unloaded Q follows. Pair with
+Si5351 reference for sub-Hz frequency accuracy.
+
+#### Connector / jumper audit
+`projects/vna/headers-and-jumper-audit/` — 💭 not started.
+
+Walk the lab's RF feedline tree. For each connector pair / jumper:
+sweep S21 + S11; flag any out-of-spec for replacement. Catch the one
+bad SMA before it pollutes an MDS measurement.
+
+#### NanoVNA-as-power-detector for OOK link tests
+`projects/vna/ook-power-detector/` — 💭 not started.
+
+Single-frequency S21 capture in continuous mode while the OOK link
+project's transmitter modulates. The NanoVNA acts as a calibrated
+power detector at a known frequency, dB-magnitude vs time. Cheaper
+substitute for `projects/rtlsdr/ook-link/`'s power-detector channel.
+
+#### NanoVNA + Flipper Sub-GHz match validation
+`projects/vna/flipper-subghz-match/` — 💭 not started.
+
+Plug the Flipper Zero's external antenna SMA into the NanoVNA. Sweep
+S11 over the Flipper's three Sub-GHz windows (300–348, 387–464,
+779–928 MHz). Identifies which CC1101 channels actually have a matched
+antenna vs which see mismatch. Useful for picking the optimal channel
+for a given external antenna.
+
+#### Antenna pattern via NanoVNA + rotator
+`projects/vna/antenna-pattern/` — 💭 not started.
+
+The `scpi-rotator` ESP32 project rotates a test antenna in az/el while
+the NanoVNA captures S11. For each angle, log return loss; convert to
+estimated radiation pattern (relative dB) over the swept azimuth /
+elevation. Cheap polar pattern without an anechoic chamber. Pairs with
+`projects/rf/antenna-range/`.
+
+#### Wideband return-loss browser
+`projects/vna/wideband-rl-browser/` — 💭 not started.
+
+NanoVNA continuously sweeps 1 MHz – 1.5 GHz in segments. Web UI on
+host displays the current wideband return-loss heat map; user clicks
+to drill in. Useful as a permanently-running rough survey scope —
+new resonances, new RF leakage paths, broken jumpers all show up here
+first.
+
+#### NanoVNA-F screen-grab + live-trace web export
+`projects/vna/screen-export/` — 💭 not started.
+
+The NanoVNA-F has a `capture` shell command that returns the screen
+framebuffer. The project converts the captured image to PNG and
+serves it on a local HTTP endpoint, optionally annotated with the
+current sweep parameters. For documentation and remote viewing.
+
 ### Future-solartron
 
 These are blocked on the KISS-488 adapter; code mostly does not exist yet.

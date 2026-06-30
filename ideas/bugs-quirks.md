@@ -163,8 +163,29 @@ The load-bearing constraints:
   Use `rf_bench.utils` helpers (`dbm_to_vpp`, `vpp_to_dbm`) — they're
   correct.
 
+### Arduino + W5100 4-channel relay board (`hardware/arduino-relay-board/`)
+
+- **Relay module on the bench is active-HIGH, not active-LOW.** The
+  generic 4-channel module currently wired to the Arduino energizes
+  when the control pin is driven HIGH. Initial firmware defaulted
+  `RELAY_ACTIVE_HIGH = false` (the cheap-module convention) and on
+  first bring-up every relay was in the inverted state. Flipped to
+  `true` and the inversion went away with no other changes. Anyone
+  swapping to a different module should expect to verify polarity
+  again and may need to flip it back.
+- **W5100 has only 4 hardware sockets, not 8.** One is consumed by the
+  listening server, so the practical max-concurrent-clients is 3
+  (`MAX_CLIENTS = 3` in the sketch). On a W5500 swap, bump it up to
+  6–7. The Arduino `Ethernet` library auto-detects either chip; no
+  other code change is needed.
+- **The Vilros Ethernet R3 shield's microSD CS (D4) must be driven
+  HIGH in `setup()` even if you're not using the SD.** Both the W5100
+  and the SD chip share SPI; a floating SD CS will corrupt every
+  Ethernet transfer with garbage. Symptom: DHCP succeeds, then the
+  TCP server hangs on the first packet.
+
 ---
 
-*Last revised: 2026-06-08. Per-driver and per-project READMEs are the
+*Last revised: 2026-06-25. Per-driver and per-project READMEs are the
 authoritative source for any specific implementation detail; this
 document is the cross-cutting reference.*

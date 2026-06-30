@@ -38,6 +38,12 @@ Usage::
         gen.set_frequency(2, 100_000)
         gen.output_on()
 
+        # Arbitrary waveforms (16 slots: ARB0..ARB15)
+        import math
+        sine = [math.sin(2*math.pi*i/1024) for i in range(1024)]
+        gen.upload_arb_normalized(0, sine)
+        gen.set_waveform(1, Waveform.ARB0)
+
         # Frequency counter (EXT IN connector on rear)
         gen.counter_setup(mode=CounterMode.FREQ, gate=Gate.S1, source_ttl=False)
         gen.counter_start()
@@ -947,6 +953,165 @@ class MHS5200A:
         """Return True if the sweep is running."""
         v = self._read_raw("r8b")
         return int(v) != 0
+
+    # ------------------------------------------------------------------
+    # Arbitrary waveform upload (ARB0..ARB15)
+    # ------------------------------------------------------------------
+
+    def upload_arb(self, slot: int, samples: list) -> None:
+        """Upload an arbitrary waveform to one of the 16 user-defined slots.
+
+        The MHS-5200A supports 16 arbitrary waveform memories (slots 0-15),
+        each storing 1024 samples. After upload, select the waveform with
+        ``set_waveform(channel, Waveform.ARB0 + slot)``.
+
+        Args:
+            slot:    Memory slot 0-15. Slot N corresponds to Waveform.ARBN
+                     (e.g. slot 0 → Waveform.ARB0 = waveform code 100).
+            samples: Exactly 1024 integers in the range 0-255.
+                     0 = minimum voltage, 255 = maximum voltage.
+                     The device interpolates between samples at its 200 MSa/s
+                     DAC rate when playing back the waveform.
+
+        Example — upload a simple ramp::
+
+            ramp = [int(i * 255 / 1023) for i in range(1024)]
+            gen.upload_arb(0, ramp)
+            gen.set_waveform(1, Waveform.ARB0)
+            gen.output_on()
+
+        Example — upload a sine wave::
+
+            import math
+            sine = [int((math.sin(2*math.pi*i/1024) + 1) * 127.5)
+                    for i in range(1024)]
+            gen.upload_arb(1, sine)
+            gen.set_waveform(1, Waveform.ARB1)
+
+        Protocol reference:
+            Arbitrary waveform upload protocol reverse-engineered by Al Williams
+            (wd5gnr) and documented in https://github.com/wd5gnr/mhs5200a (public
+            domain). This implementation is independent.
+
+            Wire format: The 1024-sample waveform is uploaded as 16 chunks of 64
+            samples each. Each chunk is sent as:
+                :a<slot><chunk>\\r\\n
+                v0,v1,v2,...,v63\\r\\n
+            where <slot> and <chunk> are single hex digits (0-F). The device
+            replies 'ok\\r\\n' after each chunk. A 10 ms inter-chunk delay is
+            required for reliable uploads on firmware 5040000.
+
+        Raises:
+            ValueError: if slot is not 0-15, if samples is not exactly 1024
+                        elements, or if any sample is outside 0-255.
+            MHS5200AError: if the device fails to acknowledge a chunk upload.
+        """
+        # Validation
+        if not isinstance(slot, int) or not 0 <= slot <= 15:
+            raise ValueError(f"slot must be 0-15, got {slot!r}")
+        if len(samples) != 1024:
+            raise ValueError(f"samples must be exactly 1024 elements, got {len(samples)}")
+
+        # Convert to integers and validate range
+        try:
+            samples_int = [int(s) for s in samples]
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"all samples must be convertible to int: {e}") from e
+
+        for i, v in enumerate(samples_int):
+            if not 0 <= v <= 255:
+                raise ValueError(
+                    f"sample[{i}] = {v} is out of range (must be 0-255)"
+                )
+
+        # Upload 16 chunks of 64 samples each
+        for chunk_idx in range(16):
+            # Extract this chunk's 64 samples
+            chunk_start = chunk_idx * 64
+            chunk_end = chunk_start + 64
+            chunk_samples = samples_int[chunk_start:chunk_end]
+
+            # Protocol quirk: send a blank ':' line before each chunk (from wd5gnr's
+            # reference implementation). This appears to be required for reliable uploads.
+            self._ser.reset_input_buffer()
+            self._ser.write(b":\r\n")
+            time.sleep(COMMAND_DELAY)
+            self._ser.reset_input_buffer()
+
+            # Format: :a<slot_hex><chunk_hex><comma-separated values>\r\n
+            # Header and data must be on the SAME line (not two separate lines)
+            data_str = ",".join(str(v) for v in chunk_samples)
+            line = f":a{slot:x}{chunk_idx:x}{data_str}\r\n"
+            try:
+                self._ser.write(line.encode("ascii"))
+            except serial.SerialException as e:
+                raise MHS5200AError(
+                    f"failed to send chunk {chunk_idx}: {e}"
+                ) from e
+
+            # Wait for 'ok' response
+            time.sleep(COMMAND_DELAY)
+            response_line = self._ser.readline()
+            response = response_line.decode("ascii", errors="replace").strip()
+
+            if response != "ok":
+                raise MHS5200AError(
+                    f"chunk {chunk_idx} upload failed: expected 'ok', got {response!r}"
+                )
+
+            # Inter-chunk delay — the device needs time to commit the chunk
+            # to flash. 10 ms is the value used in wd5gnr's bash script and
+            # is empirically reliable on firmware 5040000.
+            time.sleep(0.010)
+
+    def upload_arb_normalized(self, slot: int, samples: list) -> None:
+        """Upload an arbitrary waveform from normalized -1.0 to +1.0 samples.
+
+        Convenience wrapper around :meth:`upload_arb` that accepts floating-point
+        samples in the range -1.0 to +1.0 and scales them to the device's 0-255
+        integer range.
+
+        Args:
+            slot:    Memory slot 0-15.
+            samples: Exactly 1024 floats in the range -1.0 to +1.0.
+                     -1.0 maps to 0 (minimum voltage).
+                      0.0 maps to 128 (center / no DC offset).
+                     +1.0 maps to 255 (maximum voltage).
+
+        Example — upload a normalized sine wave::
+
+            import math
+            sine_norm = [math.sin(2 * math.pi * i / 1024) for i in range(1024)]
+            gen.upload_arb_normalized(2, sine_norm)
+            gen.set_waveform(1, Waveform.ARB2)
+
+        Raises:
+            ValueError: if any sample is outside -1.0 to +1.0, or other
+                        validation failures from :meth:`upload_arb`.
+        """
+        if len(samples) != 1024:
+            raise ValueError(f"samples must be exactly 1024 elements, got {len(samples)}")
+
+        # Validate range and scale
+        scaled = []
+        for i, s in enumerate(samples):
+            try:
+                f = float(s)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"sample[{i}] is not a valid float: {e}") from e
+
+            if not -1.0 <= f <= 1.0:
+                raise ValueError(
+                    f"sample[{i}] = {f} is out of range (must be -1.0 to +1.0)"
+                )
+
+            # Scale: -1.0 → 0, 0.0 → 128, +1.0 → 255
+            scaled_val = int(round((f + 1.0) * 127.5))
+            # Clamp to 0-255 to handle any floating-point rounding edge cases
+            scaled_val = max(0, min(255, scaled_val))
+            scaled.append(scaled_val)
+
+        self.upload_arb(slot, scaled)
 
     # ------------------------------------------------------------------
     # Power amplifier (if equipped — model dependent)

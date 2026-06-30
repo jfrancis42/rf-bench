@@ -5,8 +5,11 @@
 > amplitude, waveform, duty-cycle, offset, phase, attenuator, and
 > per-channel set/get; master output enable; built-in frequency counter
 > (loopback test confirms ±7 ppm against the unit's commanded frequency);
-> period-mode counter; snapshot of full state. Sweep and arb-upload commands
-> are implemented from documentation but not yet exercised against hardware.
+> period-mode counter; snapshot of full state. **Arbitrary waveform upload
+> (ARB0-ARB15) added 2026-06-17** — implemented from wd5gnr's public-domain
+> reference implementation and **hardware-verified working** (1024-sample
+> uploads to all 16 slots, ~200-300 ms per upload). Sweep commands
+> implemented from documentation but not yet exercised against hardware.
 
 Python driver for the **Koolertron / MHinstek MHS-5200A series** dual-channel
 DDS arbitrary-waveform signal generator with built-in frequency counter and
@@ -53,6 +56,12 @@ with MHS5200A() as gen:                         # auto-detect CH340 / PL2303
     gen.set_waveform(2, Waveform.SQUARE)
     gen.set_duty_cycle(2, 25.0)                 # CH2: 25% duty
     gen.output_on()                             # master enable (BOTH ch)
+
+    # Arbitrary waveform (16 slots: ARB0..ARB15)
+    import math
+    sine = [math.sin(2*math.pi*i/1024) for i in range(1024)]
+    gen.upload_arb_normalized(0, sine)          # upload to slot 0
+    gen.set_waveform(1, Waveform.ARB0)          # use it on CH1
 
     # Built-in frequency counter (Ext.IN connector on front)
     hz = gen.measure_frequency_hz(gate=Gate.S10)
@@ -230,6 +239,47 @@ inaccurate. Caller should sanity-check against the expected input.
 | `sweep_setup(start_hz, stop_hz, time_s, log=False)` | Configure |
 | `sweep_start()` / `sweep_stop()` / `get_sweep_state()` | Run / stop / query |
 
+### Arbitrary waveforms (ARB0..ARB15)
+
+The MHS-5200A has 16 user-defined arbitrary waveform slots (ARB0 through ARB15), each storing 1024 samples at 8-bit resolution (0-255). After uploading a waveform, select it with `set_waveform(channel, Waveform.ARB0 + slot)`.
+
+| Method | Description |
+|--------|-------------|
+| `upload_arb(slot, samples)` | Upload 1024 integers (0-255) to slot 0-15 |
+| `upload_arb_normalized(slot, samples)` | Upload 1024 floats (-1.0 to +1.0) to slot 0-15 |
+
+**Example — generate and upload a sine wave:**
+
+```python
+import math
+from rf_bench.koolertron import MHS5200A, Waveform
+
+with MHS5200A() as gen:
+    # Create normalized sine wave (1024 samples, -1.0 to +1.0)
+    sine = [math.sin(2 * math.pi * i / 1024) for i in range(1024)]
+    
+    # Upload to slot 0 (ARB0)
+    gen.upload_arb_normalized(0, sine)
+    
+    # Output it on channel 1
+    gen.set_frequency(1, 100_000)
+    gen.set_waveform(1, Waveform.ARB0)
+    gen.output_on()
+```
+
+**Example — integer samples (0-255 range):**
+
+```python
+# Ramp waveform
+ramp = [int(i * 255 / 1023) for i in range(1024)]
+gen.upload_arb(1, ramp)
+gen.set_waveform(1, Waveform.ARB1)
+```
+
+**Protocol reference:** Arbitrary waveform upload protocol reverse-engineered by **Al Williams (wd5gnr)** and documented in <https://github.com/wd5gnr/mhs5200a> (public domain). The `setwave5200` shell script in that repository provided the reference implementation from which the wire protocol was understood. This Python implementation is independent.
+
+**Upload format:** The device receives waveforms as 16 chunks of 64 samples each. Each chunk is sent as `:a<slot><chunk>\r\n` followed by a comma-separated list of 64 decimal values. The device replies `ok\r\n` after each chunk. A 10 ms inter-chunk delay is required for reliable uploads (empirically determined from the reference implementation).
+
 ### Memory slots
 
 | Method | Description |
@@ -285,16 +335,27 @@ The single most useful resource was:
 
 > **wd5gnr (Al Williams)** — *"Serial Protocol for MHS-5200A"*, document
 > version 2, dated 9 August 2015. The complete protocol document, including
-> the frequency counter and sweep commands, is included in the
-> `MHS5200AProtocol.pdf` file of his open-source reference implementation.
+> the frequency counter, sweep, and arbitrary waveform upload commands, is
+> included in the `MHS5200AProtocol.pdf` file of his open-source reference
+> implementation.
 >
 > Repository: <https://github.com/wd5gnr/mhs5200a>
 > Document:   `MHS5200AProtocol.pdf` in that repository.
+> Reference implementation: `setwave5200` shell script (public domain).
 >
 > This protocol document is the canonical public reference; without it, only
-> the basic 8 set/get commands from the standard serial probing would be
-> known. The frequency counter, sweep, arbitrary-waveform upload, and memory-
-> slot commands all come from his reverse-engineering work.
+> the basic 8 set/get commands from standard serial probing would be known.
+> The frequency counter, sweep, arbitrary-waveform upload, and memory-slot
+> commands all come from his reverse-engineering work.
+>
+> **Arbitrary waveform upload:** Al Williams' `setwave5200` shell script
+> (explicitly marked "Public Domain — use it how you like" in its header)
+> provided the reference implementation from which the wire protocol for
+> uploading 1024-sample waveforms to the device's 16 ARB slots was
+> understood. The upload format (16 chunks of 64 samples, `:a<slot><chunk>`
+> header, comma-separated decimal values, 10 ms inter-chunk delay) was
+> derived from studying that script and the accompanying AWK processing
+> files. This Python implementation is independent; no code was copied.
 
 Other community sources that helped confirm details:
 

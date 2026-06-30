@@ -24,8 +24,10 @@ workaround for the SSA's missing FM-demod SCPI), see
 | FX2LAFW Logic Analyzer (×3) | 8-ch, 24 MHz max, Saleae-compatible | USB VID=08a9 PID=0014 | `rf_bench.fx2lafw.FX2LAFWLogicAnalyzer` | ✅ Driver complete, hardware untested |
 | gpsd | GPS daemon client | localhost:2947 | `rf_bench.gpsd.GPSD` | ✅ tested |
 | HP 8712B | 2-port VNA 300 kHz–1.3 GHz | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.hp.HP8712B` | ❌ pending KISS-488 |
+| NanoVNA-F (Deepelec) | 1.5-port VNA, 50 kHz–1.5 GHz, 4.3" LCD, S11+S21 only | USB CDC `/dev/ttyACM1` | `rf_bench.nanovna.NanoVNA` | ✅ tested 2026-06-30 |
 | Solartron 7151 | 6.5-digit DMM, IEEE-488 | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.solartron.Solartron7151` | ❌ pending KISS-488 |
 | XL9535 relay board | I2C 16-port expander → relays | via Bus Pirate I2C | `rf_bench.relay.XL9535` | ❌ board ordered 2026-06-03 |
+| Arduino+W5100 4-ch network relay | Arduino Uno R3 + Vilros Ethernet R3 shield + 4-ch active-HIGH relay module | 10.1.1.36 TCP :5025 | `rf_bench.arduino_relay_board.ArduinoRelayBoard` | ✅ tested 2026-06-25 |
 | KiwiSDR | HF receiver 0–30 MHz, GPS-disciplined, 12 kS/s | host:8073 WebSocket | `rf_bench.kiwisdr.KiwiSDR` | 🧪 IP TBD |
 | SunSDR2 Pro | HF/6 m + 2 m, 192 kS/s IQ, RX+TX, dual TRX | ExpertSDR3 TCI :50001 | `rf_bench.sunsdr.SunSDR` | 🧪 IP TBD |
 
@@ -253,6 +255,58 @@ exactly what `projects/radio/receiver-test/` produces.
   48 000/float32/2 regardless of what was requested, and the binary frame
   header carries the actual sample rate and format which should be read from
   each frame, not assumed.
+
+---
+
+### Vector network analyzers
+
+#### NanoVNA-F (Deepelec)
+
+- **Hardware:** Deepelec NanoVNA-F (Shenzhen), 4.3" 480×272 LCD, HW2.3 / HW3.1
+  on the bench unit, STM32H7-based, USB Type-C, internal battery.
+- **Range:** 50 kHz – 300 MHz fundamental + harmonic mixing to ~1.5 GHz on this
+  firmware; reduced accuracy above ~600 MHz. Newer Deepelec firmware extends
+  to 3 GHz; the bench unit runs **firmware 0.2.1 by BH5HNU**, dated Aug 2020.
+- **Ports:** **forward-only (1.5-port)** — measures S11 and S21 simultaneously
+  every sweep. S12 / S22 require physical DUT reversal.
+- **Sweep:** 11 / 51 / 101 / 201 / 301 / 401 points, software-selectable. The
+  driver caps at 401 to match upstream firmware.
+- **Output:** uncalibrated, set via coarse `power 0..3` index. No dBm scale.
+- **Calibration:** stored SOLT slots in flash (saved via `save 0..4`).
+- **Driver:** `rf_bench.nanovna.NanoVNA`, ASCII shell over USB CDC at
+  `/dev/ttyACM1`. Status ✅ — first release tested 2026-06-30 against the
+  user's unit (17 API smoke tests pass including S11/S21 capture, marker
+  positioning, single_sweep, average, format selection, calibration-state
+  query, error refusal for S12/S22).
+- **Cross-driver swappable:** the NanoVNA driver and the HP 8712B driver
+  expose the same core method names (`setup_sweep`, `set_parameter`,
+  `single_sweep`, `get_frequencies`, `get_s_data`, `get_trace_db`,
+  `get_trace_phase`, `get_s11`, `get_s21`, `set_marker`, `correction_on/off`,
+  `is_correction_on`, `average_s_data`, context-manager). Methods only one
+  hardware supports raise `NotImplementedError` rather than silently doing
+  the wrong thing (NanoVNA: `set_power(dbm)`, `set_averaging(count)`;
+  HP only: `S12`/`S22` work natively, NanoVNA refuses).
+
+**Quirks worth knowing:**
+
+- The NanoVNA-F shell returns a `ch> ` prompt after every response. The
+  driver reads until that prompt and strips the echoed command. Tested.
+- `cal` (no args) prints the loaded-term status, e.g. `"load Es Er cal'ed"`.
+  Modern firmwares append `" on"` / `" off"`; firmware 0.2.1 on the F-series
+  does not — `is_correction_on()` falls back to scanning for `'ed` tokens.
+- USB-CDC ACM ignores the baudrate parameter — pyserial requires one anyway.
+- Two USB-CDC devices may enumerate when the F-series is in some firmware
+  states; on this unit only `/dev/ttyACM1` is the shell port.
+- Several other NanoVNAs (V2 / S-A-A-2 / LiteVNA / NanoVNA-F **V2**) use a
+  *binary* protocol; this driver does NOT support them — a future
+  `NanoVNA_V2` class would be needed.
+
+**What the NanoVNA-F adds to the bench vs. HP 8712B:**
+
+- Working **today** — the HP is blocked on a KISS-488 adapter.
+- USB-attached, portable to a field trip; the HP is rack-bound.
+- Cheap enough to be sacrificial near a transmitter; the HP is not.
+- 1.5-port forward-only — full S22/S12 will still need the HP once it's online.
 
 ---
 
@@ -519,6 +573,40 @@ la = registry.get('logic-analyzer', tag='primary')
   *coil driver* for external RF-rated relays (reed: 100 MHz; Omron G6Y:
   3 GHz; coaxial relays: as needed) when switching RF. The XL9535 driver
   is identical regardless of which relay type is wired downstream of it.
+
+#### Arduino + Vilros Ethernet R3 — 4-channel network relay board
+
+- **Hardware stack:** Arduino Uno R3 + Vilros Ethernet R3 shield
+  (clone of the Arduino Ethernet Shield R3 — Wiznet **W5100** + on-board
+  microSD slot) + a generic 4-channel **active-HIGH** relay module.
+- **Network:** static-fallback DHCP. Address **10.1.1.36**, listens on
+  **TCP port 5025**.
+- **Firmware:** `~/Dropbox/build/rf-bench/hardware/arduino-relay-board/
+  arduino-relay-board.ino` (stock Arduino `Ethernet` library v2.x — also
+  works unchanged with W5500 modules, only socket count changes).
+- **Driver:** `rf_bench.arduino_relay_board.ArduinoRelayBoard`. Status
+  ✅ — full test pass on 2026-06-25 (`test_relays.py` exercises every
+  command and verifies state round-trip).
+- **Pin map (claimed by the shield, do NOT use for relays):** D2 (W5100
+  INT, optional), D4 (SD CS), D10 (W5100 CS), D11/D12/D13 (SPI MOSI/
+  MISO/SCK). D4 is driven HIGH in `setup()` to keep the unused SD chip
+  off the bus.
+- **Relay pins:** D5 → relay 1, D6 → relay 2, D7 → relay 3, D8 → relay
+  4. Module is **active-HIGH** (drive pin HIGH to energize); polarity
+  controlled by `RELAY_ACTIVE_HIGH` in the sketch.
+- **Protocol:** plain-ASCII line-oriented, every command yields exactly
+  one response line. Commands: `ON n`, `OFF n`, `PULSEH n ms`,
+  `PULSEL n ms`, `STATUS n`, `STATUS` (4-bit hex bitmask), `*IDN?`,
+  `RESET`, `HELP`. Pulses are non-blocking — a 30 s pulse does not
+  freeze the network. Any explicit `ON`/`OFF`/`PULSE*` on the same
+  relay cancels the pending revert.
+- **Concurrency:** W5100 has 4 hardware sockets total → 3 simultaneous
+  clients (one socket is consumed by the listening server). On a W5500
+  bump `MAX_CLIENTS` in the sketch up to 7.
+- **Use cases:** DUT power sequencing, antenna/preamp switching for
+  externally-driven relays, generic remote GPIO control without
+  consuming a Bus Pirate. Complementary to the XL9535 (local I²C,
+  16 relays) and the ESP32 `scpi-relay` (WiFi-based equivalent).
 
 ---
 
