@@ -67,7 +67,11 @@
 > | `vna/balun-pdf` | 🧪 | Two-pass S11+S21 balun characterisation: return loss + insertion loss + amplitude/phase balance. |
 > | `vna/resonance-finder` | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
 > | `vna/connector-check` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL for shell scripting. |
-> | `vna/tdr-pdf` | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. |
+> | `vna/tdr-pdf` | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. **Time-gating via `--gate-start-m` / `--gate-end-m`.** |
+> | `vna/de-embed-pdf` | 🧪 | Pure post-processor: measurement.s2p + fixture.s2p → DUT-alone .s2p + before/after PDF (S↔T matrix algebra). |
+> | `vna/mixed-mode-pdf` | 🧪 | Single-ended .s4p → mixed-mode S-params (Sdd, Scc, Sdc, Scd) PDF + .s4p; Bockelman / Eisenstadt mode transform. |
+> | `vna/crystal-bvd-pdf` | 🧪 | Crystal Butterworth-Van Dyke extraction (Lm, Cm, Rm, C0, Qm); live capture or .s2p input; PDF + SPICE .sub. |
+> | `vna/vector-fit-spice` | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready Laplace subcircuit (LTspice or ngspice). |
 > | legacy `vna/antenna`, `filter`, `group-delay`, `impedance`, `tline`, `sparams` | ❌ *(superseded)* | Replaced by the `*-pdf/` projects above; kept only for historical reference. |
 > | `vna/transistor` | ❌ | Still HP-only — parametric bias-swept S-params don't fit the NanoVNA DUT-reversal workflow. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
@@ -2140,9 +2144,13 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 | `projects/vna/balun-pdf/` | 🧪 | Two-pass S11+S21 balun characterisation: RL + insertion loss + amplitude/phase balance. |
 | `projects/vna/resonance-finder/` | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
 | `projects/vna/connector-check/` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL. |
-| `projects/vna/tdr-pdf/` | 🧪 | Host-side IFFT TDR (step + impulse), cable-VF presets, fault auto-classification. |
+| `projects/vna/tdr-pdf/` | 🧪 | Host-side IFFT TDR (step + impulse), cable-VF presets, fault auto-classification. **Now also `--gate-start-m` / `--gate-end-m` time gating.** |
+| `projects/vna/de-embed-pdf/` | 🧪 | Pure post-processor: `measurement.s2p` + `fixture.s2p` → DUT-alone `.s2p` + before/after PDF. S↔T algebra. |
+| `projects/vna/mixed-mode-pdf/` | 🧪 | 4-port single-ended `.s4p` → mixed-mode (Sdd / Scc / Sdc / Scd) PDF + .s4p. |
+| `projects/vna/crystal-bvd-pdf/` | 🧪 | Crystal Butterworth-Van Dyke extraction (Lm, Cm, Rm, C0, Qm); live capture or `.s2p` input; PDF + SPICE `.sub`. |
+| `projects/vna/vector-fit-spice/` | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready Laplace subcircuit (LTspice or ngspice). |
 
-All **fifteen** scripts share the same swappable-VNA-API pattern and the same
+All **nineteen** scripts share the same swappable-VNA-API pattern and the same
 CLI shape (`--vna {nanovna,hp} --start MHZ --stop MHZ --label ... --output FILE.pdf`).
 See [`projects/vna/README.md`](projects/vna/README.md) for the full per-project status table,
 and each project's README for a "NanoVNA vs HP" section documenting where one VNA

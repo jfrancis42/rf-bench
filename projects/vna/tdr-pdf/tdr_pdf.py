@@ -163,12 +163,22 @@ def make_window(name: str, n: int) -> np.ndarray:
 def compute_tdr(freqs_hz: np.ndarray, gamma: np.ndarray,
                 vf: float, window_name: str,
                 interp_factor: int = 8,
-                ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+                ) -> dict:
     """
     Run low-pass TDR with optional zero-padding for interpolation in time.
 
-    Returns:
-        (distance_m, gamma_step, gamma_impulse_abs)
+    Returns a dict with:
+        distance_m       : (half_len,) one-way distance axis
+        step             : (half_len,) cumulative-sum step response
+        impulse          : (full_len,) real impulse response — full (both
+                           positive and negative-time halves) so gating
+                           can FFT it back cleanly
+        impulse_abs_pos  : (half_len,) |impulse| over positive-time half
+                           (the chart-friendly view)
+        n_input          : original sweep length (used to fold the gated
+                           spectrum back to the input frequency grid)
+        full_len         : zero-padded spectrum length
+        dt               : time step in seconds
     """
     n = len(freqs_hz)
     if n < 4:
@@ -208,7 +218,74 @@ def compute_tdr(freqs_hz: np.ndarray, gamma: np.ndarray,
     # Step response is the cumulative integral of the impulse response.
     step = np.cumsum(h_pos)
 
-    return distance_m, step, np.abs(h_pos)
+    return dict(
+        distance_m=distance_m,
+        step=step,
+        impulse=h,                          # FULL real impulse response
+        impulse_abs_pos=np.abs(h_pos),
+        n_input=n,
+        full_len=full_len,
+        dt=dt,
+    )
+
+
+def compute_gated_response(tdr_result: dict, vf: float,
+                           gate_start_m: float, gate_end_m: float,
+                           gate_taper_m: float = 0.05,
+                           ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Zero the impulse response outside the user's spatial gate, FFT back to
+    the frequency domain, and return (gated_freqs_hz, gated_gamma).
+
+    A cosine-taper "edge ramp" of width gate_taper_m on each side avoids
+    spectral leakage from the sharp gate edges. Taper defaults to 5 cm,
+    which is invisibly small at HF and meaningful at 1+ GHz.
+
+    The returned frequency grid is the SAME grid the original sweep
+    used (the script trims the inverse-FFT back to the input length).
+    """
+    impulse  = tdr_result["impulse"]
+    full_len = tdr_result["full_len"]
+    dt       = tdr_result["dt"]
+    n_in     = tdr_result["n_input"]
+
+    # Per-sample one-way distance for the FULL impulse-response axis.
+    t_full = np.arange(full_len) * dt
+    dist_full = vf * C0_M_PER_S * t_full / 2.0
+
+    # Build the gating window. In the gate band, value = 1; at the edges,
+    # cosine ramp from 0 to 1 over `gate_taper_m`. Outside, value = 0.
+    gate = np.zeros(full_len, dtype=np.float64)
+    in_band = (dist_full >= gate_start_m) & (dist_full <= gate_end_m)
+    gate[in_band] = 1.0
+
+    if gate_taper_m > 0:
+        rise = (dist_full >= gate_start_m - gate_taper_m) & \
+               (dist_full < gate_start_m)
+        if np.any(rise):
+            x = (dist_full[rise] - (gate_start_m - gate_taper_m)) / gate_taper_m
+            gate[rise] = 0.5 * (1.0 - np.cos(np.pi * x))
+        fall = (dist_full > gate_end_m) & \
+               (dist_full <= gate_end_m + gate_taper_m)
+        if np.any(fall):
+            x = (dist_full[fall] - gate_end_m) / gate_taper_m
+            gate[fall] = 0.5 * (1.0 + np.cos(np.pi * x))
+
+    # Apply gate symmetrically about t = 0 (causal + anti-causal halves)
+    # to keep the impulse response real.
+    impulse_gated = impulse.copy()
+    half = full_len // 2
+    # Positive-time half
+    impulse_gated[:half] *= gate[:half]
+    # Negative-time half (mirror)
+    impulse_gated[half:] *= gate[:half][::-1]
+
+    # FFT back to spectrum, take the positive-frequency bins, trim to the
+    # input grid length n_in.
+    spectrum_gated = np.fft.fft(impulse_gated)
+    gated_gamma = spectrum_gated[:n_in]
+
+    return gated_gamma, gate
 
 
 def find_dominant_fault(distance_m, step, impulse_abs, dead_zone_m: float):
@@ -248,7 +325,8 @@ def find_dominant_fault(distance_m, step, impulse_abs, dead_zone_m: float):
 # ---------------------------------------------------------------------------
 
 def plot_pdf(distance_axis, step, impulse_abs, vf, units, fault_info,
-             dead_zone, label, driver_name, idn, freqs_hz, output_path):
+             dead_zone, label, driver_name, idn, freqs_hz, output_path,
+             gated_gamma=None, gate_band=None):
     sweep_lo_mhz = float(freqs_hz[0] / 1e6)
     sweep_hi_mhz = float(freqs_hz[-1] / 1e6)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -263,7 +341,21 @@ def plot_pdf(distance_axis, step, impulse_abs, vf, units, fault_info,
         unit_label = "m"
         dead_zone_disp = dead_zone
 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 9), sharex=True)
+    show_gated = gated_gamma is not None
+    n_panels = 3 if show_gated else 2
+    fig = plt.figure(figsize=(11, 4.5 * n_panels))
+    # First two panels share a distance X axis; third (gated) is independent
+    if show_gated:
+        gs = fig.add_gridspec(3, 1, hspace=0.32)
+        ax_step    = fig.add_subplot(gs[0, 0])
+        ax_impulse = fig.add_subplot(gs[1, 0], sharex=ax_step)
+        ax_gated   = fig.add_subplot(gs[2, 0])
+        axes = [ax_step, ax_impulse, ax_gated]
+    else:
+        gs = fig.add_gridspec(2, 1, hspace=0.05)
+        ax_step    = fig.add_subplot(gs[0, 0])
+        ax_impulse = fig.add_subplot(gs[1, 0], sharex=ax_step)
+        axes = [ax_step, ax_impulse]
 
     # ── Panel 1: step response ───────────────────────────────────────
     ax = axes[0]
@@ -314,13 +406,49 @@ def plot_pdf(distance_axis, step, impulse_abs, vf, units, fault_info,
         fd_disp = fd * 3.28084 if units == "ft" else fd
         ax.axvline(fd_disp, color="red", linestyle="--", linewidth=1.0,
                    alpha=0.7)
+    # Overlay the gate window on the first two panels
+    if gate_band is not None and gate_band[0] is not None:
+        g_lo_disp = gate_band[0] * 3.28084 if units == "ft" else gate_band[0]
+        g_hi_disp = gate_band[1] * 3.28084 if units == "ft" else gate_band[1]
+        for a in (axes[0], axes[1]):
+            a.axvspan(g_lo_disp, g_hi_disp, color="#2ca02c", alpha=0.15,
+                      label=f"Time gate ({g_lo_disp:.2f}–{g_hi_disp:.2f} "
+                            f"{unit_label})")
+        # Refresh legends so the gate entry appears
+        axes[0].legend(loc="upper right", fontsize=8, framealpha=0.92)
+        axes[1].legend(loc="upper right", fontsize=8, framealpha=0.92)
     ax.set_xlabel(f"Distance one-way ({unit_label})")
     ax.set_ylabel("|h(d)|")
     ax.grid(True, which="both", alpha=0.35)
-    ax.legend(loc="upper right", fontsize=8, framealpha=0.92)
+    if gate_band is None or gate_band[0] is None:
+        ax.legend(loc="upper right", fontsize=8, framealpha=0.92)
 
-    fig.tight_layout()
-    fig.savefig(output_path, format="pdf")
+    # ── Optional Panel 3: gated frequency response ───────────────────
+    if gated_gamma is not None:
+        ax = axes[2]
+        freqs_mhz = freqs_hz / 1e6
+        rl_db = -20.0 * np.log10(np.clip(np.abs(gated_gamma), 1e-12, None))
+        ax.plot(freqs_mhz, rl_db, color="#2ca02c", linewidth=1.4,
+                label="Gated return loss")
+        ax.set_xlabel("Frequency (MHz)")
+        ax.set_ylabel("Return loss of\ngated reflection (dB)")
+        ax.set_xlim(float(freqs_mhz[0]), float(freqs_mhz[-1]))
+        ax.grid(True, which="both", alpha=0.35)
+        ax.legend(loc="upper right", fontsize=8, framealpha=0.92)
+        # Reference lines at common RL thresholds
+        for db_val, color in ((9.5, "red"), (14.0, "orange"),
+                              (20.0, "green"), (26.0, "blue")):
+            ax.axhline(db_val, color=color, linestyle="--", linewidth=0.8,
+                       alpha=0.5)
+        g_lo_disp = gate_band[0] * 3.28084 if units == "ft" else gate_band[0]
+        g_hi_disp = gate_band[1] * 3.28084 if units == "ft" else gate_band[1]
+        ax.set_title(
+            f"Frequency response of just the reflection in "
+            f"{g_lo_disp:.2f}–{g_hi_disp:.2f} {unit_label}",
+            fontsize=9,
+        )
+
+    fig.savefig(output_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -365,9 +493,35 @@ def main() -> int:
                    help="Frequency-domain zero-pad factor for time-domain "
                         "interpolation (default 8). Higher = smoother trace, "
                         "no real resolution gain.")
+    p.add_argument("--gate-start-m", type=float, default=None, metavar="M",
+                   help="Time-gate START distance in metres. Together with "
+                        "--gate-end-m, defines a window in the impulse "
+                        "response that gets FFT'd back to the frequency "
+                        "domain so you can see what just THAT reflection "
+                        "contributes to S11. Skip the rest of the cable.")
+    p.add_argument("--gate-end-m", type=float, default=None, metavar="M",
+                   help="Time-gate END distance in metres.")
+    p.add_argument("--gate-start-ft", type=float, default=None, metavar="FT",
+                   help="Same as --gate-start-m but in feet.")
+    p.add_argument("--gate-end-ft", type=float, default=None, metavar="FT",
+                   help="Same as --gate-end-m but in feet.")
+    p.add_argument("--gate-taper-m", type=float, default=0.05, metavar="M",
+                   help="Width of the cosine edge taper on the gate (default "
+                        "0.05 m = 5 cm). Tapers reduce spectral leakage from "
+                        "sharp gate edges. Set to 0 for a hard gate.")
     p.add_argument("--label", default="cable")
     p.add_argument("--output", required=True, metavar="FILE.pdf")
     args = p.parse_args()
+
+    # Resolve gate flags (m / ft) into single metres values
+    if args.gate_start_ft is not None:
+        args.gate_start_m = args.gate_start_ft / 3.28084
+    if args.gate_end_ft is not None:
+        args.gate_end_m = args.gate_end_ft / 3.28084
+    if (args.gate_start_m is None) ^ (args.gate_end_m is None):
+        print("Error: pass BOTH --gate-start and --gate-end (or neither)",
+              file=sys.stderr)
+        return 1
 
     if args.start <= 0 or args.stop <= 0 or args.stop <= args.start:
         print("Error: --start and --stop must be positive with stop > start")
@@ -425,11 +579,41 @@ def main() -> int:
         print(f"  Resolution   : {resolution_m:.3f} m  ({resolution_m * 3.28084:.3f} ft)")
         print(f"  Unambiguous  : {unambig_m:.1f} m  ({unambig_m * 3.28084:.1f} ft)")
 
-        distance_m, step, impulse_abs = compute_tdr(
+        tdr_full = compute_tdr(
             freqs_hz, gamma, vf=vf,
             window_name=args.window,
             interp_factor=args.interp,
         )
+        distance_m = tdr_full["distance_m"]
+        step = tdr_full["step"]
+        impulse_abs = tdr_full["impulse_abs_pos"]
+
+        # Optional time-gating: zero impulse outside [gate_start_m, gate_end_m],
+        # FFT back to get the gated frequency response (= what S11 would look
+        # like if ONLY the reflections in that distance band were present).
+        gated_gamma = None
+        gate_window = None
+        if args.gate_start_m is not None and args.gate_end_m is not None:
+            g_lo = args.gate_start_m
+            g_hi = args.gate_end_m
+            if units == "ft":
+                # Flags were passed in feet via --gate-start-ft / --gate-end-ft
+                # so the conversion has already happened upstream.
+                pass
+            if g_hi <= g_lo:
+                print("Error: --gate-end must exceed --gate-start", file=sys.stderr)
+                return 1
+            gated_gamma, gate_window = compute_gated_response(
+                tdr_full, vf=vf,
+                gate_start_m=g_lo, gate_end_m=g_hi,
+                gate_taper_m=args.gate_taper_m,
+            )
+            print(f"  Gate         : {g_lo:.3f} – {g_hi:.3f} m  "
+                  f"({g_lo*3.28084:.3f} – {g_hi*3.28084:.3f} ft), "
+                  f"taper {args.gate_taper_m*100:.1f} cm")
+            mag = np.abs(gated_gamma)
+            print(f"  Gated |Γ|    : min {mag.min():.4f}, max {mag.max():.4f}, "
+                  f"median {np.median(mag):.4f}")
 
         if args.max_dist is not None:
             max_m = args.max_dist / 3.28084 if args.feet else args.max_dist
@@ -459,6 +643,9 @@ def main() -> int:
             idn=idn,
             freqs_hz=freqs_hz,
             output_path=args.output,
+            gated_gamma=gated_gamma,
+            gate_band=(args.gate_start_m, args.gate_end_m)
+                if args.gate_start_m is not None else None,
         )
         print(f"  Wrote PDF    → {args.output}")
         return 0

@@ -305,6 +305,179 @@ framebuffer. The project converts the captured image to PNG and
 serves it on a local HTTP endpoint, optionally annotated with the
 current sweep parameters. For documentation and remote viewing.
 
+### Future-vna-math
+
+Pure-host-side processing on top of S-parameter captures, all of
+which work identically on the NanoVNA and the HP 8712B since the
+math is post-capture. Roughly ordered "would actually be useful
+day-to-day" → "cool but niche". Anything marked ✅ here has since
+been built — see the "BUILT" parenthetical at the end.
+
+#### Time-domain transformations (extend `tdr-pdf/`)
+
+**Time gating.** TDR a cable, define a time window around one
+specific reflection, IFFT back to the frequency domain. The result
+is the frequency response of just *that one connector*, isolated
+from everything else in the run. Hugely useful when you have a
+multi-connector feedline and need to know "which of these 8 PL-259s
+is bad?" ~200 lines on top of `tdr-pdf/`. **(✅ BUILT 2026-06-30 as
+the `--gate-start-m` / `--gate-end-m` flags on `tdr-pdf/`.)**
+
+**TDT (time-domain transmission).** Same math on S21 instead of
+S11. Finds lumped reflections **inside** a 2-port DUT — bonding-wire
+mismatches in an amplifier, board-trace discontinuities, internal
+filter element parasitics. The HP 8712B has it natively as
+`:CALC:TRAN:STATE ON`; NanoVNA needs host-side compute. — 💭 not
+started.
+
+**Bandpass-mode TDR.** For sweeps that don't start at DC (most
+non-NanoVNA-F gear). The current `tdr-pdf` script uses low-pass
+mode; bandpass mode uses the analytic signal (Hilbert transform of
+the band-shifted spectrum) instead. ~50 extra lines. — 💭 not
+started.
+
+#### Calibration and reference-plane tricks
+
+**De-embedding.** Measure a fixture's S-parameters once, save as
+Touchstone, then *mathematically subtract* it from every subsequent
+measurement. Moves the reference plane from "at the SMA jack" to
+"at the chip pad." Industry-standard technique; one of the highest-
+value VNA tricks. Pure host-side matrix algebra; works identically
+on both VNAs. **(✅ BUILT 2026-06-30 as `projects/vna/de-embed-pdf/`.)**
+
+**TRL (Thru-Reflect-Line) calibration.** Better than SOLT on PCB
+fixtures because no fragile precision OPEN standard is required.
+Works at frequencies where you can build precise transmission-line
+standards. Pure host-side once raw uncorrected S-params are
+captured. — 💭 not started.
+
+**Renormalization.** Convert measured 50 Ω S-params to S-params *at
+any reference impedance* — 75 Ω (CATV / SDI), 100 Ω (differential
+pairs), 600 Ω (open-wire ladder line). One-line numpy. Lets a 50-Ω
+VNA characterize a 75-Ω device honestly. — 💭 not started.
+
+#### Multi-port emulation with a 2-port VNA
+
+**Mixed-mode / differential S-parameters.** Capture all four
+single-ended S-params (the trick already used by `sparams-pdf`),
+then apply a fixed 4×4 transform to get differential-mode S_dd,
+common-mode S_cc, and conversion-mode S_dc / S_cd. Lets you score
+"is this CAT5 line common-mode-rejecting properly?" or "is this
+LVDS pair really differential?" — **(✅ BUILT 2026-06-30 as
+`projects/vna/mixed-mode-pdf/`.)**
+
+**Full 4-port DUT characterization with a 2-port VNA.** Six pair-
+wise captures with the other two ports terminated; reconstruct the
+full 4×4 S-matrix. Classical "poor man's 4-port VNA" recipe. Quite
+painful operator-wise (6 swaps + reterminations); listed for
+completeness. — 💭 not started.
+
+#### Component model extraction (S-params → schematic)
+
+**BVD (Butterworth-Van Dyke) crystal extraction.** Sweep S21 across
+a crystal's series resonance, fit to the 4-parameter motional
+model: motional inductance Lm, motional capacitance Cm, motional
+resistance Rm, and shunt capacitance C₀. Used by every crystal
+manufacturer; pure curve-fit on top of `resonance-finder/`. Output
+includes a schematic-symbol overlay and a SPICE-paste-ready BVD
+netlist. **(✅ BUILT 2026-06-30 as `projects/vna/crystal-bvd-pdf/`.)**
+
+**Vector Fitting** (Gustavsen's classic algorithm, 1999). Fit
+measured S-params with a rational function (sum of poles +
+residues), getting an *analytic* model that can be exported to
+**SPICE subcircuit format**. Take any measured 2-port and drop it
+straight into LTspice as a `.subckt`. Most engineering value of
+anything on this list. **(✅ BUILT 2026-06-30 as
+`projects/vna/vector-fit-spice/`.)**
+
+**Per-unit-length transmission-line RLGC extraction.** Measure
+S-params of two known lengths of the same line, solve for
+distributed R, L, G, C(f). Yields skin-effect coefficient,
+dielectric loss tangent, propagation constant. Extension of
+`tline-pdf/` math. — 💭 not started.
+
+#### Statistical / quality work
+
+**Stability logging.** Sweep a known reference standard every N
+minutes via cron; track |S11| variance over hours / days.
+Quantifies calibration drift; alerts when it exceeds spec. — 💭
+not started.
+
+**Causality check via Kramers-Kronig.** Re(S(ω)) and Im(S(ω)) of
+any causal system are Hilbert transforms of each other. Compute one
+from the other and compare to the measurement. Non-zero residual →
+either non-causal measurement (= calibration error) or a non-linear
+DUT. — 💭 not started.
+
+**Q-extraction triple cross-check.** Three independent Q methods —
+3 dB bandwidth, Lorentzian fit, and Q-circle on the Smith chart —
+should all agree to within a percent or two. Where they disagree,
+the measurement is suspect. Useful for tuning high-Q crystals where
+1 % matters. — 💭 not started.
+
+#### Antenna and propagation science
+
+**Wheeler-cap antenna efficiency.** Measure antenna Q in free
+space, then re-measure inside a conducting cap (which suppresses
+radiation). Comparison gives radiation efficiency vs ohmic
+efficiency. NanoVNA-portable; finally tells you whether that tiny
+mobile whip is actually radiating. — 💭 not started.
+
+**Antenna factor calibration.** Pair the VNA with a calibrated
+noise source to derive antenna factor in dB(m⁻¹). Lets you use a
+homebrew antenna for absolute field-strength measurement. — 💭 not
+started.
+
+**NEC model verification.** Measure real antenna S11, compare to
+NEC-2-simulated S11 of the modelled geometry. Disagreement
+diagnoses the model — wrong height, wrong wire size, missing
+ground, etc. — 💭 not started.
+
+#### Cross-instrument combinations
+
+**Antenna pattern via VNA + rotator.** Point a known antenna at the
+DUT, rotate the DUT (via the ESP32 `scpi-rotator` project), measure
+S21 magnitude at each angle. Cheap polar pattern without an
+anechoic chamber. — 💭 not started.
+
+**VNA + Bus Pirate-controlled digital attenuator.** Sweep across
+the attenuator's full code space, characterise per-code attenuation
+and phase shift vs frequency. Build a correction table; downstream
+projects get true-dB-accurate attenuation. — 💭 not started.
+
+**VNA-driven coupler power-meter.** DDS or SDG feeds a directional
+coupler, VNA reads through-arm and coupled-arm S21, SSA reads
+absolute power. Cross-calibrate the NanoVNA's relative-only S21
+into absolute dBm using the SSA as transfer reference. — 💭 not
+started.
+
+#### Advanced math / curiosity
+
+**Cepstral analysis of S11.** log-magnitude FFT separates discrete
+cable reflections (sharp cepstral peaks) from distributed losses
+(smooth cepstral background). Useful when TDR can't separate
+closely-spaced reflections. — 💭 not started.
+
+**Mode decomposition in oversize waveguide.** When frequency goes
+above a cable's TE₁₁ cutoff, S-params describe multi-mode
+propagation. Modal analysis breaks it apart. Niche but
+mathematically beautiful. — 💭 not started.
+
+**Frequency-comb analysis.** Apply a known comb (e.g., a PLL with
+many spurs) to a DUT, capture S21 at every comb tooth
+simultaneously; faster than a full sweep over discrete bands. — 💭
+not started.
+
+#### Why these belong on `projects/vna/`
+
+Every entry above is pure post-processing of a complex S-parameter
+capture — no new hardware, no firmware mods. The capture happens
+through the existing swappable VNA API; the math runs in Python
+afterward. The HP 8712B and NanoVNA-F give identical results on any
+of these (within their respective dynamic-range floors), so each
+project's `--vna {nanovna,hp}` flag continues to work without
+modification.
+
 ### Future-solartron
 
 These are blocked on the KISS-488 adapter; code mostly does not exist yet.

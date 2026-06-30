@@ -26,7 +26,11 @@ Pick the backend at runtime with the script's `--vna {nanovna,hp}` flag.
 | [`balun-pdf/`](balun-pdf/) | 🧪 | Two-pass balun characterisation: RL + insertion loss + amplitude/phase balance. |
 | [`connector-check/`](connector-check/) | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL. |
 | [`toroid-sniff/`](toroid-sniff/) | 🧪 | Wound-toroid L, Al, Q vs frequency + mix-consistency hint. |
-| [`tdr-pdf/`](tdr-pdf/) | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. |
+| [`tdr-pdf/`](tdr-pdf/) | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. **Time gating via `--gate-start-m` / `--gate-end-m`**: isolate one reflection in time, FFT back to get its frequency response. |
+| [`de-embed-pdf/`](de-embed-pdf/) | 🧪 | Pure post-processor: `measurement.s2p` + `fixture.s2p` → DUT-alone `.s2p` + before/after PDF. S↔T matrix algebra; symmetric or asymmetric fixture topology. |
+| [`mixed-mode-pdf/`](mixed-mode-pdf/) | 🧪 | 4-port single-ended `.s4p` → mixed-mode S-params (Sdd, Scc, Sdc, Scd) PDF + .s4p output. Standard Bockelman / Eisenstadt mode transform. |
+| [`crystal-bvd-pdf/`](crystal-bvd-pdf/) | 🧪 | Live VNA capture (or `.s2p` input) → Butterworth-Van Dyke parameter extraction (Lm, Cm, Rm, C0, Qm) with iterative C0 refinement; PDF + SPICE `.sub` subcircuit. |
+| [`vector-fit-spice/`](vector-fit-spice/) | 🧪 | Gustavsen Vector Fitting → SPICE-paste-ready behavioural Laplace subcircuit. LTspice or ngspice flavor. Drops measured S-params into any simulator. |
 | [`antenna/`](antenna/) | 🧪 *(legacy, superseded)* | Full feed-point impedance: VSWR + R+X + Smith. Superseded by [`impedance-pdf/`](impedance-pdf/). Kept only for historical reference. |
 | `filter/` | ❌ *(legacy, superseded)* | Older HP-only filter-sweep stub. Use [`filter-pdf/`](filter-pdf/) (with optional `--phase` / `--group-delay`). |
 | `group-delay/` | ❌ *(legacy, superseded)* | Use [`group-delay-pdf/`](group-delay-pdf/) (standalone) or [`filter-pdf/ --group-delay`](filter-pdf/). |

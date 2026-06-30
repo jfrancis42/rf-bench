@@ -86,6 +86,64 @@ Optional flags:
 - `--interp N` — frequency-domain zero-pad factor for finer time
   sampling (default 8). Doesn't add real resolution; only smooths the
   trace.
+- `--gate-start-m M` / `--gate-end-m M` — **time gating.** Defines a
+  window in the impulse response, zeros the response outside it, and
+  FFT's that back to the frequency domain. The result is what S11
+  would look like if ONLY the reflections in that distance band were
+  present. Use this to isolate "which connector is bad" when several
+  reflections are in series on one cable. (Or `--gate-start-ft` /
+  `--gate-end-ft` for feet.)
+- `--gate-taper-m M` — cosine-taper width on each gate edge (default
+  0.05 m = 5 cm). Avoids spectral leakage from a hard window. Set to 0
+  for a hard gate.
+
+## Time gating in detail
+
+A normal TDR shows you EVERY reflection in a cable. When you have a
+50-ft run with 4 PL-259s in series, ALL of them contribute to S11,
+and you can't tell which one is the bad one just by looking at the
+frequency-domain S11 trace.
+
+Time gating fixes that. You see the TDR impulse-response peak at,
+say, 18 m one-way. You pass `--gate-start-m 17 --gate-end-m 19`.
+The script zeros the impulse response everywhere except 17–19 m,
+FFT's back to the frequency domain, and shows you the return-loss
+trace of just the reflection at that connector — disambiguated from
+the other three.
+
+Two important caveats:
+
+1. **Spatial resolution = vf · c / (2 · sweep span).** With a 0.05 –
+   900 MHz sweep on RG-58 (vf 0.66), that's about 11 cm. Two reflections
+   closer than 11 cm cannot be separated; gate them as one and live
+   with the ambiguity.
+2. **Gate taper matters.** A hard rectangular gate causes spectral
+   leakage that puts a fake ripple on the gated frequency response.
+   The default 5 cm cosine taper softens the edges enough to
+   suppress most of this. For an HF-only sweep where 5 cm is tiny
+   compared to a wavelength, you can leave it. For UHF / SHF work
+   where 5 cm is a significant fraction of a wavelength, **reduce
+   the taper or you'll smear adjacent reflections together**.
+
+Example workflow — find the bad PL-259 in a 4-connector feedline:
+
+```bash
+# Step 1: capture a full TDR to see all the reflections
+python tdr_pdf.py --start 0.05 --stop 900 --cable RG-58 \
+    --label "Full feedline" --output full.pdf
+
+# (PDF shows reflection peaks at 0.2 m, 6.4 m, 18.1 m, 30.0 m)
+
+# Step 2: gate around each peak in turn
+python tdr_pdf.py --start 0.05 --stop 900 --cable RG-58 \
+    --gate-start-m 17.5 --gate-end-m 18.5 \
+    --label "PL-259 #3 at 18 m" --output pl259_3.pdf
+
+# (PDF "gated frequency response" panel shows return loss vs frequency
+# for just that one connector. -25 dB across HF = healthy. -10 dB =
+# damaged or filthy connector. Compare against the same gate on the
+# other 3 connectors.)
+```
 
 ## Output
 
