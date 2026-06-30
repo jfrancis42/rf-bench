@@ -131,32 +131,53 @@ applicable. Driver verified against the user's NanoVNA-F on 2026-06-30
 #### Field antenna sweep (battery-powered)
 `projects/vna/field-antenna/` — 💭 not started.
 
+Note: `projects/vna/swr-pdf/`, `smith-pdf/`, and `return-loss-pdf/`
+(all built 2026-06-30) already cover the USB-tethered-to-laptop case.
+This entry is now specifically the *standalone* / *on-device-only*
+workflow: SOLT-calibrate on the NanoVNA, save Touchstone .s1p to
+internal flash, then later pull it off the device for a PDF report
+without the laptop being present at the antenna.
+
 Take the NanoVNA-F to the antenna. SOLT-calibrated S11 sweep over band
 of interest, save Touchstone .s1p to internal flash or USB-tether host.
 Output: VSWR plot, R + jX vs freq, resonance point, 2:1-VSWR bandwidth.
 The HP 8712B cannot do this — it's rack-bound.
 
 #### Coax TDR via S11 IFFT
-`projects/vna/coax-tdr/` — 💭 not started.
+`projects/vna/tdr-pdf/` — 🧪 **built 2026-06-30** (not yet run against hardware).
 
-Wideband S11 sweep → IFFT → impulse response. Identifies discontinuities
-(open, short, kink, water ingress, connector quality) at known velocity
-factor. Both VNAs can do it; NanoVNA-F is cheaper to bring to a tower base.
+Wideband S11 sweep → IFFT → step + impulse response. Identifies
+discontinuities (open, short, kink, water ingress, connector quality)
+at known velocity factor. Cable-VF presets (RG-58, RG-213, LMR-400,
+9913, Heliax-1/2, etc.), fault auto-classification, choice of window
+(Hann / Hamming / Blackman / Kaiser / rect), zero-pad interpolation.
+Works on both VNAs (host-side math). The original future-list note
+about "tower-base portability" still matches — NanoVNA-F runs on
+batteries; the HP can't.
 
 #### Balun / common-mode-choke characterizer
-`projects/vna/balun-test/` — 💭 not started.
+**Two projects built 2026-06-30** (neither run against hardware yet):
 
-Identifies bands where a current balun / choke is effective (impedance ≥
-feedline Z) vs transparent. Sweep S11, plot vs HF / VHF / UHF bands.
+- `projects/vna/balun-pdf/` — 🧪 two-pass S11+S21 capture of a balun
+  with each leg measured against the other terminated in 50 Ω.
+  Outputs RL, insertion loss, amplitude balance, phase balance vs
+  frequency. 0° / 180° nominal-phase flag for current vs voltage
+  balun topologies.
+- `projects/vna/choke-pdf/` — 🧪 series-through fixture method
+  (Z = 2·Z0·(1−S21)/S21). Outputs |Z|, R, X with target line
+  configurable (2 kΩ / 5 kΩ thresholds standard for HF / VHF).
+
+Together these cover the original "balun-test" idea.
 
 #### Cable loss + electrical-length library
-`projects/vna/cable-loss-cal/` — 💭 not started.
+`projects/vna/cable-loss-pdf/` — 🧪 **partially built 2026-06-30** (per-cable
+PDF; the persistent YAML library is still future work).
 
-Build `~/.rf-bench/cables.yaml` indexed by cable serial number / label.
-Each entry: per-frequency loss table, electrical length, fixture
-calibration date. Projects needing calibrated power at the DUT
-(transmitter tests, NF, MDS) look up the cable and de-embed automatically.
-Stops "cal-once-then-forget" loss errors from poisoning measurements.
+The PDF generator captures S21 of a cable as a THRU and outputs total
+loss plus per-100-ft (or per-100-m) with a manufacturer overlay (RG-58,
+LMR-400, Heliax-1/2, etc.) and optional pass/fail target. The "save to
+`~/.rf-bench/cables.yaml` so downstream projects auto-de-embed" idea
+is still TODO — currently each cable check is a one-shot PDF.
 
 #### Real-time filter tuning aid
 `projects/vna/filter-tuning/` — 💭 not started.
@@ -220,17 +241,26 @@ characterize SMT components above its raw port reference plane.
 #### Crystal Q via S21 transmission test
 `projects/vna/quartz-q/` — 💭 not started.
 
+Note: `projects/vna/resonance-finder/` (🧪 built 2026-06-30) already
+covers the loaded-Q part for any S11 dip — point it at the crystal in
+a one-port fixture and it returns f₀, -3 dB BW, Q. The `quartz-q/`
+idea is still distinct because it wants an *S21* shunt fixture for
+unloaded-Q extraction with known fixture impedance.
+
 Low-impedance shunt fixture across the crystal under test; NanoVNA
 S21 sweep through the series-resonance minimum. 3 dB bandwidth gives
 loaded Q; with known fixture impedance, unloaded Q follows. Pair with
 Si5351 reference for sub-Hz frequency accuracy.
 
 #### Connector / jumper audit
-`projects/vna/headers-and-jumper-audit/` — 💭 not started.
+`projects/vna/connector-check/` — 🧪 **built 2026-06-30** (not yet run
+against hardware).
 
-Walk the lab's RF feedline tree. For each connector pair / jumper:
-sweep S21 + S11; flag any out-of-spec for replacement. Catch the one
-bad SMA before it pollutes an MDS measurement.
+S11 sweep with 50 Ω load on the back; PASS/FAIL per amateur band vs
+a configurable RL threshold; PDF + JSON; non-zero exit on FAIL so it
+runs from shell scripts. Catches the one bad PL-259 before it
+pollutes an MDS measurement. The "walk-the-lab" aggregator (collect
+every connector audit into one HTML report) is still TODO.
 
 #### NanoVNA-as-power-detector for OOK link tests
 `projects/vna/ook-power-detector/` — 💭 not started.

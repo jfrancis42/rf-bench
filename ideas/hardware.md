@@ -307,6 +307,18 @@ exactly what `projects/radio/receiver-test/` produces.
 - USB-attached, portable to a field trip; the HP is rack-bound.
 - Cheap enough to be sacrificial near a transmitter; the HP is not.
 - 1.5-port forward-only — full S22/S12 will still need the HP once it's online.
+- Wider frequency span at both ends: starts at 50 kHz (HP starts at
+  300 kHz) and reaches 1.5 GHz fundamental, with harmonic-extended
+  reach to ~3 GHz on the H4 / DiSlord firmware (HP tops out at 1.3 GHz).
+- On-device TDR display for at-the-antenna fault-finding (host-side
+  TDR via `projects/vna/tdr-pdf/` works on both VNAs).
+
+**Currently running against the NanoVNA-F (all swappable-API):**
+
+`swr-pdf/`, `smith-pdf/`, `return-loss-pdf/`, `cable-loss-pdf/`,
+`filter-pdf/`, `choke-pdf/`, `toroid-sniff/`, `balun-pdf/`,
+`resonance-finder/`, `connector-check/`, `tdr-pdf/`. See
+`projects/vna/README.md` for the full table and status.
 
 ---
 

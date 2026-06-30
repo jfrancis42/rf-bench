@@ -96,8 +96,17 @@ method set so the same code runs on either backend.
 |---------|--------|----------|-------|
 | `swr-pdf/` | ✅ | NanoVNA-F (`/dev/ttyACM1`) or HP 8712B | S11 → VSWR-vs-frequency single-page PDF. Amateur-band shading 160 m – 70 cm. Tested 2026-06-30 against NanoVNA-F across 2 m / 70 cm / 3–30 MHz. |
 | `smith-pdf/` | ✅ | NanoVNA-F or HP 8712B | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm / 23 cm / HF. |
+| `return-loss-pdf/` | 🧪 | NanoVNA-F or HP 8712B | S11 → return-loss-dB PDF with equivalent-VSWR secondary axis. Better than swr-pdf for sub-2:1 fine-tuning. Authored 2026-06-30; not yet run against hardware. |
+| `cable-loss-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 THRU → coax insertion-loss PDF; optional dB/100 ft panel with manufacturer-curve overlay (RG-58/-213/LMR-400/etc.) and pass/fail target line. Authored 2026-06-30. |
+| `filter-pdf/` | 🧪 | NanoVNA-F or HP 8712B (THRU) | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. Authored 2026-06-30. |
+| `choke-pdf/` | 🧪 | NanoVNA-F or HP 8712B (series-through fixture) | Common-mode choke |Z| / R / X PDF using the K6JCA / DXE series-through method (Z = 2·Z0·(1−S21)/S21). Authored 2026-06-30. |
+| `toroid-sniff/` | 🧪 | NanoVNA-F or HP 8712B (series-through) | Wound-toroid L / Al / Q PDF with a mix-consistency hint (43 / 31 / 61 / 77 / 2 / 6) based on Q-peak frequency. Authored 2026-06-30. |
+| `balun-pdf/` | 🧪 | NanoVNA-F or HP 8712B (two-pass) | Balun characterisation: RL + insertion loss + amplitude balance + phase balance, captured as two passes (swap A↔B with the other leg in 50 Ω). 0° / 180° nominal phase per balun topology. Authored 2026-06-30. |
+| `resonance-finder/` | 🧪 | NanoVNA-F or HP 8712B | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. Authored 2026-06-30. |
+| `connector-check/` | 🧪 | NanoVNA-F or HP 8712B | Per-amateur-band PASS / FAIL return-loss check vs configurable threshold. PDF + JSON; non-zero exit on FAIL. Authored 2026-06-30. |
+| `tdr-pdf/` | 🧪 | NanoVNA-F or HP 8712B | Host-side IFFT time-domain reflectometer (step + impulse), cable-VF presets (RG-58/-213/LMR-400/etc.), fault auto-classification (open-like / short-like / mismatch). Authored 2026-06-30. |
 | `antenna/` | 🧪 | HP 8712B (pending) or NanoVNA | Full feed-point impedance: VSWR + R+X + Smith. Resonance finder. Currently HP-only in code; aligning to swappable API is a known TODO. |
-| `filter/` | ❌ | HP 8712B (pending) | Filter S21 + group delay sweep. |
+| `filter/` | ❌ | HP 8712B (pending) | Older filter S21 stub. Use `filter-pdf/` instead. |
 | `group-delay/` | ❌ | HP 8712B (pending) | Group delay vs frequency. |
 | `impedance/` | ❌ | HP 8712B (pending) | One-port impedance characterization. |
 | `sparams/` | ❌ | HP 8712B (pending) | Full S-parameter capture (Touchstone). |

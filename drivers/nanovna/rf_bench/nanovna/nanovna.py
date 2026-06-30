@@ -76,6 +76,26 @@ ORIGINAL_POINTS  = 101          # edy555 original firmware
 VALID_PARAMETERS = ("S11", "S21", "S12", "S22")
 SUPPORTED_PARAMETERS = ("S11", "S21")
 
+# Nominal source output power at the max power-index setting, *at the
+# fundamental frequency* (~50 kHz – 300 MHz on the NanoVNA-F). Above
+# ~300 MHz the NanoVNA family reaches up to 1.5 GHz using Si5351 odd
+# harmonics (3rd / 5th / 7th); harmonic output is typically 10–30 dB
+# below the fundamental and is not flat across band.
+#
+# Sources:
+#   - flyoob/NanoVNA-F firmware v0.1.4 release notes (2020-03-26):
+#     "Supports 0dBm output (fundamental frequency, for HW V3.1 & HW V2.3
+#     only, for HW V2.2 still -13dBm output)"
+#
+# These are nominal — actual output varies a few dB across the
+# fundamental band and is not calibrated by the vendor. S-parameter
+# measurements are ratiometric and do NOT depend on this number; it
+# matters only for absolute-level questions (e.g. driving a DUT into a
+# specific input power for compression / noise-floor tests).
+NOMINAL_FUNDAMENTAL_DBM_HW_V3_1 = 0.0
+NOMINAL_FUNDAMENTAL_DBM_HW_V2_3 = 0.0
+NOMINAL_FUNDAMENTAL_DBM_HW_V2_2 = -13.0
+
 _PROMPT = b"ch> "
 
 
@@ -554,18 +574,25 @@ class NanoVNA:
         Set source power.
 
         NanoVNA firmware exposes a coarse power index (``power 0..3``); there
-        is no continuous dBm setting and the absolute output level is not
-        calibrated. This driver does NOT translate ``dbm`` → index because
-        the mapping varies by hardware revision and is not documented. Call
-        :meth:`raw_power_index` to set the index directly when needed.
+        is no continuous dBm setting and the per-index dBm mapping is not
+        published by the vendor. The only documented absolute number is the
+        max-index, fundamental-frequency output (see
+        :data:`NOMINAL_FUNDAMENTAL_DBM_HW_V3_1`,
+        :data:`NOMINAL_FUNDAMENTAL_DBM_HW_V2_3`,
+        :data:`NOMINAL_FUNDAMENTAL_DBM_HW_V2_2`). For S-parameter work this
+        is irrelevant (ratiometric measurement); for absolute-level work,
+        characterise your specific unit against a calibrated power meter or
+        spectrum analyzer and build a per-index, per-frequency table.
 
         Raises:
             NotImplementedError: Always. Use :meth:`raw_power_index`.
         """
         raise NotImplementedError(
             "NanoVNA power is not specified in dBm. Use raw_power_index(0..3) "
-            "for the coarse hardware setting (mapping is hardware-revision "
-            "dependent and not documented)."
+            "for the coarse hardware setting (per-index dBm mapping is not "
+            "vendor-published). Nominal max-index output at the fundamental "
+            "band is 0 dBm on HW V3.1 / V2.3 and -13 dBm on HW V2.2; "
+            "harmonic-extended bands (>300 MHz) are tens of dB lower."
         )
 
     def raw_power_index(self, idx: int) -> None:
@@ -574,7 +601,9 @@ class NanoVNA:
 
         Args:
             idx: 0 (lowest) .. 3 (highest). The absolute power per index is
-                 not calibrated and varies across hardware revisions.
+                 not calibrated and varies across hardware revisions; see
+                 :func:`set_power` for the only documented absolute number
+                 (max-index, fundamental-band output).
         """
         if idx < 0 or idx > 3:
             raise ValueError(f"power index must be 0..3, got {idx}")

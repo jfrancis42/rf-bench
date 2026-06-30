@@ -14,8 +14,17 @@ Pick the backend at runtime with the script's `--vna {nanovna,hp}` flag.
 |---------|--------|-------|
 | [`swr-pdf/`](swr-pdf/) | ✅ | S11 → VSWR-vs-frequency single-page PDF. Tested 2026-06-30 against NanoVNA-F on 2 m, 70 cm, 3–30 MHz. |
 | [`smith-pdf/`](smith-pdf/) | ✅ | S11 → Smith-chart single-page PDF. Tested 2026-06-30 against NanoVNA-F on 70 cm, 23 cm, and HF. |
+| [`return-loss-pdf/`](return-loss-pdf/) | 🧪 | S11 → return-loss-dB PDF with equivalent-VSWR axis. Author: 2026-06-30. |
+| [`cable-loss-pdf/`](cable-loss-pdf/) | 🧪 | S21 THRU → cable insertion-loss PDF; optional dB/100ft panel with manufacturer overlay. |
+| [`filter-pdf/`](filter-pdf/) | 🧪 | S21 → filter response with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. |
+| [`choke-pdf/`](choke-pdf/) | 🧪 | CM-choke series-through |Z| / R / X PDF (DX-Engineering / K6JCA method). |
+| [`resonance-finder/`](resonance-finder/) | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
+| [`balun-pdf/`](balun-pdf/) | 🧪 | Two-pass balun characterisation: RL + insertion loss + amplitude/phase balance. |
+| [`connector-check/`](connector-check/) | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL. |
+| [`toroid-sniff/`](toroid-sniff/) | 🧪 | Wound-toroid L, Al, Q vs frequency + mix-consistency hint. |
+| [`tdr-pdf/`](tdr-pdf/) | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. |
 | [`antenna/`](antenna/) | 🧪 | Full feed-point impedance: VSWR + R+X + Smith. Currently HP-only in code — porting to swappable API is a known TODO. |
-| `filter/` | ❌ | Filter S21 + group delay sweep. HP 8712B pending. |
+| `filter/` | ❌ | Older HP-only filter-sweep stub. Use [`filter-pdf/`](filter-pdf/) instead. |
 | `group-delay/` | ❌ | Group delay vs frequency. HP 8712B pending. |
 | `impedance/` | ❌ | One-port impedance characterization. HP 8712B pending. |
 | `sparams/` | ❌ | Full S-parameter capture (Touchstone export). HP 8712B pending. |

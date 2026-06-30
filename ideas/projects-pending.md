@@ -2,20 +2,35 @@
 
 ### HP 8712B VNA
 
-(`projects/vna/` — all ❌, blocked on KISS-488 adapter.)
+**Status changed 2026-06-30:** the swappable VNA API is now exercised by
+eleven projects that run today on the NanoVNA-F. See
+[`projects-built.md`](projects-built.md) for the current list
+(`swr-pdf`, `smith-pdf`, `return-loss-pdf`, `cable-loss-pdf`,
+`filter-pdf`, `choke-pdf`, `toroid-sniff`, `balun-pdf`,
+`resonance-finder`, `connector-check`, `tdr-pdf`). Each will gain HP
+support automatically once the KISS-488 adapter arrives — the scripts
+are written against the shared method set.
+
+The truly HP-only projects below remain blocked on KISS-488. They
+need full two-port S-parameters (S12 / S22) or absolute calibrated
+power, neither of which the 1.5-port NanoVNA-F can provide.
+
+(`projects/vna/sparams/`, `group-delay/`, `impedance/`,
+`transistor/`, `tline/`, `filter/`, `antenna/` — all ❌, blocked on
+KISS-488 adapter.)
 
 The HP 8712B adds **phase** to every measurement that the SSA scalar VNA
-already does, plus full SOLT calibration.
+already does, plus full SOLT calibration with absolute-dBm source.
 
 | Project | Notes |
 |---------|-------|
-| `sparams/` | Full S11/S21/S12/S22 magnitude + phase; Touchstone .s2p export. |
-| `group-delay/` | τ_g(f) = −dφ/dω from S21 phase; built-in `GDELAY` mode for cross-check. |
-| `impedance/` | Z = R + jX from calibrated S11; Smith chart + Cartesian R/X plots. |
-| `transistor/` | S-parameters + MAG / K-factor / stability circles / unilateral figure of merit. |
-| `tline/` | Velocity factor, Z₀, attenuation α(f), propagation constant — from open-then-shorted S11 measurements at known length. |
-| `filter/` | Filter passband ripple / stopband / shape factor / group delay; pass-fail mask. |
-| `antenna/` | Feed-point Z = R + jX vs frequency; replaces the SSA scalar antenna analyzer for everything but its passband range. |
+| `sparams/` | Full S11/S21/S12/S22 magnitude + phase; Touchstone .s2p export. NanoVNA-F is 1.5-port — needs HP for S12/S22. |
+| `group-delay/` | τ_g(f) = −dφ/dω from S21 phase; built-in `GDELAY` mode for cross-check. (Could be approximated on the NanoVNA via differentiation of S21 phase from `get_s_data()`; no project yet.) |
+| `impedance/` | Z = R + jX from calibrated S11; Smith chart + Cartesian R/X plots. (Note: `choke-pdf` already does this for series-through Z; this is the parallel one-port version.) |
+| `transistor/` | S-parameters + MAG / K-factor / stability circles / unilateral figure of merit. Needs S12/S22, so HP-only. |
+| `tline/` | Velocity factor, Z₀, attenuation α(f), propagation constant — from open-then-shorted S11 measurements at known length. Could run on NanoVNA-F. |
+| `filter/` | Older filter-sweep stub; `filter-pdf/` (🧪 built 2026-06-30) supersedes it for the common case. Keep only if you want the HP's calibrated dBm absolute-level readout. |
+| `antenna/` | Feed-point Z = R + jX vs frequency. Could run on NanoVNA-F once ported to the swappable API (known TODO). |
 
 **Bring-up plan** — once KISS-488 is installed:
 1. Set HP 8712B GPIB address ≠ 16 (Solartron defaults to 16 too).

@@ -55,6 +55,15 @@
 > | `radio/dstar-monitor` | ❌ | IC-9700 D-STAR activity monitor — code complete, untested |
 > | `vna/swr-pdf` | ✅ | S11 → VSWR-vs-frequency single-page PDF. Tested 2026-06-30 against NanoVNA-F on 2 m, 70 cm, and 3–30 MHz. Reference implementation of the swappable-VNA-API pattern (`--vna {nanovna,hp}`). |
 > | `vna/smith-pdf` | ✅ | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm, 23 cm, and HF. |
+> | `vna/return-loss-pdf` | 🧪 | S11 → return-loss-dB PDF with equivalent-VSWR secondary axis. Better than swr-pdf for sub-2:1 fine-tuning. |
+> | `vna/cable-loss-pdf` | 🧪 | S21 THRU → cable insertion-loss PDF; optional dB/100 ft panel with manufacturer overlay (RG-58/-213/LMR-400 etc.) and pass/fail target line. |
+> | `vna/filter-pdf` | 🧪 | S21 → filter response PDF with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. |
+> | `vna/choke-pdf` | 🧪 | Series-through |Z| / R / X PDF for common-mode chokes (K6JCA / DXE method). |
+> | `vna/toroid-sniff` | 🧪 | Series-through L / Al / Q for a wound toroid; suggests ferrite/iron mix based on Q-peak frequency. |
+> | `vna/balun-pdf` | 🧪 | Two-pass S11+S21 balun characterisation: return loss + insertion loss + amplitude/phase balance. |
+> | `vna/resonance-finder` | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
+> | `vna/connector-check` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL for shell scripting. |
+> | `vna/tdr-pdf` | 🧪 | Host-side IFFT TDR (step + impulse) with cable-VF presets and fault auto-classification. |
 > | `vna/antenna` and friends | 🧪 | Full feed-point impedance + Smith chart; HP-only in code today (porting to swappable API is a known TODO). Other `vna/*` subdirs await KISS-488 adapter. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
 
@@ -2101,13 +2110,37 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 
 ---
 
-## Future Projects — Vector Network Analyzer (NanoVNA / HP 8712B)
+## Current Projects — Vector Network Analyzer (NanoVNA / HP 8712B)
 
 > **All vna/ projects target the swappable VNA API shared by `rf_bench.nanovna.NanoVNA`
 > and `rf_bench.hp.HP8712B`.** They run today on the NanoVNA-F; HP-only modes (full
 > S22/S12, calibrated dBm source, hardware averaging) are blocked on the KISS-488 adapter.
 > The same project script accepts a `--vna nanovna|hp` flag and uses whichever is
 > available.
+
+### Built and ready to use (✅ hardware-tested · 🧪 authored, hardware test pending)
+
+| Path | Status | One-line description |
+|------|--------|----------------------|
+| `projects/vna/swr-pdf/` | ✅ | S11 → VSWR-vs-frequency single-page PDF. Amateur-band shading. |
+| `projects/vna/smith-pdf/` | ✅ | S11 → frequency-coloured Smith-chart PDF. |
+| `projects/vna/return-loss-pdf/` | 🧪 | S11 → RL-dB PDF with equivalent-VSWR secondary axis (better than swr-pdf for sub-2:1 fine-tuning). |
+| `projects/vna/cable-loss-pdf/` | 🧪 | S21 THRU → cable insertion-loss PDF; optional dB/100 ft panel with manufacturer overlay (RG-58/-213/LMR-400 etc.) and pass/fail target. |
+| `projects/vna/filter-pdf/` | 🧪 | S21 → filter response with auto-detected -3/-6/-20/-40/-60 dB bandwidths, ripple, shape factor, stopband floor. |
+| `projects/vna/choke-pdf/` | 🧪 | Series-through \|Z\| / R / X for common-mode chokes (K6JCA / DXE method). |
+| `projects/vna/toroid-sniff/` | 🧪 | Wound-toroid L / Al / Q + mix-consistency hint (43 / 31 / 61 / 77 / 2 / 6). |
+| `projects/vna/balun-pdf/` | 🧪 | Two-pass S11+S21 balun characterisation: RL + insertion loss + amplitude/phase balance. |
+| `projects/vna/resonance-finder/` | 🧪 | Auto-find S11 dips, fit -3 dB BW, report loaded Q. PDF + CSV. |
+| `projects/vna/connector-check/` | 🧪 | Per-amateur-band PASS/FAIL return-loss check; PDF + JSON; non-zero exit on FAIL. |
+| `projects/vna/tdr-pdf/` | 🧪 | Host-side IFFT TDR (step + impulse), cable-VF presets, fault auto-classification. |
+
+All eleven scripts share the same swappable-VNA-API pattern and the same
+CLI shape (`--vna {nanovna,hp} --start MHZ --stop MHZ --label ... --output FILE.pdf`).
+See [`projects/vna/README.md`](projects/vna/README.md) for the full per-project status table.
+
+---
+
+## Future Projects — Vector Network Analyzer (NanoVNA / HP 8712B)
 
 The HP 8712B performs full two-port SOLT calibration and returns complex (magnitude + phase)
 S-parameters — capabilities beyond what the Siglent instruments offer. The key distinction

@@ -162,6 +162,51 @@ with NanoVNA() as vna:
 Calibration applies only over the swept range it was measured at. Change
 the sweep, recalibrate.
 
+## Source output power
+
+The NanoVNA's source has only a coarse 0–3 power index — no continuous
+dBm setting — and the vendor doesn't publish a per-index dBm table.
+`set_power(dbm)` therefore raises `NotImplementedError`; use
+`raw_power_index(0..3)` for the raw hardware setting.
+
+The one absolute number that *is* documented comes from the
+NanoVNA-F firmware v0.1.4 release notes (2020-03-26):
+
+| Hardware revision | Max-index, fundamental-band output |
+|---|---|
+| **HW V3.1** | 0 dBm |
+| **HW V2.3** | 0 dBm |
+| HW V2.2 | −13 dBm |
+
+These are constants in the driver:
+
+```python
+from rf_bench.nanovna import (
+    NOMINAL_FUNDAMENTAL_DBM_HW_V3_1,   #   0.0
+    NOMINAL_FUNDAMENTAL_DBM_HW_V2_3,   #   0.0
+    NOMINAL_FUNDAMENTAL_DBM_HW_V2_2,   # -13.0
+)
+```
+
+Caveats:
+
+- **Fundamental band only** (~50 kHz – 300 MHz). Above 300 MHz the
+  NanoVNA family reaches up to 1.5 GHz via Si5351 odd harmonics
+  (3rd / 5th / 7th); harmonic output is typically 10–30 dB below the
+  fundamental and not flat across band.
+- **Nominal, not calibrated.** Real output varies a few dB across the
+  fundamental band, unit-to-unit, and with battery state on portable
+  models.
+- **Doesn't matter for S-parameter work.** S11 / S21 / VSWR / RL are
+  ratiometric and don't depend on absolute source power. This number
+  matters only when you need the DUT input at a specific level
+  (compression sweeps, noise-floor tests, antenna gain measurements
+  that need a known incident power).
+- **Indices 0–2 are unspecified.** If you need a known output below
+  max, characterise *your specific unit* against a calibrated power
+  meter / spectrum analyzer (e.g. SSA3032X Plus) and store the result
+  as a per-index, per-frequency table.
+
 ## Building & publishing
 
 ```bash
