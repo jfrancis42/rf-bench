@@ -91,6 +91,10 @@ class HP8712B:
         self.kiss_port = kiss_port
         self.gpib_addr = gpib_addr
         self._sock: Optional[socket.socket] = None
+        # Track the currently-selected S-parameter so get_s11()/get_s21()
+        # convenience accessors can re-select and acquire as needed. The
+        # actual on-instrument state is set when set_parameter() is called.
+        self._parameter: str = "S11"
         self.connect()
 
     # ------------------------------------------------------------------
@@ -221,6 +225,11 @@ class HP8712B:
         self.send(f":CALC:PAR:MOD {param}")          # Verify against HP 8712B manual
         # Also enable the measurement via the sensor path
         self.send(f":SENS:{param}:STAT ON")           # Verify against HP 8712B manual
+        self._parameter = param
+
+    def get_parameter(self) -> str:
+        """Return the currently selected S-parameter."""
+        return self._parameter
 
     def set_format(self, fmt: str) -> None:
         """
@@ -287,6 +296,15 @@ class HP8712B:
     def hold(self) -> None:
         """Hold (stop) the sweep."""
         self.send(":TRIG:SOUR MAN")                    # Verify against HP 8712B manual
+
+    # NanoVNA-compatibility aliases
+    def pause(self) -> None:
+        """Pause sweeping. Alias for :meth:`hold` (NanoVNA-compatible name)."""
+        self.hold()
+
+    def resume(self) -> None:
+        """Resume sweeping. Alias for :meth:`continuous` (NanoVNA-compatible name)."""
+        self.continuous()
 
     # ------------------------------------------------------------------
     # Data readout
@@ -364,6 +382,68 @@ class HP8712B:
         return reals + 1j * imags
 
     # ------------------------------------------------------------------
+    # Cross-driver convenience methods (NanoVNA API parity)
+    # ------------------------------------------------------------------
+
+    def get_s11(self) -> np.ndarray:
+        """
+        Return the current S11 trace as a complex array.
+
+        Mirrors :meth:`rf_bench.nanovna.NanoVNA.get_s11`. Switches the
+        instrument parameter selection to S11 if it is not already there
+        (which requires a fresh sweep — averaging settings apply).
+        """
+        if self._parameter != "S11":
+            self.set_parameter("S11")
+            self.single_sweep()
+        return self.get_s_data()
+
+    def get_s21(self) -> np.ndarray:
+        """
+        Return the current S21 trace as a complex array.
+
+        Mirrors :meth:`rf_bench.nanovna.NanoVNA.get_s21`. Switches the
+        instrument parameter selection to S21 if it is not already there
+        (which requires a fresh sweep — averaging settings apply).
+        """
+        if self._parameter != "S21":
+            self.set_parameter("S21")
+            self.single_sweep()
+        return self.get_s_data()
+
+    def get_trace_db_at(self, freq_hz: float) -> float:
+        """
+        Return the selected parameter's log-magnitude in dB at the sweep
+        point closest to ``freq_hz``.
+
+        Mirrors :meth:`rf_bench.nanovna.NanoVNA.get_trace_db_at`.
+        """
+        freqs = self.get_frequencies()
+        db = self.get_trace_db()
+        idx = int(np.argmin(np.abs(freqs - float(freq_hz))))
+        return float(db[idx])
+
+    def average_s_data(self, n: int = 4) -> np.ndarray:
+        """
+        Capture ``n`` sweeps and return the complex average of the selected
+        parameter.
+
+        Mirrors :meth:`rf_bench.nanovna.NanoVNA.average_s_data` for projects
+        that want host-side averaging regardless of which driver is in use.
+        On the HP 8712B, prefer :meth:`set_averaging` for hardware
+        averaging — it is faster and gives the trace dynamic range needed
+        for low-level S21 measurements.
+        """
+        if n < 1:
+            raise ValueError(f"n must be ≥ 1, got {n}")
+        self.single_sweep()
+        acc = self.get_s_data().astype(np.complex128)
+        for _ in range(n - 1):
+            self.single_sweep()
+            acc = acc + self.get_s_data().astype(np.complex128)
+        return acc / float(n)
+
+    # ------------------------------------------------------------------
     # Calibration
     # ------------------------------------------------------------------
 
@@ -374,6 +454,15 @@ class HP8712B:
     def correction_off(self) -> None:
         """Disable error correction (calibration)."""
         self.send(":SENS:CORR:STAT OFF")
+
+    # NanoVNA-style aliases for cross-driver parity
+    def cal_on(self) -> None:
+        """Enable error correction. Alias for :meth:`correction_on`."""
+        self.correction_on()
+
+    def cal_off(self) -> None:
+        """Disable error correction. Alias for :meth:`correction_off`."""
+        self.correction_off()
 
     def is_correction_on(self) -> bool:
         """
@@ -389,15 +478,24 @@ class HP8712B:
     # Markers
     # ------------------------------------------------------------------
 
-    def set_marker(self, freq_hz: float) -> None:
+    def set_marker(self, freq_hz: float, marker: int = 1) -> None:
         """
-        Enable marker 1 and position it at the specified frequency.
+        Enable a marker and position it at the specified frequency.
 
         Args:
             freq_hz: Marker frequency in Hz.
+            marker:  Marker number (HP 8712B supports 1..4). Defaults to 1
+                     to match the cross-driver swappable signature.
         """
-        self.send(":CALC:MARK:STAT ON")
-        self.send(f":CALC:MARK:X {freq_hz:.1f}")
+        if marker < 1 or marker > 4:
+            raise ValueError(f"marker must be 1..4, got {marker}")
+        # HP 8712B uses a separate marker selector first
+        if marker != 1:
+            self.send(f":CALC:MARK{marker}:STAT ON")           # Verify against HP 8712B manual
+            self.send(f":CALC:MARK{marker}:X {freq_hz:.1f}")   # Verify against HP 8712B manual
+        else:
+            self.send(":CALC:MARK:STAT ON")
+            self.send(f":CALC:MARK:X {freq_hz:.1f}")
 
     def get_marker_value(self) -> float:
         """

@@ -29,6 +29,7 @@
 > | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
 > | `rf-bench-drivers-gpsd` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-gpsd)](https://pypi.org/project/rf-bench-drivers-gpsd/) | ✅ | gpsd GPS client 0.1.1 — tested with u-blox receiver; lat/lon/alt/speed/heading/DOP |
 > | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
+> | `rf-bench-drivers-nanovna` | not on PyPI | ✅ | NanoVNA-F / -H / -H4 — ASCII shell over USB CDC; 17 API smoke tests pass on NanoVNA-F (2026-06-30); API-swappable with `rf-bench-drivers-hp` |
 > | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
 > | `rf-bench-drivers-koolertron` | not on PyPI yet | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A |
 >
@@ -51,7 +52,9 @@
 > | `radio/rx-crosscheck` | ❌ | IC-9700 ↔ RTL-SDR cross-calibration — code complete, untested |
 > | `radio/aprs-igate` | ❌ | IC-9700 USB audio APRS igate — code complete, untested |
 > | `radio/dstar-monitor` | ❌ | IC-9700 D-STAR activity monitor — code complete, untested |
-> | `vna/*` | ❌ | HP 8712B VNA — hardware adapter not yet installed |
+> | `vna/swr-pdf` | ✅ | S11 → VSWR-vs-frequency single-page PDF. Tested 2026-06-30 against NanoVNA-F on 2 m, 70 cm, and 3–30 MHz. Reference implementation of the swappable-VNA-API pattern (`--vna {nanovna,hp}`). |
+> | `vna/smith-pdf` | ✅ | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm, 23 cm, and HF. |
+> | `vna/antenna` and friends | 🧪 | Full feed-point impedance + Smith chart; HP-only in code today (porting to swappable API is a known TODO). Other `vna/*` subdirs await KISS-488 adapter. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
 
 ---
@@ -259,6 +262,21 @@ with Solartron7151("10.1.1.70") as dmm:
 | Class | Instrument family | Tested with | Protocol |
 |-------|------------------|-------------|---------|
 | `HP8712B` | HP 8712B Vector Network Analyzer (300 kHz–1.3 GHz) | none yet — awaiting KISS-488 + HP 8712B | IEEE-488 / KISS-488 Ethernet-GPIB / TCP port 1234 |
+
+### NanoVNA (`rf_bench.nanovna`) ✅ TESTED
+
+| Class | Instrument family | Tested with | Protocol |
+|-------|------------------|-------------|---------|
+| `NanoVNA` | NanoVNA (edy555), NanoVNA-H / -H4 (hugen79 / DiSlord), NanoVNA-F (Deepelec). 50 kHz – 1.5 GHz (harmonic-extended), 1.5-port forward-only (S11+S21) | NanoVNA-F (Deepelec) HW2.3/3.1, firmware 0.2.1 — 2026-06-30 | ASCII shell over USB CDC ACM (`/dev/ttyACM*`) |
+
+The `NanoVNA` and `HP8712B` classes implement the same core method set
+(`setup_sweep`, `set_parameter`, `single_sweep`, `get_frequencies`,
+`get_s_data`, `get_trace_db`, `get_trace_phase`, `get_s11`, `get_s21`,
+`set_marker`, `get_marker_value`, `correction_on/off`,
+`is_correction_on`, `average_s_data`, etc.). Project scripts written
+against this API run on either VNA. NanoVNA-only behaviors (S12/S22,
+`set_power(dbm)`, hardware averaging) raise `NotImplementedError`
+rather than silently doing the wrong thing.
 
 ### Utilities (`rf_bench.utils`)
 
@@ -2080,16 +2098,20 @@ print(s.recv(1024).decode())  # N0GQ,ESP32-SCPI-Relay,1.0,2026
 
 ---
 
-## Future Projects — HP 8712B Vector Network Analyzer
+## Future Projects — Vector Network Analyzer (NanoVNA / HP 8712B)
 
-> **These projects require the HP 8712B VNA and an Ethernet-GPIB adapter (KISS-488 Rev 2).**
-> The HP 8712B is not yet connected. All projects below are blocked on the KISS-488 adapter
-> being installed and `rf-bench-drivers-hp` being verified with the physical instrument.
+> **All vna/ projects target the swappable VNA API shared by `rf_bench.nanovna.NanoVNA`
+> and `rf_bench.hp.HP8712B`.** They run today on the NanoVNA-F; HP-only modes (full
+> S22/S12, calibrated dBm source, hardware averaging) are blocked on the KISS-488 adapter.
+> The same project script accepts a `--vna nanovna|hp` flag and uses whichever is
+> available.
 
 The HP 8712B performs full two-port SOLT calibration and returns complex (magnitude + phase)
 S-parameters — capabilities beyond what the Siglent instruments offer. The key distinction
 is phase: the Siglent tools measure amplitude only. The HP 8712B enables Smith charts, group
-delay, true Z = R + jX, and stability circles.
+delay, true Z = R + jX, and stability circles. The NanoVNA-F provides the same phase data
+in forward direction only (S11 + S21), with the cost trade-off that S22 / S12 require
+physically reversing the DUT.
 
 ---
 
@@ -2204,7 +2226,142 @@ calibrated S11, plus VSWR and return loss. Backwards-compatible with `rf-bench-a
 output format. The HP 8712B gives R + jX so the engineer knows whether the antenna is
 inductive or capacitive at each frequency, enabling direct matching network design.
 
-**Requires:** `rf-bench-drivers-hp`, HP 8712B, SOLT calibration standard set.
+**Requires:** `rf-bench-drivers-hp` *or* `rf-bench-drivers-nanovna`, a 2-port (HP) or
+1.5-port (NanoVNA) VNA, SOLT calibration standard set.
+
+---
+
+## Future Projects — NanoVNA-specific
+
+> **These projects exploit NanoVNA-specific characteristics (cheap, portable, battery-powered,
+> field-usable) that the HP 8712B doesn't share.** The driver works today against the
+> bench's NanoVNA-F; no KISS-488 dependency.
+
+### rf-bench-vna-field-antenna *(future)*
+
+`projects/vna/field-antenna/`
+
+**Purpose:** Battery-powered field antenna sweep. NanoVNA-F (with internal battery + LCD)
+goes to the antenna; runs a SOLT-calibrated S11 sweep over the band of interest; saves
+Touchstone .s1p to local file or uploads via WiFi-tethered host. Output: VSWR plot,
+R + jX vs frequency, resonance point, bandwidth at 2:1 VSWR. The HP 8712B is rack-bound;
+this is the project the HP cannot do.
+
+### rf-bench-vna-coax-tdr *(future)*
+
+`projects/vna/coax-tdr/`
+
+**Purpose:** Time-domain reflectometry from S11 IFFT. NanoVNA wideband S11 sweep,
+IFFT to obtain impulse response, identify discontinuities (open, short, kink, water
+ingress) at known velocity factor. Useful for finding faults in feedlines, dead spots
+in jumpers, and verifying connector quality. Both VNAs can do this; the NanoVNA-F is
+cheaper to bring to a tower base.
+
+### rf-bench-vna-balun-test *(future)*
+
+`projects/vna/balun-test/`
+
+**Purpose:** Common-mode rejection test for current baluns and chokes. Drives port 0
+into one side of the balun, terminates the other side, measures S11 vs frequency.
+Identifies the bands where the choke is effective (impedance ≥ feedline impedance)
+and where it's transparent. Pairs well with RB3X25 reflection bridge.
+
+### rf-bench-vna-cable-loss-cal *(future)*
+
+`projects/vna/cable-loss-cal/`
+
+**Purpose:** Per-cable insertion loss + electrical length library, persisted to YAML
+file in `~/.rf-bench/cables.yaml`. NanoVNA sweeps each cable end-to-end with the THRU
+calibration, records loss vs frequency and electrical length, accumulates a library.
+Projects that need calibrated power at the DUT (transmitter tests, NF measurements)
+look up cable loss and de-embed automatically.
+
+### rf-bench-vna-filter-tuning *(future)*
+
+`projects/vna/filter-tuning/`
+
+**Purpose:** Real-time filter tuning aid. NanoVNA-F's screen + SCREEN_CAPTURE mode
+exports the running S21 trace via USB to a host that overlays target response and
+deviation indicators. Useful when tuning crystal filters / cavity filters by hand —
+the host beeps when each pole crosses target.
+
+### rf-bench-vna-multi-segment *(future)*
+
+`projects/vna/multi-segment/`
+
+**Purpose:** Span >401-point traces by stitching contiguous NanoVNA segments
+(`NanoVNA.iter_segments()`). For each segment: SOLT-calibrate at that range,
+acquire S11 + S21, concatenate into a single wideband Touchstone. The trade-off
+is calibration discontinuity at segment edges; the project flags edges and offers
+interpolation across the seam.
+
+### rf-bench-vna-vs-ssa-cross-check *(future)*
+
+`projects/vna/vs-ssa-cross-check/`
+
+**Purpose:** Cross-validate NanoVNA-F amplitude readings against the SSA3032X via
+the SDG1062X as a known source. NanoVNA reads S21 of a coupler tap; SSA reads
+absolute power from the through arm. With known coupler loss, both should agree;
+deviation reveals NanoVNA amplitude calibration drift between SOLT runs. Builds
+a per-frequency dBFS→dBm trim table for the NanoVNA at the cost of the bench-
+known SDG + SSA pair.
+
+### rf-bench-vna-portable-rf-survey *(future)*
+
+`projects/vna/portable-rf-survey/`
+
+**Purpose:** Walk an installation site, sweep S11 of every visible cable / antenna /
+patch panel feed; aggregate results into a single HTML report with VSWR plots,
+problem-cable highlights, and recommended fixes. NanoVNA-F's built-in screen
+provides on-site go/no-go; the host report adds analytics.
+
+### rf-bench-vna-doe-iso-baseline *(future)*
+
+`projects/vna/doe-iso-baseline/`
+
+**Purpose:** Day-zero baseline / drift monitor. Sweeps a known SOLT cal kit's
+verification standards (e.g., mismatch attenuator, sliding load, beadless airline
+if available) and records the systematic residual error at each frequency. Re-run
+nightly via cron; alert when drift exceeds threshold. The same script runs on the
+HP 8712B for cross-comparison once it's online.
+
+### rf-bench-vna-amplifier-curve *(future)*
+
+`projects/vna/amplifier-curve/`
+
+**Purpose:** Small-signal gain + return loss vs bias point. NanoVNA + SPD3303X-E
+to set bias; sweep over Vds / Id grid; capture S21, S11 at each point. Output: gain
+contour vs bias, MAG estimate via |S21/S12| ratio (proxy on NanoVNA — true MAG
+requires HP for S12), heat map of unconditional stability. Useful for RF amplifier
+characterization at the homebrew bench.
+
+### rf-bench-vna-de-embed-fixture *(future)*
+
+`projects/vna/de-embed-fixture/`
+
+**Purpose:** Two-port de-embedding of a printed-circuit test fixture. SOLT calibrate
+at the SMA reference plane; capture the fixture's S-parameters (open, short, thru
+PCB patterns); use those to mathematically remove the fixture from subsequent DUT
+measurements. Lets the NanoVNA characterize SMT components at higher frequencies
+than its raw port reference plane allows.
+
+### rf-bench-vna-quartz-q *(future)*
+
+`projects/vna/quartz-q/`
+
+**Purpose:** Crystal Q measurement via S21 transmission-line fixture. Drive port 0
+through a low-impedance shunt across the crystal; measure S21 minimum vs frequency
+(series resonance). 3 dB bandwidth gives Q. Pairs with the Si5351 reference clock
+for sub-Hz accuracy at the resonance frequency.
+
+### rf-bench-vna-headers-and-jumper-audit *(future)*
+
+`projects/vna/headers-and-jumper-audit/`
+
+**Purpose:** Quick audit of every connector / jumper in the lab's RF feedline tree.
+Walks the inventory, sweeps each connector pair, records insertion loss + return
+loss; flags any out of spec for replacement. Goal: catch the one bad SMA before it
+shows up in an MDS measurement.
 
 ---
 

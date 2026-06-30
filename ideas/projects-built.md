@@ -86,6 +86,24 @@ GPS is wired into many other domains via the `--gps` flag — see
 | `tdr/` | ✅ | SDG + scope + SMA T | See `projects/rf/tdr/` — alias entry for cross-reference. |
 | `txvs/` | ✅ | scope | Transmitter-vs-scope characteristic capture. |
 
+### projects/vna
+
+Uses the swappable VNA API — `rf_bench.nanovna.NanoVNA` (working) or
+`rf_bench.hp.HP8712B` (hardware pending). Scripts call only the shared
+method set so the same code runs on either backend.
+
+| Project | Status | Hardware | Notes |
+|---------|--------|----------|-------|
+| `swr-pdf/` | ✅ | NanoVNA-F (`/dev/ttyACM1`) or HP 8712B | S11 → VSWR-vs-frequency single-page PDF. Amateur-band shading 160 m – 70 cm. Tested 2026-06-30 against NanoVNA-F across 2 m / 70 cm / 3–30 MHz. |
+| `smith-pdf/` | ✅ | NanoVNA-F or HP 8712B | S11 → Smith-chart single-page PDF, frequency-coloured locus. Tested 2026-06-30 against NanoVNA-F on 70 cm / 23 cm / HF. |
+| `antenna/` | 🧪 | HP 8712B (pending) or NanoVNA | Full feed-point impedance: VSWR + R+X + Smith. Resonance finder. Currently HP-only in code; aligning to swappable API is a known TODO. |
+| `filter/` | ❌ | HP 8712B (pending) | Filter S21 + group delay sweep. |
+| `group-delay/` | ❌ | HP 8712B (pending) | Group delay vs frequency. |
+| `impedance/` | ❌ | HP 8712B (pending) | One-port impedance characterization. |
+| `sparams/` | ❌ | HP 8712B (pending) | Full S-parameter capture (Touchstone). |
+| `tline/` | ❌ | HP 8712B (pending) | Transmission line characterization. |
+| `transistor/` | ❌ | HP 8712B (pending) | RF transistor S-parameter extraction. |
+
 ### projects/spectrum
 
 | Project | Status | Notes |
@@ -212,6 +230,23 @@ which has an archived working proxy at
 | `tx-characterize/` | HF TX characterization with 192 kHz IQ. |
 | `vhf-monitor/` | 100–150 MHz wideband activity monitor (TRX 1). |
 | `vhf-tx-test/` | IC-9700 TX → SunSDR TRX 1 wideband measurement. |
+
+### hardware/
+
+Standalone embedded hardware projects that aren't part of the ESP32 SCPI
+fleet (different MCU / different network stack / different protocol).
+
+| Project | Status | Hardware | Protocol | Use Case |
+|---------|--------|----------|----------|----------|
+| `arduino-relay-board/` | ✅ | Arduino Uno R3 + Vilros Ethernet R3 (W5100 + microSD) + 4-ch active-HIGH relay module | ASCII line protocol on TCP :5025 (DHCP, address 10.1.1.36) | Wired-Ethernet remote relay switching where WiFi (ESP32 `scpi-relay/`) is undesirable or unavailable |
+
+Tested on hardware 2026-06-25 — all four relays exercise correctly via
+`hardware/arduino-relay-board/test_relays.py` against the
+`rf_bench.arduino_relay_board.ArduinoRelayBoard` driver. Non-blocking
+pulse mode (`PULSEH`/`PULSEL`) confirmed; explicit `ON`/`OFF` correctly
+cancels an in-flight pulse.
+
+---
 
 ### projects/esp32
 
