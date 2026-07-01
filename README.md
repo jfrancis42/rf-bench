@@ -234,6 +234,7 @@ physics, not by the price of the box.
 > | `gps/monitor` | 🧪 | Fullscreen GPS status: DOP bars, scatter plot, speed, heading — tested |
 > | `gps/freq-cal` | ❌ | GPS-timestamped frequency drift measurement with SSA — untested |
 > | `soundcard/*` (45 projects) | 🧪 | Real-time audio DSP: noise reduction, filters, spatial audio, measurement (THD/IMD/SNR/freq response), ambient/nature, radio simulation, VAD |
+> | `educational/iq` | ✅ | IQ modulation/demodulation with HF channel simulator — AM/FM/USB/LSB, Watterson fading, QRN, echo, 8 propagation presets |
 > | `esp32/*` (35 projects) | ❌ | ESP32 SCPI-over-WiFi controllers — all built to docs, untested against hardware |
 
 ---
@@ -510,6 +511,30 @@ interface as a measurement and signal processing tool. The `dsp_pipeline` framew
 provides `AudioStream`, `DSPBlock`, and `Pipeline` classes for building real-time
 audio processors. Projects span noise reduction, filters, spatial audio, measurement
 (THD, IMD, SNR, frequency response), ambient/nature synthesis, and radio simulation.
+
+### Educational: IQ Modulation (`projects/educational/iq/`)
+
+Learn how radios encode and decode audio at the sample level. Three pipe-chainable
+Python programs model the complete HF signal path:
+
+- **`modulate.py`** — Audio file (any format) → filter → compress → AM/FM/USB/LSB → 8 kHz complex64 IQ
+- **`hf-static.py`** — Comprehensive HF channel simulator: Watterson selective fading, Rayleigh multipath, atmospheric static (QRN), long-path echo, flutter, ionospheric chirp, D-layer absorption, power line noise, heterodyne/splatter interference, band noise coloring
+- **`demodulate.py`** — IQ → demodulate → interpolate → AGC → speaker or WAV file
+- **`play-iq.sh`** — One-command wrapper: plays any audio file through the full chain
+
+```bash
+# Listen to an audiobook as if received on 40m with moderate HF conditions
+./play-iq.sh --preset moderate audiobook.mp3
+
+# Or build the pipe yourself
+python modulate.py --mode usb --input voice.wav --stdout \
+  | python hf-static.py --preset dx \
+  | python demodulate.py --mode usb --stdin --speaker
+```
+
+8 propagation presets from `clear` (quiet 20m winter morning) to `geomagnetic-storm`
+(near-blackout). Streams with constant memory — handles multi-hour files without loading
+them into RAM. Source is heavily commented for teaching DSP concepts.
 
 ### Utilities (`rf_bench.utils`)
 
