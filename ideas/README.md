@@ -20,6 +20,7 @@ This documentation is intentionally exhaustive. If something contradicts a per-d
 | **[traceability.md](traceability.md)** | Bench-internal calibration chain plan |
 | **[bugs-quirks.md](bugs-quirks.md)** | Cross-cutting instrument bugs and workarounds |
 | **[shuttlexpress.md](shuttlexpress.md)** | ShuttleXpress jog/shuttle controller application ideas |
+| **[kestrel.md](kestrel.md)** | Kestrel 5500L weather meter application ideas |
 
 ---
 
