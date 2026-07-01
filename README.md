@@ -151,7 +151,7 @@ physics, not by the price of the box.
 >
 > All import paths (`rf_bench.siglent`, `rf_bench.icom`, `rf_bench.yaesu`,
 > `rf_bench.utils`, `rf_bench.buspirate`, `rf_bench.flipper`, `rf_bench.rtlsdr`,
-> `rf_bench.yertai`, `rf_bench.gpsd`, `rf_bench.shuttlexpress`) are stable across releases.
+> `rf_bench.yertai`, `rf_bench.gpsd`, `rf_bench.shuttlexpress`, `rf_bench.kestrel`) are stable across releases.
 >
 > | Package | PyPI | Status | Provides |
 > |---------|------|--------|---------|
@@ -170,6 +170,7 @@ physics, not by the price of the box.
 > | `rf-bench-drivers-koolertron` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-koolertron)](https://pypi.org/project/rf-bench-drivers-koolertron/) | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A; 0.2.0 adds arbitrary-waveform upload |
 > | `rf-bench-drivers-arduino-relay-board` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-arduino-relay-board)](https://pypi.org/project/rf-bench-drivers-arduino-relay-board/) | ✅ | Arduino + W5100/W5500 4-channel Ethernet relay board, TCP :5025 — tested 2026-06-25 against 10.1.1.36 |
 > | `rf-bench-drivers-shuttlexpress` | not on PyPI | ✅ | Contour Design ShuttleXpress USB jog/shuttle controller — evdev, Linux-only, tested 2026-07-01 |
+> | `rf-bench-drivers-kestrel` | not on PyPI | ✅ | Kestrel 5500L weather meter — BLE, async, temp/RH/wind/pressure/altitude + derived atmo, tested 2026-07-01 |
 >
 > **Projects** (in `projects/`) follow the same grading. Highlights:
 >
@@ -535,6 +536,38 @@ shuttle.run()  # blocking; also available: run_in_thread(), run_async()
 Applications: radio VFO tuning, instrument parameter adjustment, filter sweep,
 media scrubbing, CNC jog. See `ideas/shuttlexpress.md` for mapping ideas.
 
+### Kestrel 5500L (`rf_bench.kestrel`)
+
+| Class | Device | Protocol |
+|-------|--------|---------|
+| `Kestrel5500` | Nielsen-Kellerman Kestrel 5500L weather meter | BLE GATT (proprietary, reverse-engineered) |
+
+Async BLE driver for the Kestrel 5500L portable weather station. Streams
+live sensor data every ~4 seconds: temperature, relative humidity, wind speed,
+barometric pressure, altitude, dew point, wet bulb, and heat index. Computes
+derived atmospheric properties: air density, density altitude, vapor pressure,
+virtual temperature, speed of sound, RF refractivity, estimated cloud base,
+wind chill, QNH (from known altitude), and true altitude (from QNH).
+
+```python
+import asyncio
+from rf_bench.kestrel import Kestrel5500
+
+async def main():
+    async with Kestrel5500("88:6B:0F:5F:D0:EB") as kestrel:
+        async for reading in kestrel.stream():
+            print(f"T={reading.temperature_f:.1f}°F  "
+                  f"RH={reading.relative_humidity:.1f}%  "
+                  f"Wind={reading.wind_speed_mph:.1f} mph  "
+                  f"DA={reading.density_altitude_ft:.0f} ft  "
+                  f"N={reading.rf_refractivity:.0f}")
+
+asyncio.run(main())
+```
+
+RF refractivity is directly relevant to VHF/UHF propagation prediction —
+values above 350 N-units indicate potential tropospheric ducting.
+
 ### Soundcard (`projects/soundcard/`)
 
 | Framework | What it provides | Protocol |
@@ -598,6 +631,7 @@ pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + c
 pip install rf-bench-drivers-nanovna     # NanoVNA family (USB CDC, ASCII shell) — API-swappable with rf-bench-drivers-hp
 pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch Ethernet relay board
 pip install rf-bench-drivers-shuttlexpress       # Contour Design ShuttleXpress jog/shuttle (Linux only)
+pip install rf-bench-drivers-kestrel             # Kestrel 5500L BLE weather meter (Linux only)
 ```
 
 **Dependency:** [NumPy](https://numpy.org/) (for `rf_bench.utils` and the

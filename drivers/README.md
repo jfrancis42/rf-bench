@@ -20,6 +20,7 @@ Python driver packages for bench instruments. Each is published to PyPI separate
 | `relay/` | `rf_bench.relay` | not yet | ❌ hw ordered |
 | `arduino-relay-board/` | `rf_bench.arduino_relay_board` | `rf-bench-drivers-arduino-relay-board` 0.1.0 | ✅ tested |
 | `shuttlexpress/` | `rf_bench.shuttlexpress` | not yet | ✅ tested 2026-07-01 |
+| `kestrel/` | `rf_bench.kestrel` | not yet | ✅ tested 2026-07-01 |
 | `hp/` | `rf_bench.hp` | not yet | ❌ pending KISS-488 |
 | `nanovna/` | `rf_bench.nanovna` | `rf-bench-drivers-nanovna` 0.1.0 | ✅ tested 2026-06-30 (API-swappable with `rf_bench.hp.HP8712B`) |
 | `solartron/` | `rf_bench.solartron` | not yet | ❌ pending KISS-488 |

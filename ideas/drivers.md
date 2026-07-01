@@ -19,6 +19,7 @@
 | `rf_bench.relay` | (not on PyPI) | local | ❌ | Hardware ordered 2026-06-03 |
 | `rf_bench.arduino_relay_board` | `rf-bench-drivers-arduino-relay-board` | 0.1.0 | ✅ | Arduino Uno + Vilros Ethernet R3 (W5100), 4-ch network relay, TCP :5025 — tested 2026-06-25 |
 | `rf_bench.shuttlexpress` | (not yet on PyPI) | 0.1.0 local | ✅ | Contour Design ShuttleXpress jog/shuttle USB HID; Linux evdev; tested 2026-07-01 on 10.1.0.10 |
+| `rf_bench.kestrel` | (not yet on PyPI) | 0.1.0 local | ✅ | Kestrel 5500L BLE weather meter; reverse-engineered GATT; async (bleak); tested 2026-07-01 on 10.1.0.10 |
 | `rf_bench.hp` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
 | `rf_bench.solartron` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
 
