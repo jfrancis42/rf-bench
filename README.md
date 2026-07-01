@@ -86,6 +86,19 @@
 > | legacy `vna/antenna`, `filter`, `group-delay`, `impedance`, `tline`, `sparams` | ❌ *(superseded)* | Replaced by the `*-pdf/` projects above; kept only for historical reference. |
 > | `vna/transistor` | ❌ | Still HP-only — parametric bias-swept S-params don't fit the NanoVNA DUT-reversal workflow. |
 > | `sunsdr/remote-speaker` | ❌ | Browser TCI audio player — code complete, untested (hardware pending) |
+> | `sunsdr/hf-scanner` | ❌ | TCI-based HF band scanner — code complete, untested |
+> | `sunsdr/vhf-monitor` | ❌ | TCI VHF activity monitor — code complete, untested |
+> | `sunsdr/tx-arb` | ❌ | Arbitrary waveform TX via TCI — code complete, untested |
+> | `kiwisdr/hf-monitor` | ❌ | Remote HF band occupancy monitor — code complete, untested |
+> | `kiwisdr/propagation` | ❌ | Multi-KiwiSDR propagation comparison — code complete, untested |
+> | `kiwisdr/cw-skimmer` | ❌ | CW signal decoder via remote KiwiSDR — code complete, untested |
+> | `kiwisdr/wwv` | ❌ | WWV reception + frequency calibration via KiwiSDR — code complete, untested |
+> | `gps/survey` | 🧪 | Static position precision survey — code complete, tested |
+> | `gps/gridsquare` | 🧪 | Live Maidenhead locator + waypoint distance/bearing — tested |
+> | `gps/monitor` | 🧪 | Fullscreen GPS status: DOP bars, scatter plot, speed, heading — tested |
+> | `gps/freq-cal` | ❌ | GPS-timestamped frequency drift measurement with SSA — untested |
+> | `soundcard/*` (45 projects) | 🧪 | Real-time audio DSP: noise reduction, filters, spatial audio, measurement (THD/IMD/SNR/freq response), ambient/nature, radio simulation, VAD |
+> | `esp32/*` (35 projects) | ❌ | ESP32 SCPI-over-WiFi controllers — all built to docs, untested against hardware |
 
 ---
 
@@ -163,6 +176,10 @@ See `rf_bench/inventory/README.md` for full documentation.
 | Class | Instrument | Protocol |
 |-------|-----------|---------|
 | `IC7300` | IC-7300 HF/6m transceiver | Hamlib rigctld / TCP port 4532 |
+| `IC9700` | IC-9700 VHF/UHF/SHF transceiver (2 m / 70 cm / 23 cm) | Hamlib rigctld / TCP port 4532 |
+
+IC-9700 additions over the common radio API: VFO A/B selection, split/duplex,
+TX frequency and mode control, PTT, satellite mode with Doppler correction, D-STAR (DV mode).
 
 ### Yaesu (`rf_bench.yaesu`)
 
@@ -308,6 +325,56 @@ against this API run on either VNA. NanoVNA-only behaviors (S12/S22,
 `set_power(dbm)`, hardware averaging) raise `NotImplementedError`
 rather than silently doing the wrong thing.
 
+### KiwiSDR (`rf_bench.kiwisdr`)
+
+| Class | Instrument | Protocol |
+|-------|-----------|---------|
+| `KiwiSDR` | KiwiSDR HF receiver (0–30 MHz, GPS-disciplined clock) | WebSocket / port 8073 |
+
+12 kS/s fixed sample rate, 4–8 simultaneous channels per server, IQ and audio
+modes, frequency/mode/passband/AGC control, waterfall data. Remote HF reception
+without local antenna.
+
+### SunSDR2 Pro (`rf_bench.sunsdr`)
+
+| Class | Instrument | Protocol |
+|-------|-----------|---------|
+| `SunSDR` | SunSDR2 Pro (0.1–55 MHz + 2 m + 70 cm, dual RX, TX) | TCI WebSocket / port 50001 |
+
+48/96/192 kS/s IQ streaming, dual independent receivers, transmit with modulation,
+frequency/mode/filter control. Connects via the TCI (Transceiver Control Interface)
+protocol through ExpertSDR3.
+
+### FX2LAFW Logic Analyzer (`rf_bench.fx2lafw`)
+
+| Class | Instrument | Protocol |
+|-------|-----------|---------|
+| `FX2LAFWLogicAnalyzer` | Saleae-compatible 24 MHz 8-channel logic analyzer | USB / sigrok-cli (fx2lafw firmware) |
+
+Capture, VCD export, and protocol decode (UART, SPI, I2C) via sigrok. Useful for
+debugging serial protocols between bench instruments and embedded controllers.
+
+### Arduino Relay Board (`rf_bench.arduino_relay_board`)
+
+| Class | Instrument | Protocol |
+|-------|-----------|---------|
+| `ArduinoRelayBoard` | Arduino + W5100/W5500 Ethernet 4-channel relay board | SCPI / TCP port 5025 |
+
+Network-controllable relay switching for test automation. Compatible with both
+W5100 and W5500 Ethernet shields. DHCP or static IP.
+
+### Soundcard (`projects/soundcard/`)
+
+| Framework | What it provides | Protocol |
+|-----------|-----------------|---------|
+| `dsp_pipeline` | Real-time audio DSP framework (45 projects) | sounddevice / PortAudio |
+
+Not a traditional "instrument driver" — the soundcard projects use the PC's audio
+interface as a measurement and signal processing tool. The `dsp_pipeline` framework
+provides `AudioStream`, `DSPBlock`, and `Pipeline` classes for building real-time
+audio processors. Projects span noise reduction, filters, spatial audio, measurement
+(THD, IMD, SNR, frequency response), ambient/nature synthesis, and radio simulation.
+
 ### Utilities (`rf_bench.utils`)
 
 `rf_utils` — pure-Python RF math library. Power conversions, impedance and
@@ -326,7 +393,7 @@ Or install only the sub-packages you need:
 
 ```bash
 pip install rf-bench-drivers-siglent   # Siglent instruments
-pip install rf-bench-drivers-icom      # Icom IC-7300
+pip install rf-bench-drivers-icom      # Icom IC-7300 + IC-9700
 pip install rf-bench-drivers-yaesu     # Yaesu FT-891
 pip install rf-bench-drivers-utils     # RF math utilities (no instruments)
 pip install rf-bench-drivers-yertai    # Yertai ET5406A+ DC load
@@ -340,11 +407,14 @@ pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch E
 `SDS2000X` waveform decoder).
 
 **For radio control:** [Hamlib](https://hamlib.github.io/) must be installed
-and `rigctld` must be running before using `IC7300` or `FT891`.
+and `rigctld` must be running before using `IC7300`, `IC9700`, or `FT891`.
 
 ```bash
 # IC-7300  (CI-V baud set to 115200 in radio menu)
 rigctld -m 3073 -r /dev/ttyUSB0 -s 115200 &
+
+# IC-9700  (CI-V baud set to 115200; also supports LAN connection)
+rigctld -m 3081 -r /dev/ttyUSB0 -s 115200 &
 
 # FT-891  (CAT baud set to 38400 in Menu 031)
 rigctld -m 1036 -r /dev/ttyUSB0 -s 38400 &
@@ -380,7 +450,7 @@ Or import from subpackages:
 
 ```python
 from rf_bench.siglent import SSA3000X, SDG1000X
-from rf_bench.icom   import IC7300
+from rf_bench.icom   import IC7300, IC9700
 from rf_bench.yaesu  import FT891, PREAMP_OFF, PREAMP_AMP1
 from rf_bench.utils  import thermal_noise_floor, ip3_from_imd, rl_to_vswr
 ```
@@ -703,8 +773,13 @@ from rf_bench.utils import (
 | `SDM3000X` | SDM3045X | 10.1.1.63 | 5025 | LAN/SCPI |
 | `SPD3303X` | SPD3303X-E | 10.1.1.56 | 5025 | LAN/SCPI |
 | `IC7300` | IC-7300 | localhost | 4532 | `rigctld -m 3073 -r /dev/ttyUSB0 -s 115200` |
+| `IC9700` | IC-9700 | localhost | 4532 | `rigctld -m 3081 -r /dev/ttyUSB0 -s 115200` (or LAN) |
 | `FT891` | FT-891 | localhost | 4532 | `rigctld -m 1036 -r /dev/ttyUSB0 -s 38400` |
 | `MHS5200A` | MHS-5225A (KKmoon rebrand) | `/dev/ttyUSB0` (auto-detect CH340/PL2303) | n/a | 57600 8N1 USB CDC; auto-detected by USB VID/PID |
+| `NanoVNA` | NanoVNA-F (Deepelec) | `/dev/ttyACM1` | n/a | USB CDC ACM; ASCII shell |
+| `KiwiSDR` | KiwiSDR | (remote host) | 8073 | WebSocket |
+| `SunSDR` | SunSDR2 Pro | (ExpertSDR3 host) | 50001 | TCI WebSocket |
+| `ArduinoRelayBoard` | Arduino+W5100 4-ch relay | 10.1.1.36 | 5025 | Ethernet/SCPI |
 
 All drivers accept `host` and `port` constructor arguments to override defaults.
 
