@@ -343,7 +343,11 @@ on both VNAs. **(✅ BUILT 2026-06-30 as `projects/vna/de-embed-pdf/`.)**
 fixtures because no fragile precision OPEN standard is required.
 Works at frequencies where you can build precise transmission-line
 standards. Pure host-side once raw uncorrected S-params are
-captured. — 💭 not started.
+captured. See [`ideas/trl-calibration.md`](trl-calibration.md) for
+full design reference (Engen-Hoer math, constraints, failure modes,
+implementation requirements). scikit-rf provides a working
+implementation today; bespoke rf-bench version deferred until a PCB
+TRL kit is on the bench. — 💭 not started.
 
 **Renormalization.** Convert measured 50 Ω S-params to S-params *at
 any reference impedance* — 75 Ω (CATV / SDI), 100 Ω (differential

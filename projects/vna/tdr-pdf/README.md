@@ -145,6 +145,26 @@ python tdr_pdf.py --start 0.05 --stop 900 --cable RG-58 \
 # other 3 connectors.)
 ```
 
+## Example output
+
+A ~16.5 ft cable (vf 0.660) swept 0.05–900 MHz on a NanoVNA-F:
+
+![TDR example — healthy cable](test.png)
+
+- **Top (step response):** Γ stays near zero along the entire
+  cable, confirming a well-matched run. The grey dead zone (6.6 ft)
+  masks the port-1 connector reflection. The dominant fault marker
+  at 16.49 ft shows Γ = −0.00 — the open end of the cable, barely
+  visible because the termination is close to 50 Ω.
+- **Bottom (impulse response):** Sharp peaks at the port connector
+  (0–0.5 ft, inside the dead zone) and at the cable end (16.49 ft).
+  The low-amplitude peaks between 2–5 ft are likely adapter
+  transitions or cable-flex reflections — all well below −40 dB
+  equivalent return loss.
+
+This is a healthy cable. A bad connector would show a large impulse
+peak mid-cable and a step-response jump at that distance.
+
 ## Output
 
 Two-panel single-page PDF:

@@ -19,6 +19,7 @@ This documentation is intentionally exhaustive. If something contradicts a per-d
 | **[projects-future.md](projects-future.md)** | Future project ideas (12 categories, 100+ projects) |
 | **[traceability.md](traceability.md)** | Bench-internal calibration chain plan |
 | **[bugs-quirks.md](bugs-quirks.md)** | Cross-cutting instrument bugs and workarounds |
+| **[shuttlexpress.md](shuttlexpress.md)** | ShuttleXpress jog/shuttle controller application ideas |
 
 ---
 

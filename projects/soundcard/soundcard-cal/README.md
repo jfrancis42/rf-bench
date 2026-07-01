@@ -5,6 +5,17 @@ automated loopback tests (output → input). Produces a calibration JSON
 file that other soundcard projects can load to apply frequency response
 correction, know their noise floor, and understand crosstalk limits.
 
+## Example Calibration Report
+
+![USB Soundcard Calibration](usb_soundcard_cal.png)
+
+**Example results (USB Audio Device loopback):**
+- Noise floor: -73.9 dBFS
+- Dynamic range: 73.9 dB  
+- THD @ 1 kHz: 0.116% (-58.7 dB)
+- Frequency response: 4.0 dB ripple (100 Hz–10 kHz), 20.1 dB mean gain
+- Auto-detected loopback gain: 9.5× (amplitude adjusted to 0.052)
+
 ## What it measures
 
 | Measurement | Method |
@@ -19,26 +30,53 @@ correction, know their noise floor, and understand crosstalk limits.
 
 ```bash
 # Loopback cable required: connect output to input
+# Auto-detects loopback gain and saves to ~/.config/rf-bench/
 python soundcard_cal.py
 
 # Specify devices
-python soundcard_cal.py --input-device 2 --output-device 2
+python soundcard_cal.py --input-device 3 --output-device 3
 
 # Generate PDF report
-python soundcard_cal.py --pdf report.pdf
+python soundcard_cal.py --input-device 3 --output-device 3 --pdf report.pdf
 
-# Custom output file
+# Custom output file (overrides standard location)
 python soundcard_cal.py --output my_soundcard.json
+
+# Override amplitude (skip auto-detection)
+python soundcard_cal.py --amplitude 0.05
 
 # Test mode (no hardware, synthetic impairments)
 python soundcard_cal.py --test --pdf test_report.pdf
 ```
 
+## Auto-Detection
+
+The script automatically detects loopback gain by sending a 1 kHz test tone and measuring the returned signal. It then calculates a safe amplitude (targeting 70% of full scale) to avoid clipping while maximizing SNR.
+
+**Detection handles:**
+- High-gain loopbacks (like USB soundcards with built-in gain)
+- Unity-gain loopbacks (direct cable connections)
+- Attenuated loopbacks (line-out → mic-in with attenuator)
+- Disconnected loopback (aborts with error)
+- Severe clipping (retries at lower level, aborts if still clipping)
+
+**Override with `--amplitude` if:**
+- You want to test at a specific level
+- Auto-detection fails for some reason
+
+## Standard Locations
+
+**Calibration files:** `~/.config/rf-bench/soundcard_cal_<device_name>.json`  
+**PDF reports:** Specify with `--pdf` flag (no default location)
+
+Other soundcard projects automatically load calibration from `~/.config/rf-bench/`.
+
 ## Flags
 
-- `--output FILE` — calibration JSON output (default: `soundcard_cal.json`)
+- `--output FILE` — calibration JSON output (default: `~/.config/rf-bench/soundcard_cal_<device>.json`)
 - `--pdf FILE` — generate calibration report PDF
 - `--duration SECS` — test signal duration (default: 3.0)
+- `--amplitude AMP` — test signal amplitude 0-1 (default: auto-detect)
 - Standard audio device flags (`--input-device`, `--output-device`, etc.)
 - `--test` — run with synthetic data (no soundcard needed)
 

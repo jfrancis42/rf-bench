@@ -51,3 +51,4 @@ recordings_test/
 # Third-party font files (cannot redistribute due to licensing)
 # Users must download from original sources via install_fonts.py
 fonts/
+keep/

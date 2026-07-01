@@ -151,7 +151,7 @@ physics, not by the price of the box.
 >
 > All import paths (`rf_bench.siglent`, `rf_bench.icom`, `rf_bench.yaesu`,
 > `rf_bench.utils`, `rf_bench.buspirate`, `rf_bench.flipper`, `rf_bench.rtlsdr`,
-> `rf_bench.yertai`, `rf_bench.gpsd`) are stable across releases.
+> `rf_bench.yertai`, `rf_bench.gpsd`, `rf_bench.shuttlexpress`) are stable across releases.
 >
 > | Package | PyPI | Status | Provides |
 > |---------|------|--------|---------|
@@ -169,6 +169,7 @@ physics, not by the price of the box.
 > | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
 > | `rf-bench-drivers-koolertron` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-koolertron)](https://pypi.org/project/rf-bench-drivers-koolertron/) | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A; 0.2.0 adds arbitrary-waveform upload |
 > | `rf-bench-drivers-arduino-relay-board` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-arduino-relay-board)](https://pypi.org/project/rf-bench-drivers-arduino-relay-board/) | ✅ | Arduino + W5100/W5500 4-channel Ethernet relay board, TCP :5025 — tested 2026-06-25 against 10.1.1.36 |
+> | `rf-bench-drivers-shuttlexpress` | not on PyPI | ✅ | Contour Design ShuttleXpress USB jog/shuttle controller — evdev, Linux-only, tested 2026-07-01 |
 >
 > **Projects** (in `projects/`) follow the same grading. Highlights:
 >
@@ -500,6 +501,40 @@ debugging serial protocols between bench instruments and embedded controllers.
 Network-controllable relay switching for test automation. Compatible with both
 W5100 and W5500 Ethernet shields. DHCP or static IP.
 
+### ShuttleXpress (`rf_bench.shuttlexpress`)
+
+| Class | Device | Protocol |
+|-------|--------|---------|
+| `ShuttleXpress` | Contour Design ShuttleXpress USB jog/shuttle controller | Linux evdev (HID) |
+
+Generic event-driven driver for the ShuttleXpress — a physical knob with three
+distinct control types: a free-spinning jog wheel (±1 per detent), a spring-loaded
+shuttle ring (absolute position -7 to +7, returns to center on release), and 5
+momentary buttons. Supports blocking, threaded, and asyncio event loops.
+
+```python
+from rf_bench.shuttlexpress import ShuttleXpress
+
+shuttle = ShuttleXpress()  # auto-discovers by USB VID:PID
+
+@shuttle.on_jog
+def jog(event):
+    print(f"Jog: {event.value}")  # +1 or -1
+
+@shuttle.on_shuttle
+def ring(event):
+    print(f"Shuttle: {event.value}")  # -7 to +7
+
+@shuttle.on_button
+def button(event):
+    print(f"Button {event.value}: {event.type.value}")
+
+shuttle.run()  # blocking; also available: run_in_thread(), run_async()
+```
+
+Applications: radio VFO tuning, instrument parameter adjustment, filter sweep,
+media scrubbing, CNC jog. See `ideas/shuttlexpress.md` for mapping ideas.
+
 ### Soundcard (`projects/soundcard/`)
 
 | Framework | What it provides | Protocol |
@@ -562,6 +597,7 @@ pip install rf-bench-drivers-gpsd      # gpsd GPS client
 pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand)
 pip install rf-bench-drivers-nanovna     # NanoVNA family (USB CDC, ASCII shell) — API-swappable with rf-bench-drivers-hp
 pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch Ethernet relay board
+pip install rf-bench-drivers-shuttlexpress       # Contour Design ShuttleXpress jog/shuttle (Linux only)
 ```
 
 **Dependency:** [NumPy](https://numpy.org/) (for `rf_bench.utils` and the
