@@ -1,5 +1,133 @@
 # rf-bench
 
+Open-source Python framework for automated control of lab instruments and
+programmatic analysis of measurement data. Instead of pushing buttons on a
+front panel and reading numbers off a screen, rf-bench lets you write scripts
+that coordinate multiple instruments simultaneously, sweep parameters, collect
+data, and produce publication-quality PDFs — unattended, repeatable, and fast.
+
+The core idea: most bench instruments already speak SCPI or have a serial
+protocol. A $60 function generator, a $300 spectrum analyzer, and a $25
+NanoVNA become a serious RF test lab when software ties them together. The
+instruments don't know they're cheap — the measurements are limited by
+physics, not by the price of the box.
+
+**What this replaces:**
+
+- **$15,000+ vector network analyzer** — A $50 NanoVNA-F with rf-bench's
+  `vna/` suite produces SOLT-calibrated Smith charts, TDR fault location,
+  Butterworth-Van Dyke crystal parameter extraction, time-gated de-embedding,
+  and Touchstone .s2p files. The same scripts run unchanged on an HP 8712B
+  when you need the dynamic range.
+
+- **$5,000 audio analyzer** — A PC soundcard running `soundcard/thd-analyzer`
+  measures THD+N down to the noise floor of the interface (~-100 dBFS on a
+  decent card), identifies individual harmonics through the 10th, and exports
+  a PDF. Add `soundcard/freq-response` for a swept frequency response plot.
+  Total hardware cost: the soundcard you already own.
+
+**What this enables that's otherwise impractical by hand:**
+
+- **Automated receiver characterization** — `radio/receiver-test` drives a
+  signal generator through a calibrated attenuator chain into a transceiver,
+  steps the level in 1 dB increments while reading S-meter via CAT, and
+  produces MDS, noise figure, IP3, blocking dynamic range, and selectivity
+  curves for every amateur band — a measurement suite that takes a human
+  operator an entire weekend, finished in minutes.
+
+- **Time-domain reflectometry from frequency-domain data** — `vna/tdr-pdf`
+  takes a wideband S11 sweep from any VNA, inverse-FFTs it, and locates
+  cable faults to within centimeters. It classifies each discontinuity
+  (open, short, kink, water ingress), applies time-gating to isolate
+  individual connectors, and produces a single-page PDF. Field-usable
+  with a battery-powered NanoVNA at a tower base.
+
+- **Hands-free filter tuning** — `vna/filter-tuning` displays a live S21
+  trace with a target response mask overlaid. Adjust a trimmer capacitor and
+  watch the trace move toward the mask in real time — no need to repeatedly
+  trigger single sweeps and squint at the screen.
+
+**Turning cheap hardware into calibrated instruments:**
+
+- **$30 DDS generator → calibrated signal source** — The KKmoon /
+  MHinstek MHS-5200A is a $30 dual-channel DDS generator sold under a
+  dozen brand names on Amazon and AliExpress. Out of the box it has
+  nearly 5 dB of amplitude rolloff at 25 MHz, 12 ppm frequency error,
+  and the two channels track each other poorly. The
+  `signal-sources/koolertron-cal` project fixes all of this in one
+  automated pass: it commands the generator to step through frequencies
+  while the SDS2504X Plus oscilloscope measures actual delivered power
+  at each point, builds a per-channel correction table, then calibrates
+  frequency against a known reference. The resulting JSON file
+  (`~/.koolertron_mhs5200_cal.json`) is loaded transparently by the
+  driver — after calibration, `set_amplitude_dbm(1, 20e6, -10)` delivers
+  exactly -10 dBm at 20 MHz into 50 ohms, not the -14.7 dBm the
+  uncorrected unit would produce. The frequency correction eliminates the
+  TCXO error entirely. A $30 instrument that would otherwise need manual
+  correction at every frequency now behaves like one costing 10x more —
+  and the entire calibration takes under two minutes with no human
+  intervention beyond plugging in two BNC cables.
+
+**Siglent instrument coordination — the bench working as a system:**
+
+- **Automated Bode plotter** — `scope/bode-plotter` turns an SDS2504X Plus
+  and SDG1062X into a swept gain/phase analyzer. The SDG steps through
+  frequencies while the scope captures both channels, extracts gain and
+  phase via FFT, and produces a publication-quality Bode plot — log
+  frequency, dB gain, and phase on a single PDF. Covers 10 Hz to 60 MHz.
+  The scope's built-in AWG can substitute for the SDG below 25 MHz,
+  making it a zero-extra-hardware solution for audio and IF work.
+
+- **RF amplifier characterization** — `rf/rf-amplifier` drives the
+  SSA3032X Plus tracking generator (or the SDG1062X) through a DUT while
+  the SSA measures output power at each frequency. One run produces gain
+  flatness, harmonic distortion (2nd and 3rd), and 1 dB compression point
+  — the three numbers that define an amplifier. Covers 9 kHz to 3.2 GHz
+  with the tracking generator, sweeping 200 points in under a minute.
+
+- **Generator self-calibration** — `signal-sources/sdg-cal` uses the
+  SSA3032X Plus as a traceable reference to characterize the SDG1062X
+  itself: output flatness vs frequency, harmonic content, linearity,
+  and channel-to-channel tracking. The resulting correction table
+  (`~/.sdg_cal.json`) is consumed by other measurement scripts to
+  de-embed generator error from DUT measurements automatically.
+
+**Multi-instrument integration — things no single box can do alone:**
+
+- **Signal hunter with automatic handoff** — `rtlsdr/classify` uses an
+  RTL-SDR to scan a wide frequency range, captures IQ bursts from every
+  detected signal, and classifies each by modulation (AM/OOK, FM, FSK,
+  PSK, CW, pulsed). When it finds something interesting, it commands the
+  SSA3032X spectrum analyzer to lock on that frequency for calibrated
+  amplitude and harmonic measurement. A $25 dongle does the wide search;
+  the precision instrument does the deep measurement. Neither could do
+  both jobs alone.
+
+- **Satellite pass automation** — `radio/satellite` fetches TLEs from
+  AMSAT and SatNOGS, predicts passes over your location (from GPS or
+  manual coordinates), and during a live pass drives an IC-9700's dual
+  VFOs with real-time Doppler correction on both uplink and downlink
+  simultaneously. It compensates for the satellite's 7.8 km/s velocity
+  without the operator touching the dial — the frequency shift on a
+  435 MHz downlink can exceed ±10 kHz during a single pass.
+
+- **Tropospheric ducting detector** — `rtlsdr/fm-rds` continuously scans
+  the FM broadcast band, demodulates each station, and decodes RDS PI
+  codes to identify station origin by region. When stations from 500+
+  miles away suddenly appear in the log — a tropospheric duct has formed.
+  The script fires an SMS alert so you can get on VHF/UHF before the
+  opening closes.
+
+- **Unattended weather satellite ground station** — `rtlsdr/wxsat`
+  computes pass times from current TLEs, waits for the next NOAA or
+  Meteor-M satellite to rise above the horizon, captures the signal at
+  137 MHz, and decodes the image to PNG — all with a $25 dongle and a
+  V-dipole made from two pieces of wire. In `--auto` mode it runs
+  continuously, building a library of images pass after pass with no
+  human intervention.
+
+---
+
 > **v0.6.0** — meta-package; installs all driver sub-packages.
 >
 > ⚠️ **This repository is under active development.** Quality varies by subsystem:
