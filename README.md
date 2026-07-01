@@ -126,6 +126,14 @@ physics, not by the price of the box.
   continuously, building a library of images pass after pass with no
   human intervention.
 
+**Example output** — all produced by a $50 NanoVNA-F and a single Python command:
+
+![VSWR sweep — 70 cm HT antenna](projects/vna/swr-pdf/70cm_ht_preview.png)
+
+![Smith chart — 70 cm antenna](projects/vna/smith-pdf/70cm_smith_preview.png)
+
+![TDR — cable fault location at 16.49 ft](projects/vna/tdr-pdf/test.png)
+
 ---
 
 > **v0.6.0** — meta-package; installs all driver sub-packages.
