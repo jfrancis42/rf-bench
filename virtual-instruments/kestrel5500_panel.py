@@ -303,7 +303,7 @@ class KestrelPanel(tk.Tk):
         self._f_unit = self._mono(12, bold=True)
         self._f_value = self._mono(26, bold=True)
         self._f_value_sm = self._mono(18, bold=True)
-        self._f_value_xs = self._mono(13, bold=True)
+        self._f_value_xs = self._mono(16, bold=True)
         self._f_section = self._mono(8)
         self._f_header = self._mono(9)
         self._f_status = self._mono(9)
@@ -365,27 +365,27 @@ class KestrelPanel(tk.Tk):
     def _build_primary(self, parent):
         """Large measurement tiles: Temperature, Humidity, Wind, Pressure."""
         section = _frame(parent, C_WIN_BG)
-        section.pack(fill=tk.X, pady=(8, 0))
+        section.pack(fill=tk.X, pady=(10, 0))
         _label(section, "PRIMARY SENSORS", C_SECTION_LABEL, C_WIN_BG,
-               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 4))
+               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 6))
 
         grid = _frame(section, C_WIN_BG)
         grid.pack()
         self._w_temp = self._big_tile(grid, "TEMPERATURE", "°F", 0, 0)
-        self._w_rh = self._big_tile(grid, "RELATIVE HUMIDITY", "%", 0, 1)
+        self._w_rh = self._big_tile(grid, "HUMIDITY", "%", 0, 1)
         self._w_wind = self._big_tile(grid, "WIND SPEED", "mph", 0, 2)
-        self._w_pres = self._big_tile(grid, "BARO PRESSURE", "inHg", 0, 3)
+        self._w_pres = self._big_tile(grid, "PRESSURE", "inHg", 0, 3)
 
     def _build_secondary(self, parent):
         """Medium tiles: Altitude, DA, Dew Pt, Wet Bulb, Heat Index."""
         section = _frame(parent, C_WIN_BG)
-        section.pack(fill=tk.X, pady=(6, 0))
-        _label(section, "ALTITUDE / DERIVED ON-DEVICE", C_SECTION_LABEL, C_WIN_BG,
-               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 4))
+        section.pack(fill=tk.X, pady=(10, 0))
+        _label(section, "ALTITUDE / DERIVED", C_SECTION_LABEL, C_WIN_BG,
+               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 6))
 
         grid = _frame(section, C_WIN_BG)
         grid.pack()
-        self._w_alt = self._med_tile(grid, "PRESSURE ALT", "ft", 0, 0)
+        self._w_alt = self._med_tile(grid, "PRESS ALT", "ft", 0, 0)
         self._w_da = self._med_tile(grid, "DENSITY ALT", "ft", 0, 1)
         self._w_dp = self._med_tile(grid, "DEW POINT", "°F", 0, 2)
         self._w_wb = self._med_tile(grid, "WET BULB", "°F", 0, 3)
@@ -394,62 +394,77 @@ class KestrelPanel(tk.Tk):
     def _build_derived(self, parent):
         """Derived atmospheric properties + QNH."""
         section = _frame(parent, C_WIN_BG)
-        section.pack(fill=tk.X, pady=(6, 0))
+        section.pack(fill=tk.X, pady=(10, 0))
         _label(section, "ATMOSPHERIC / RF", C_SECTION_LABEL, C_WIN_BG,
-               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 4))
+               self._f_section, anchor='w').pack(fill=tk.X, pady=(0, 6))
 
         grid = _frame(section, C_WIN_BG)
         grid.pack()
-        self._w_refract = self._sm_tile(grid, "RF REFRACTIVITY", "N", 0, 0)
+        self._w_refract = self._sm_tile(grid, "REFRACTIVITY", "N", 0, 0)
         self._w_rho = self._sm_tile(grid, "AIR DENSITY", "kg/m³", 0, 1)
-        self._w_cloud = self._sm_tile(grid, "CLOUD BASE AGL", "ft", 0, 2)
-        self._w_sos = self._sm_tile(grid, "SPEED OF SOUND", "m/s", 0, 3)
-        self._w_vp = self._sm_tile(grid, "VAPOR PRESSURE", "mbar", 0, 4)
-        self._w_qnh = self._sm_tile(grid, "QNH (ALTIMETER)", "inHg", 0, 5)
+        self._w_cloud = self._sm_tile(grid, "CLOUD BASE", "ft", 0, 2)
+        self._w_sos = self._sm_tile(grid, "SPEED/SOUND", "m/s", 1, 0)
+        self._w_vp = self._sm_tile(grid, "VAPOR PRESS", "mbar", 1, 1)
+        self._w_qnh = self._sm_tile(grid, "QNH", "inHg", 1, 2)
 
     def _big_tile(self, parent, label, unit, row, col):
-        W, H = 220, 80
+        W = 240
         outer, inner = _tile(parent)
-        outer.grid(row=row, column=col, padx=3, pady=3)
-        inner.configure(width=W, height=H)
-        inner.pack_propagate(False)
-        _label(inner, label, C_MEAS_LABEL, C_TILE_BG, self._f_label, anchor='w').place(x=6, y=4)
-        u = _label(inner, unit, C_UNIT, C_TILE_BG, self._f_unit, anchor='e')
-        u.place(relx=0.95, rely=0.95, anchor='se')
+        outer.grid(row=row, column=col, padx=4, pady=4)
+        inner.configure(width=W)
+        # Label row at top
+        top = _frame(inner, C_TILE_BG)
+        top.pack(fill=tk.X, padx=10, pady=(8, 0))
+        _label(top, label, C_MEAS_LABEL, C_TILE_BG, self._f_label, anchor='w').pack(side=tk.LEFT)
+        # Value row — large, right-aligned
         val_var = tk.StringVar(value="---")
         val_lbl = tk.Label(inner, textvariable=val_var, fg=C_VALUE_DIM,
                            bg=C_TILE_BG, font=self._f_value, anchor='e')
-        val_lbl.place(relx=0.92, rely=0.58, anchor='e')
+        val_lbl.pack(fill=tk.X, padx=(10, 14), pady=(4, 0))
+        # Unit row at bottom
+        bot = _frame(inner, C_TILE_BG)
+        bot.pack(fill=tk.X, padx=10, pady=(0, 8))
+        _label(bot, unit, C_UNIT, C_TILE_BG, self._f_unit, anchor='w').pack(side=tk.LEFT)
         return {"var": val_var, "lbl": val_lbl}
 
     def _med_tile(self, parent, label, unit, row, col):
-        W, H = 175, 65
+        W = 190
         outer, inner = _tile(parent)
-        outer.grid(row=row, column=col, padx=3, pady=3)
-        inner.configure(width=W, height=H)
-        inner.pack_propagate(False)
-        _label(inner, label, C_MEAS_LABEL, C_TILE_BG, self._f_small, anchor='w').place(x=5, y=3)
-        u = _label(inner, unit, C_UNIT, C_TILE_BG, self._mono(10), anchor='e')
-        u.place(relx=0.95, rely=0.95, anchor='se')
+        outer.grid(row=row, column=col, padx=4, pady=4)
+        inner.configure(width=W)
+        # Label row
+        top = _frame(inner, C_TILE_BG)
+        top.pack(fill=tk.X, padx=8, pady=(6, 0))
+        _label(top, label, C_MEAS_LABEL, C_TILE_BG, self._f_label, anchor='w').pack(side=tk.LEFT)
+        # Value row
         val_var = tk.StringVar(value="---")
         val_lbl = tk.Label(inner, textvariable=val_var, fg=C_VALUE_DIM,
                            bg=C_TILE_BG, font=self._f_value_sm, anchor='e')
-        val_lbl.place(relx=0.90, rely=0.58, anchor='e')
+        val_lbl.pack(fill=tk.X, padx=(8, 12), pady=(2, 0))
+        # Unit row
+        bot = _frame(inner, C_TILE_BG)
+        bot.pack(fill=tk.X, padx=8, pady=(0, 6))
+        _label(bot, unit, C_UNIT, C_TILE_BG, self._mono(10), anchor='w').pack(side=tk.LEFT)
         return {"var": val_var, "lbl": val_lbl}
 
     def _sm_tile(self, parent, label, unit, row, col):
-        W, H = 148, 58
+        W = 200
         outer, inner = _tile(parent)
-        outer.grid(row=row, column=col, padx=2, pady=2)
-        inner.configure(width=W, height=H)
-        inner.pack_propagate(False)
-        _label(inner, label, C_MEAS_LABEL, C_TILE_BG, self._mono(7), anchor='w').place(x=4, y=2)
-        u = _label(inner, unit, C_UNIT, C_TILE_BG, self._mono(9), anchor='e')
-        u.place(relx=0.95, rely=0.95, anchor='se')
+        outer.grid(row=row, column=col, padx=4, pady=4)
+        inner.configure(width=W)
+        # Label row
+        top = _frame(inner, C_TILE_BG)
+        top.pack(fill=tk.X, padx=8, pady=(6, 0))
+        _label(top, label, C_MEAS_LABEL, C_TILE_BG, self._f_label, anchor='w').pack(side=tk.LEFT)
+        # Value row
         val_var = tk.StringVar(value="---")
         val_lbl = tk.Label(inner, textvariable=val_var, fg=C_VALUE_DIM,
                            bg=C_TILE_BG, font=self._f_value_xs, anchor='e')
-        val_lbl.place(relx=0.88, rely=0.56, anchor='e')
+        val_lbl.pack(fill=tk.X, padx=(8, 12), pady=(2, 0))
+        # Unit row
+        bot = _frame(inner, C_TILE_BG)
+        bot.pack(fill=tk.X, padx=8, pady=(0, 6))
+        _label(bot, unit, C_UNIT, C_TILE_BG, self._mono(10), anchor='w').pack(side=tk.LEFT)
         return {"var": val_var, "lbl": val_lbl}
 
     def _build_status_bar(self):
