@@ -13,7 +13,7 @@ workaround for the SSA's missing FM-demod SCPI), see
 | SDM3045X | Bench DMM, 4.5-digit | 10.1.1.63:5025 | `rf_bench.siglent.SDM3000X` | ✅ |
 | SPD3303X-E | Triple-output PSU, 2 × 32 V/3.2 A + fixed | 10.1.1.56:5025 | `rf_bench.siglent.SPD3303X` | ✅ |
 | RB3X25 | Reflection bridge (passive, no driver) | — | — | ✅ |
-| TX-sample tap / attenuator | Inline non-directional RF tap for TX power on SSA (~58–69 dB, freq-dependent) | — | `sunsdr2.dsp.tap_cal` | ✅ cal 2026-07-07 |
+| TX-sample tap / attenuator | Inline non-directional RF tap for TX power on SSA (~70–92 dB, −20 dB/decade) | — | `sunsdr2.dsp.tap_cal` | ✅ wattmeter-anchored 2026-07-07 |
 | Icom IC-7300 (×2) | HF + 6 m, 100 W, USB CAT | rigctld 4532 (model 3073) | `rf_bench.icom.IC7300` | ✅ |
 | Icom IC-9700 | 2 m + 70 cm + 23 cm, USB or LAN CAT | rigctld 4532 (model 3081) | `rf_bench.icom.IC9700` | ✅ |
 | Yaesu FT-891 | HF + 6 m, 100 W, USB CAT | rigctld 4532 (model 1036) | `rf_bench.yaesu.FT891` | ✅ |
@@ -173,46 +173,52 @@ load (low reflection), which is how it's always used here. Coupling is
 **reactive**, so path loss varies strongly with frequency (a resistive tap
 would be flat).
 
-**Calibration method (ratiometric, SSA tracking generator):** the SSA's TG
-absolute level is only good to a few dB and it does *not* actually reach its
-commanded level (measured ~−20 dBm when set to 0 dBm — a 20 dB error). So we
-never trust the TG's absolute output. Instead:
+**Calibration method — DIRECT WATTMETER ANCHORING (the method that works).**
 
-1. **Reference:** TG output → SSA RF input *directly* (tap bypassed). Record
-   level per frequency = P_ref.
-2. **Through:** TG output → the connector where the radio normally plugs into
-   the tap → tap sample port → SSA RF input (dummy load on the through port,
-   exactly as during TX). Record level = P_thru.
-3. **Path loss** L(f) = P_ref − P_thru. The TG-level error and the SSA
-   absolute-amplitude error cancel in the subtraction.
+⚠️ **The SSA tracking-generator method FAILED here — do not use it for this
+tap.** The TG (even at max ~0 dBm command, ~−20 dBm actual) could only push
+the through-path signal to **3.5–10.7 dB above the SA noise floor** across HF.
+At those margins the noise floor adds to the reading and inflates the measured
+peak, so the derived loss came out **flat and wrong** (~72–77 dB at every
+band). Applied to a real TX sweep it claimed 160 m made 0.1 W while the radio
+drew 4 A — a physically impossible 0.3 % PA efficiency. The tap coupling is
+simply too loose for the TG to characterise above the floor.
 
-Use a tight span + narrow RBW (e.g. 6 kHz span / 100–300 Hz RBW) — a wide
-span under-reads a CW peak by 15–20 dB.
+**What works: anchor against a through-line wattmeter at several bands.** Key
+the radio at full drive into the dummy load (SA reads 30–60 dB above floor —
+plenty of margin), read the wattmeter, and compute the loss directly:
+L(f) = P_load(dBm) − SA_peak(dBm), where P_load = 10·log₁₀(W·1000).
+
+**Measured coupling loss (2026-07-07, wattmeter-anchored, SunSDR2 full drive):**
+
+| Band | Freq (MHz) | Meter (W) | Loss (dB) |
+|------|-----------:|----------:|----------:|
+| 160m |  1.90 |  6 | 92.0 |
+|  40m |  7.10 | 15 | 82.4 |
+|  20m | 14.07 | 12–13 | 76.3 |
+|  15m | 21.10 | 12 | 72.7 |
+|  10m | 28.40 | 17 | 70.3 |
+
+Clean **capacitive-pickoff** response: −17 to −20 dB/decade, monotonic, no
+outliers. Interpolate **linearly in log₁₀(freq) vs dB** (not linear-in-Hz —
+the response is linear in log-f). Clamp outside 1.9–28.4 MHz.
 
 **Then:** P_radio(dBm) = SSA_peak(dBm) + L(f_interp);  W = 10^((P−30)/10).
+Use a tight span + narrow RBW (6 kHz / 100 Hz) — a wide span under-reads a CW
+peak 15–20 dB.
 
-**Measured coupling loss (2026-07-07, TG at 0 dBm command / ~−20 dBm actual):**
+Cal files: `~/.config/sunsdr2-cli/tap_cal.json` (loss table) +
+`tap_anchors.json` (raw anchor points); loader `sunsdr2.dsp.tap_cal.TapCal`;
+anchor a band with `sunsdr2-cli/tools/tx_anchor.py`. Copies checked into
+`sunsdr2-cli/reference/cal/`.
 
-| Freq (MHz) | Loss (dB) |
-|-----------:|----------:|
-|  1.9 | 63.8 |
-|  3.6 | 67.8 |
-|  7.1 | 69.2 |
-| 14.1 | 67.9 |
-| 21.1 | 65.9 |
-| 28.5 | 63.6 |
-| 50.1 | 57.8 |
+**Cross-check via DC telemetry:** keyed input − idle input, then W_rf / W_dc =
+PA efficiency. Anchors above give 36–47 % (textbook class-AB) — a good sanity
+gate; anything <10 % or >80 % means the loss is wrong for that band.
 
-Smooth ~58–69 dB reactive hump peaking near 7 MHz. Interpolate linearly
-between points; clamp outside 1.9–50.1 MHz. Cal file:
-`~/.config/sunsdr2-cli/tap_cal.json`; loader:
-`sunsdr2.dsp.tap_cal.TapCal`; regenerate with `sunsdr2-cli/tools/cal_tap.py`.
-
-**Accuracy:** bounded by the SSA's ~±1.5 dB amplitude spec → ~±40 % on watts.
-Good for the SunSDR2 amp-protection ceiling and relative work; anchor to a
-through-line wattmeter at one point (≥10 W) for a tighter absolute reference.
-(The SunSDR2 PRO is a **~15 W** radio, not 100 W — size expectations
-accordingly: full drive is ~15 W, not ~100 W.)
+**Accuracy:** ±1 dB or so on the anchored bands, a bit looser on interpolated
+bands (80/60/30/17/12 m). The SunSDR2 PRO is a **~6–17 W** radio across HF (not
+100 W, and not flat): ~6 W on 160 m rising to ~12–17 W on the higher bands.
 
 ---
 
