@@ -13,6 +13,7 @@ workaround for the SSA's missing FM-demod SCPI), see
 | SDM3045X | Bench DMM, 4.5-digit | 10.1.1.63:5025 | `rf_bench.siglent.SDM3000X` | ✅ |
 | SPD3303X-E | Triple-output PSU, 2 × 32 V/3.2 A + fixed | 10.1.1.56:5025 | `rf_bench.siglent.SPD3303X` | ✅ |
 | RB3X25 | Reflection bridge (passive, no driver) | — | — | ✅ |
+| TX-sample tap / attenuator | Inline non-directional RF tap for TX power on SSA (~58–69 dB, freq-dependent) | — | `sunsdr2.dsp.tap_cal` | ✅ cal 2026-07-07 |
 | Icom IC-7300 (×2) | HF + 6 m, 100 W, USB CAT | rigctld 4532 (model 3073) | `rf_bench.icom.IC7300` | ✅ |
 | Icom IC-9700 | 2 m + 70 cm + 23 cm, USB or LAN CAT | rigctld 4532 (model 3081) | `rf_bench.icom.IC9700` | ✅ |
 | Yaesu FT-891 | HF + 6 m, 100 W, USB CAT | rigctld 4532 (model 1036) | `rf_bench.yaesu.FT891` | ✅ |
@@ -154,6 +155,64 @@ Passive accessory. Used by the antenna analyzer, scalar VNA, and balun
 analyzer projects. No driver, no firmware, no quirks; just remember the
 nominal directivity is ~25 dB, which sets the noise floor on any return-loss
 measurement using it.
+
+#### TX-sample tap / attenuator (inline, non-directional) — SunSDR2 TX power
+
+Passive bench accessory for reading transmitter output power on the SSA
+without exceeding its −gt; 0 dBm input. Wiring during a TX measurement:
+
+```
+radio TX out ──► tap (through) ──► dummy load
+                  │
+                  └─ sample port ──► SSA3032X RF input
+```
+
+It is an **inline tap, not a directional coupler** — it samples whatever
+passes, forward + reflected. That's fine as long as the load is a good dummy
+load (low reflection), which is how it's always used here. Coupling is
+**reactive**, so path loss varies strongly with frequency (a resistive tap
+would be flat).
+
+**Calibration method (ratiometric, SSA tracking generator):** the SSA's TG
+absolute level is only good to a few dB and it does *not* actually reach its
+commanded level (measured ~−20 dBm when set to 0 dBm — a 20 dB error). So we
+never trust the TG's absolute output. Instead:
+
+1. **Reference:** TG output → SSA RF input *directly* (tap bypassed). Record
+   level per frequency = P_ref.
+2. **Through:** TG output → the connector where the radio normally plugs into
+   the tap → tap sample port → SSA RF input (dummy load on the through port,
+   exactly as during TX). Record level = P_thru.
+3. **Path loss** L(f) = P_ref − P_thru. The TG-level error and the SSA
+   absolute-amplitude error cancel in the subtraction.
+
+Use a tight span + narrow RBW (e.g. 6 kHz span / 100–300 Hz RBW) — a wide
+span under-reads a CW peak by 15–20 dB.
+
+**Then:** P_radio(dBm) = SSA_peak(dBm) + L(f_interp);  W = 10^((P−30)/10).
+
+**Measured coupling loss (2026-07-07, TG at 0 dBm command / ~−20 dBm actual):**
+
+| Freq (MHz) | Loss (dB) |
+|-----------:|----------:|
+|  1.9 | 63.8 |
+|  3.6 | 67.8 |
+|  7.1 | 69.2 |
+| 14.1 | 67.9 |
+| 21.1 | 65.9 |
+| 28.5 | 63.6 |
+| 50.1 | 57.8 |
+
+Smooth ~58–69 dB reactive hump peaking near 7 MHz. Interpolate linearly
+between points; clamp outside 1.9–50.1 MHz. Cal file:
+`~/.config/sunsdr2-cli/tap_cal.json`; loader:
+`sunsdr2.dsp.tap_cal.TapCal`; regenerate with `sunsdr2-cli/tools/cal_tap.py`.
+
+**Accuracy:** bounded by the SSA's ~±1.5 dB amplitude spec → ~±40 % on watts.
+Good for the SunSDR2 amp-protection ceiling and relative work; anchor to a
+through-line wattmeter at one point (≥10 W) for a tighter absolute reference.
+(The SunSDR2 PRO is a **~15 W** radio, not 100 W — size expectations
+accordingly: full drive is ~15 W, not ~100 W.)
 
 ---
 
