@@ -164,6 +164,7 @@ physics, not by the price of the box.
 > | `rf-bench-drivers-flipper` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-flipper)](https://pypi.org/project/rf-bench-drivers-flipper/) | 🔶 | Flipper Zero Sub-GHz/IR/RFID/NFC — OOK+FSK TX/RX tested; IR/RFID untested |
 > | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
 > | `rf-bench-drivers-gpsd` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-gpsd)](https://pypi.org/project/rf-bench-drivers-gpsd/) | ✅ | gpsd GPS client 0.1.1 — tested with u-blox receiver; lat/lon/alt/speed/heading/DOP |
+> | `rf-bench-drivers-virtual` | not on PyPI | ✅ | Clients for all 16 virtual SCPI instrument panels (analog meter, LED, numeric display, bar graph, knob, slider, button, toggle, line chart, XY plot, waterfall, text LCD, text input, gauge cluster, compass, Smith chart) — one package, 44 exports. Merged 2026-08-03 from 16 separate distributions that could not coexist |
 > | `rf-bench-drivers-gpib` | not on PyPI | ❌ | GPIB bus transport — Hx Engineering KISS-488 Rev 2 adapter (Telnet :23 / USB serial), shared refcounted link, per-instrument device handles, Spy-mode analyzer decoder, KISS-488 emulator for hardware-free tests. Local 0.1.0; **never run against real hardware** |
 > | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA over `rf-bench-drivers-gpib` (KISS-488, GPIB addr 16) — local 0.1.0, awaiting hardware |
 > | `rf-bench-drivers-nanovna` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-nanovna)](https://pypi.org/project/rf-bench-drivers-nanovna/) | ✅ | NanoVNA-F / -H / -H4 — ASCII shell over USB CDC; tested against NanoVNA-F 2026-06-30; API-swappable with `rf-bench-drivers-hp` |
@@ -708,6 +709,7 @@ pip install rf-bench-drivers-gpsd      # gpsd GPS client
 pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand)
 pip install rf-bench-drivers-nanovna     # NanoVNA family (USB CDC, ASCII shell) — API-swappable with rf-bench-drivers-hp
 pip install rf-bench-drivers-gpib        # GPIB bus transport (KISS-488 Rev 2) — required by -hp and -solartron
+pip install rf-bench-drivers-virtual     # clients for the 16 virtual SCPI instrument panels
 pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch Ethernet relay board
 pip install rf-bench-drivers-shuttlexpress       # Contour Design ShuttleXpress jog/shuttle (Linux only)
 pip install rf-bench-drivers-kestrel             # Kestrel 5500L BLE weather meter (Linux only)

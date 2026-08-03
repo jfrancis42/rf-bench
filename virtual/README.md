@@ -70,7 +70,7 @@ python3 demo-quick.py
 
 ```bash
 # Install driver (or use from source)
-cd ~/Dropbox/build/rf-bench/drivers/virtual-analog-meter
+cd ~/Dropbox/build/rf-bench/drivers/virtual
 pip install -e .
 
 # Python script
@@ -552,18 +552,18 @@ virtual/
 └── README.md                     ← This file
 
 drivers/
-├── virtual-analog-meter/         ← Python driver package
-│   ├── rf_bench/virtual/analog_meter.py
-│   ├── README.md                 ← Full API docs + examples
-│   ├── pyproject.toml
-│   └── LICENSE                   ← GPL-3.0-or-later
-├── virtual-led/
-├── virtual-numeric-display/
-├── virtual-bar-graph/
-├── virtual-knob/
-├── virtual-slider/
-├── virtual-button/
-└── virtual-toggle/
+└── virtual/                      ← ONE Python driver package for all 16 widgets
+    ├── rf_bench/virtual/         ← 25 modules: analog_meter.py, led.py, knob.py, …
+    │   └── __init__.py           ← re-exports all 44 public names
+    ├── widgets/                  ← per-widget API docs + examples
+    ├── tests/
+    ├── README.md
+    ├── pyproject.toml
+    └── LICENSE                   ← GPL-3.0-or-later
+
+  (Was 16 separate distributions until 2026-08-03; they each shipped their own
+   rf_bench/virtual/__init__.py, so installing any two silently clobbered the
+   first one's exports. Merged — import paths unchanged.)
 ```
 
 ## Requirements
