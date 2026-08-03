@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
 requires-python = ">=3.9"
-dependencies = ["numpy>=1.20"]
+dependencies = ["numpy>=1.20", "rf-bench-drivers-gpib>=0.1.0"]
 keywords = ["hp", "8712b", "vna", "vector-network-analyzer", "gpib", "scpi", "bench-automation", "test-equipment"]
 classifiers = [
     "Development Status :: 3 - Alpha",

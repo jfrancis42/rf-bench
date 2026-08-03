@@ -32,9 +32,9 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X                                      # noqa: E402
 from rf_bench.utils import (                                                # noqa: E402
-from rf_bench import connect
     format_freq, format_freq_short, watts_to_dbm, dbm_to_watts,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -805,12 +805,12 @@ Examples:
     ptt_active = False
 
     try:
-        print(f"Connecting to SSA via inventory'} ...")
+        print(f"Connecting to SSA via inventory ...")
         ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
         ssa.disable_tracking_generator()
 
-        print(f"Connecting to rigctld via inventory'}:{args.rig_port} ...")
+        print(f"Connecting to rigctld via inventory:{args.rig_port} ...")
         rig = RigCtld(args.rig_host, args.rig_port)
         print(f"  Connected (radio: {args.radio.upper()})")
 

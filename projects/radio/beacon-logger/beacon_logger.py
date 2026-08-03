@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from rf_bench.icom import IC9700
+from rf_bench import connect
 
 DEFAULT_RIG_HOST  = "localhost"
 DEFAULT_RIG_PORT  = 4532
@@ -140,7 +141,6 @@ def run(args):
     if args.gps:
         try:
             from rf_bench.gpsd import GPSD
-from rf_bench import connect
             gps = GPSD()
             print("GPS connected.")
         except Exception as e:

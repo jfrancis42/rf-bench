@@ -37,10 +37,10 @@ from pathlib import Path
 
 from rf_bench.icom import IC7300, IC9700
 from rf_bench.yaesu import FT891
+from rf_bench import connect
 
 try:
     from rf_bench.gpsd import GPSD, GPSDNoFixError
-from rf_bench import connect
     _HAS_GPSD = True
 except ImportError:
     _HAS_GPSD = False

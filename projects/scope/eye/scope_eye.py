@@ -208,7 +208,7 @@ Examples:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         args.plot = f"eye_{ts}_{args.baud}baud.png"
 
-    print(f"Connecting to SDS2000X via inventory'} ...")
+    print(f"Connecting to SDS2000X via inventory ...")
     scope = None
     try:
         scope = connect(args.scope or 'sds')

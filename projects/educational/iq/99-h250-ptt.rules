@@ -1,0 +1,23 @@
+# udev rule for the TEC H-250 USB handset PTT button.
+#
+# The handset's C-Media chip (USB 0d8c:aaa0) exposes its button on a raw
+# HID interface. This rule gives that hidraw node:
+#   - a stable, friendly symlink:  /dev/h250-ptt
+#   - group "input" with 0660 perms, so members of the input group can
+#     read it without root.
+#
+# Matching on BOTH idVendor and idProduct is deliberate: bare vendor 0d8c
+# is a generic C-Media id shared by many USB audio chips.
+#
+# Install:
+#   sudo cp 99-h250-ptt.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=hidraw
+#   # then replug the handset (or reboot) so the symlink appears.
+#
+# Verify:
+#   ls -l /dev/h250-ptt
+#   ./ptt.py --device /dev/h250-ptt
+
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0d8c", ATTRS{idProduct}=="aaa0", \
+    GROUP="input", MODE="0660", SYMLINK+="h250-ptt"

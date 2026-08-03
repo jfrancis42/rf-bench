@@ -27,10 +27,17 @@ import sys
 import time
 
 # ── sys.path so we work both installed and from source tree ──────────────────
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                '..', 'rf-bench-drivers-buspirate'))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                '..', 'rf-bench'))
+# The buspirate driver lives at <repo>/drivers/buspirate. This file is at
+# <repo>/projects/signal-sources/si5351-gen, so the driver is three levels up.
+_here = os.path.dirname(os.path.abspath(__file__))
+for _rel in (
+    os.path.join(_here, '..', '..', '..', 'drivers', 'buspirate'),  # monorepo source
+    os.path.join(_here, '..', 'rf-bench-drivers-buspirate'),        # legacy layout
+    os.path.join(_here, '..', 'rf-bench'),
+):
+    _p = os.path.abspath(_rel)
+    if os.path.isdir(_p):
+        sys.path.insert(0, _p)
 
 from rf_bench.buspirate import BusPirate
 
@@ -46,6 +53,7 @@ SI5351_REG_MS1       = 50      # 8 bytes: regs 50-57
 SI5351_REG_MS2       = 58      # 8 bytes: regs 58-65
 SI5351_REG_PLL_RST   = 177     # 0x20=reset PLL-A, 0x80=reset PLL-B
 SI5351_REG_XTAL_LOAD = 183     # Crystal load capacitance
+SI5351_REG_CLK0_PHOFF = 165    # CLK0 initial phase offset; CLK1=166, CLK2=167
 
 SI5351_XTAL_LOAD_6PF  = 0x52
 SI5351_XTAL_LOAD_8PF  = 0x92
@@ -57,6 +65,13 @@ SI5351_XTAL_HZ_DEFAULT = 25_000_000   # 25 MHz crystal
 DRIVE_BITS  = {2: 0b00, 4: 0b01, 6: 0b10, 8: 0b11}
 DRIVE_MA    = [2, 4, 6, 8]
 
+# Default output drive strength for quadrature (I/Q) mode. 2 mA is the lowest
+# setting (highest output impedance, smallest delivered swing) — the safe
+# starting point when driving an AD831 mixer LO, whose input must stay under
+# ±1 V while a 3.3 V CMOS square at higher drive would exceed that. Adjust via
+# the drive_ma argument to set_quadrature(), or change this module default.
+QUAD_DEFAULT_DRIVE_MA = 2
+
 # PLL assignment: CLK n → PLL A (0) or B (1)
 CLK_PLL     = [0, 1, 1]           # CLK0→PLL-A, CLK1/CLK2→PLL-B
 
@@ -65,11 +80,37 @@ CLK_PLLSRC  = [0x00, 0x20, 0x20]  # bit5 set for CLK1, CLK2
 
 MS_REGS     = [SI5351_REG_MS0, SI5351_REG_MS1, SI5351_REG_MS2]
 PLL_REGS    = [SI5351_REG_PLLA, SI5351_REG_PLLB]
+PHOFF_REGS  = [SI5351_REG_CLK0_PHOFF,
+               SI5351_REG_CLK0_PHOFF + 1,
+               SI5351_REG_CLK0_PHOFF + 2]
 
 VCO_MIN     = 600_000_000
 VCO_MAX     = 900_000_000
 FREQ_MIN    =       3_000
 FREQ_MAX    = 200_000_000
+
+# ── Quadrature (I/Q) synthesis limits ─────────────────────────────────────────
+# For a deterministic 90° phase relationship the Si5351 requires BOTH outputs to
+# share one PLL and use the SAME even integer output divider `d`. The 90° shift
+# is then produced by loading the Q channel's phase-offset register with `d`
+# (each phase LSB = one VCO period / 4; T_out/4 works out to exactly `d` LSBs).
+#
+#   f_out = f_vco / d,  f_vco in [600, 900] MHz,  d even.
+#
+# The phase-offset register is 7 bits (max 127), and we avoid the divide-by-4
+# hardware special case, so the usable even divider range is [8, 126]. That sets
+# the hard frequency window for pure-Si5351 quadrature:
+#
+#   f_min = VCO_MIN / QUAD_DIV_MAX = 600e6 / 126 ≈ 4.762 MHz
+#   f_max = VCO_MAX / QUAD_DIV_MIN = 900e6 /   8 = 112.5   MHz
+#
+# 40m/30m/20m/17m/15m/12m/10m/6m are all comfortably inside this window.
+# 80m and 160m fall below f_min and CANNOT be done with the Si5351 alone — they
+# need an external ÷4 Johnson counter (e.g. 74AC74) fed at 4× the target.
+QUAD_DIV_MIN = 8
+QUAD_DIV_MAX = 126
+QUAD_FREQ_MIN = VCO_MIN / QUAD_DIV_MAX   # ≈ 4.762 MHz
+QUAD_FREQ_MAX = VCO_MAX / QUAD_DIV_MIN   # = 112.5 MHz
 
 PRESETS_FILE = os.path.expanduser('~/.si5351_presets.json')
 
@@ -193,6 +234,73 @@ def _solve_frequency(freq_hz, xtal_hz):
     }
 
 
+def _solve_quadrature(freq_hz, xtal_hz):
+    """
+    Solve synthesis parameters for a QUADRATURE (I/Q) pair.
+
+    Unlike _solve_frequency (integer PLL + fractional multisynth), quadrature
+    demands the OPPOSITE split:
+
+      - The output divider `d` must be an EVEN INTEGER, identical on both the I
+        and Q channels, because the 90° phase step is expressed in units of `d`
+        (phase-offset register = d gives exactly T_out/4). r_div is forced to 0.
+      - All fine frequency resolution therefore has to come from a FRACTIONAL
+        PLL multiplier a + b/c, since `d` is quantised to even integers.
+
+    Strategy: pick the even divider whose ideal VCO (= freq*d) sits closest to
+    the centre of the VCO band, then realise that VCO exactly with a fractional
+    PLL feedback ratio.
+
+    Returns dict: a_pll, b_pll, c_pll, div, phase_q, vco_hz, actual_hz
+    or None if freq is outside the pure-Si5351 quadrature window.
+    """
+    if not (QUAD_FREQ_MIN <= freq_hz <= QUAD_FREQ_MAX):
+        return None
+
+    # Choose the even divider that lands the VCO nearest 750 MHz (band centre),
+    # subject to the VCO staying inside [600, 900] MHz.
+    target_vco = 750_000_000
+    best = None
+    for d in range(QUAD_DIV_MIN, QUAD_DIV_MAX + 1, 2):   # even only
+        vco = freq_hz * d
+        if not (VCO_MIN <= vco <= VCO_MAX):
+            continue
+        err = abs(vco - target_vco)
+        if best is None or err < best[0]:
+            best = (err, d, vco)
+    if best is None:
+        return None
+
+    _, div, vco_target = best
+
+    # Fractional PLL feedback: a + b/c = vco_target / xtal_hz.
+    # AN619 requires a in [15, 90], b in [0, c), c in [1, 1048575].
+    ratio = vco_target / xtal_hz
+    a_pll = int(ratio)
+    if not (15 <= a_pll <= 90):
+        return None
+    frac = ratio - a_pll
+    c_pll = 1_048_575                      # max denominator → finest resolution
+    b_pll = round(frac * c_pll)
+    if b_pll >= c_pll:                     # guard rounding to the next integer
+        b_pll = c_pll - 1
+    if b_pll > 0:
+        g = math.gcd(b_pll, c_pll)
+        b_pll //= g
+        c_pll //= g
+    else:
+        b_pll, c_pll = 0, 1
+
+    vco_actual = xtal_hz * (a_pll + b_pll / c_pll)
+    actual_hz  = vco_actual / div
+
+    return {
+        'a_pll': a_pll, 'b_pll': b_pll, 'c_pll': c_pll,
+        'div': div, 'phase_q': div,        # phase-offset LSBs for a 90° Q shift
+        'vco_hz': vco_actual, 'actual_hz': actual_hz,
+    }
+
+
 # ── Si5351 driver ─────────────────────────────────────────────────────────────
 
 class Si5351:
@@ -209,7 +317,7 @@ class Si5351:
     """
 
     def __init__(self, bp, addr=SI5351_ADDR_DEFAULT, xtal_hz=SI5351_XTAL_HZ_DEFAULT,
-                 load_cap=SI5351_XTAL_LOAD_10PF):
+                 load_cap=SI5351_XTAL_LOAD_10PF, power=True, pullups=True):
         self.bp      = bp
         self.addr    = addr
         self.xtal_hz = int(xtal_hz)
@@ -222,8 +330,21 @@ class Si5351:
         self._params  = [None, None, None]   # Last _solve_frequency result
         self._pll_vco = [0, 0]               # Current VCO for each PLL
 
-        # Bring up I2C on the Bus Pirate
-        bp.i2c_start()
+        # Bring up I2C on the Bus Pirate. The current driver exposes
+        # i2c_configure() (BPIO2/BBIO1); older revisions used i2c_start().
+        if hasattr(bp, 'i2c_configure'):
+            bp.i2c_configure()
+        else:
+            bp.i2c_start()
+        # The Si5351 breakout is powered from the Bus Pirate on this bench, and
+        # needs bus pull-ups. Enable both (harmless if externally powered).
+        if power and hasattr(bp, 'set_power'):
+            try: bp.set_power(True)
+            except Exception: pass
+        if pullups and hasattr(bp, 'set_pullups'):
+            try: bp.set_pullups(True)
+            except Exception: pass
+        time.sleep(0.2)   # let rails settle before programming
 
         # Init chip
         self._write_reg(SI5351_REG_XTAL_LOAD, load_cap)
@@ -247,6 +368,16 @@ class Si5351:
         regs = _encode_multisynth(a_pll, 0, 1)
         self._write_regs(PLL_REGS[pll_idx], regs)
         self._pll_vco[pll_idx] = a_pll * self.xtal_hz
+
+    def _program_pll_frac(self, pll_idx, a_pll, b_pll, c_pll):
+        """Program PLL A or B with fractional feedback a + b/c (for quadrature)."""
+        regs = _encode_multisynth(a_pll, b_pll, c_pll)
+        self._write_regs(PLL_REGS[pll_idx], regs)
+        self._pll_vco[pll_idx] = int(self.xtal_hz * (a_pll + b_pll / c_pll))
+
+    def _set_phase(self, clk, phase_lsbs):
+        """Set CLKn initial phase offset (0..127 LSBs of one VCO period / 4)."""
+        self._write_reg(PHOFF_REGS[clk], phase_lsbs & 0x7F)
 
     def _program_ms(self, clk, a_ms, b_ms, c_ms, r_div):
         """Program multisynth divider for CLKn."""
@@ -299,6 +430,104 @@ class Si5351:
 
         return params['actual_hz']
 
+    def set_quadrature(self, freq_hz, i_clk=0, q_clk=1, sideband='usb',
+                       drive_ma=QUAD_DEFAULT_DRIVE_MA):
+        """
+        Configure two outputs as a phase-locked I/Q (quadrature) pair.
+
+        This is a SPECIAL MODE that deliberately breaks the normal PLL map: both
+        the I and Q outputs are forced onto PLL-A and given the same even integer
+        divider, which is what the Si5351 requires for a deterministic 90° phase
+        relationship. The 90° shift is produced entirely in hardware via the
+        Q channel's phase-offset register, so the two outputs stay locked.
+
+            gen.set_quadrature(7_074_000)            # 40m, CLK0=I, CLK1=Q, USB
+            gen.set_quadrature(14_010_000, sideband='lsb')
+            gen.enable(0, True); gen.enable(1, True)
+
+        Args:
+            freq_hz  : output frequency, Hz. Must be in the pure-Si5351
+                       quadrature window (~4.762 MHz .. 112.5 MHz).
+            i_clk    : CLK index for the in-phase (I) output (default 0).
+            q_clk    : CLK index for the quadrature (Q) output (default 1).
+            sideband : 'usb'/'i-lead' → Q lags I by 90°; 'lsb'/'q-lead' →
+                       Q leads I by 90° (swaps which channel carries the offset).
+            drive_ma : drive strength (2/4/6/8 mA) applied to both outputs.
+                       Defaults to QUAD_DEFAULT_DRIVE_MA (2 mA, the lowest) —
+                       chosen for driving an AD831 mixer LO: a 3.3 V CMOS square
+                       at higher drive over-drives the AD831's ±1 V LO input, so
+                       the weakest setting (highest output Z) is the safe start.
+                       Raise it only if a specific load needs more level.
+
+        Returns:
+            actual_hz (float) on success, or None if freq is outside the window
+            (e.g. 80m/160m — use an external ÷4 counter for those) or i_clk==q_clk.
+
+        NOTE: Both outputs are driven from PLL-A. If CLK2 was previously set with
+        set_freq() on PLL-B it is unaffected; a prior CLK0/CLK1 frequency on this
+        PLL is overwritten.
+        """
+        if i_clk == q_clk:
+            return None
+        if i_clk not in (0, 1, 2) or q_clk not in (0, 1, 2):
+            return None
+
+        params = _solve_quadrature(int(freq_hz), self.xtal_hz)
+        if params is None:
+            return None
+
+        div     = params['div']
+        phase   = params['phase_q']            # == div → 90°
+        sb      = sideband.lower()
+        # For USB we want Q to LAG I: I offset 0, Q offset `div`.
+        # For LSB we want Q to LEAD I: put the offset on I instead.
+        if sb in ('lsb', 'q-lead', 'q_lead'):
+            i_phase, q_phase = phase, 0
+        else:                                  # usb / i-lead / default
+            i_phase, q_phase = 0, phase
+
+        # Both channels use PLL-A (index 0) in quadrature mode.
+        pll_idx = 0
+
+        # 1. Program PLL-A with the fractional feedback ratio.
+        self._program_pll_frac(pll_idx, params['a_pll'], params['b_pll'],
+                               params['c_pll'])
+
+        # 2. Program the SAME even integer divider on both channels (r_div=0).
+        for clk in (i_clk, q_clk):
+            self._program_ms(clk, div, 0, 1, 0)
+
+        # 3. Load phase offsets (this is what creates the 90°).
+        self._set_phase(i_clk, i_phase)
+        self._set_phase(q_clk, q_phase)
+
+        # 4. Force both channels' control regs onto PLL-A, MS source, enabled.
+        if drive_ma in DRIVE_MA:
+            self.drive_ma[i_clk] = drive_ma
+            self.drive_ma[q_clk] = drive_ma
+        for clk in (i_clk, q_clk):
+            self.freq_hz[clk]   = int(freq_hz)
+            self.actual_hz[clk] = params['actual_hz']
+            self._params[clk]   = params
+            self.enabled[clk]   = True
+            drive = DRIVE_BITS.get(self.drive_ma[clk], 0b00)
+            # PLL_SRC=0 (PLL-A) regardless of the channel's normal assignment,
+            # MS as source (0x0C), plus drive bits.
+            self._write_reg(SI5351_REG_CLK_BASE + clk, 0x0C | drive)
+        self._update_oeb()
+
+        # 5. A SINGLE PLL-A reset AFTER everything is programmed aligns the two
+        #    multisynths so the phase offset takes effect. (Per-channel resets,
+        #    as set_freq does, would destroy the phase relationship — hence the
+        #    dedicated code path here.)
+        self._write_reg(SI5351_REG_PLL_RST, 0x20)
+
+        return params['actual_hz']
+
+    def clear_phase(self, clk):
+        """Reset a channel's phase offset to 0 (undo quadrature on that CLK)."""
+        self._set_phase(clk, 0)
+
     def enable(self, clk, state):
         """Enable or disable CLKn output."""
         self.enabled[clk] = bool(state)
@@ -329,7 +558,10 @@ class Si5351:
 
     def close(self):
         self.all_off()
-        self.bp.i2c_stop()
+        # Older driver revisions had i2c_stop(); the current BPIO2/BBIO1 driver
+        # tears the bus down on bp.close(), so only call it if present.
+        if hasattr(self.bp, 'i2c_stop'):
+            self.bp.i2c_stop()
 
 
 # ── Frequency formatting helpers ──────────────────────────────────────────────
@@ -609,6 +841,39 @@ def run_tui(gen):
 
 def run_cli(gen, args):
     """Non-interactive mode: set frequencies and optionally hold."""
+    # Quadrature mode takes precedence: CLK0=I, CLK1=Q, phase-locked 90°.
+    if args.quad is not None:
+        hz = _parse_freq(args.quad)
+        if hz is None:
+            print(f'ERROR: Invalid quadrature frequency: {args.quad}', file=sys.stderr)
+            sys.exit(1)
+        actual = gen.set_quadrature(hz, i_clk=0, q_clk=1, sideband=args.sideband,
+                                    drive_ma=args.drive)
+        if actual is None:
+            print(f'ERROR: Cannot synthesize quadrature at {_fmt_hz_short(hz)}.',
+                  file=sys.stderr)
+            print(f'       Pure-Si5351 I/Q window is '
+                  f'{_fmt_hz_short(QUAD_FREQ_MIN)} .. {_fmt_hz_short(QUAD_FREQ_MAX)}. '
+                  f'80m/160m need an external ÷4 counter (74AC74).',
+                  file=sys.stderr)
+            sys.exit(1)
+        err_ppm = (actual - hz) / hz * 1e6
+        print(f'QUADRATURE ({args.sideband.upper()}): '
+              f'CLK0=I, CLK1=Q  {_fmt_hz(hz)} → {_fmt_hz(actual)}  ({err_ppm:+.2f} ppm)')
+        print(f'  divider={gen._params[0]["div"]}  '
+              f'VCO={_fmt_hz(gen._params[0]["vco_hz"])}  phase offset=90°  '
+              f'drive={args.drive}mA')
+        if args.stay:
+            print('Outputs active. Press Ctrl-C to stop.')
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
+        else:
+            print('Outputs active. Exiting — outputs remain on until reset.')
+        return
+
     channels = [
         (0, args.clk0),
         (1, args.clk1),
@@ -671,6 +936,17 @@ def main():
     cli.add_argument('--clk0', metavar='FREQ', help='CLK0 frequency (e.g. 10e6, 14.2MHz)')
     cli.add_argument('--clk1', metavar='FREQ', help='CLK1 frequency')
     cli.add_argument('--clk2', metavar='FREQ', help='CLK2 frequency')
+    cli.add_argument('--quad', metavar='FREQ',
+                     help='Quadrature I/Q pair: CLK0=I, CLK1=Q, locked 90° apart '
+                          '(e.g. 7.074MHz). Window ~4.76–112.5 MHz.')
+    cli.add_argument('--sideband', choices=['usb', 'lsb'], default='usb',
+                     help='Quadrature sideband: usb (Q lags I) or lsb (Q leads I). '
+                          'Default: usb')
+    cli.add_argument('--drive', type=int, choices=[2, 4, 6, 8],
+                     default=QUAD_DEFAULT_DRIVE_MA,
+                     help=f'Quadrature output drive strength in mA (2/4/6/8). '
+                          f'Default: {QUAD_DEFAULT_DRIVE_MA} mA — safe level for an '
+                          f'AD831 LO input.')
     cli.add_argument('--stay', action='store_true',
                      help='In CLI mode, keep running until Ctrl-C')
 
@@ -683,16 +959,32 @@ def main():
                     '10': SI5351_XTAL_LOAD_10PF}
     load_cap = load_cap_map[args.load_cap]
 
-    # Auto-detect port if default doesn't exist
-    port = args.bp
-    if not os.path.exists(port):
-        devices = BusPirate.find_devices()
-        if devices:
-            port = devices[0]
+    # Resolve the Bus Pirate port. find_devices() returns dicts describing each
+    # detected unit; for the v5 the driver needs the BPIO2 binary port, and
+    # BPIO2 must be active. ensure_bpio2() (in bp_console) auto-detects the
+    # binary port and activates + reboots into BPIO2 if it is not already up —
+    # so this "just works" on every connect, including when a GPS or other CDC
+    # device shifts the ttyACM numbering.
+    port = None
+    if args.bp and args.bp != '/dev/ttyUSB0' and os.path.exists(args.bp):
+        # User explicitly named a port that exists — respect it.
+        port = args.bp
+    else:
+        try:
+            from bp_console import ensure_bpio2
+            port = ensure_bpio2()
+            print(f'Bus Pirate BPIO2 binary port: {port}')
+        except Exception as e:
+            # Fall back to legacy string-list behaviour for v3/v4.
+            devices = BusPirate.find_devices()
+            strs = [d if isinstance(d, str) else d.get('port') for d in devices]
+            binaries = [d.get('port') for d in devices
+                        if isinstance(d, dict) and d.get('role') == 'binary']
+            port = (binaries or strs or [None])[0]
+            if not port:
+                print(f'ERROR: Bus Pirate not found ({e})', file=sys.stderr)
+                sys.exit(1)
             print(f'Bus Pirate found at {port}')
-        else:
-            print(f'ERROR: Bus Pirate not found at {args.bp}', file=sys.stderr)
-            sys.exit(1)
 
     bp  = BusPirate(port)
     gen = Si5351(bp, addr=addr, xtal_hz=xtal_hz, load_cap=load_cap)
@@ -701,7 +993,7 @@ def main():
         if args.off:
             gen.all_off()
             print('All outputs disabled.')
-        elif args.cli or any([args.clk0, args.clk1, args.clk2]):
+        elif args.cli or args.quad or any([args.clk0, args.clk1, args.clk2]):
             run_cli(gen, args)
         else:
             run_tui(gen)

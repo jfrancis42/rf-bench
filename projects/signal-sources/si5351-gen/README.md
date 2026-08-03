@@ -93,6 +93,82 @@ python3 si5351_gen.py --off
 
 Frequency formats accepted: `10e6`, `10MHz`, `10000kHz`, `10000000` (Hz).
 
+### Quadrature (I/Q) mode
+
+Two outputs locked 90° apart — the front end of a direct-conversion / Tayloe
+receiver or a phasing-type transmitter. CLK0 = I, CLK1 = Q.
+
+```bash
+# 40m quadrature pair, upper sideband (Q lags I) — usb is the default
+python3 si5351_gen.py --quad 7.074MHz --stay
+
+# same, stated explicitly
+python3 si5351_gen.py --quad 7.074MHz --sideband usb --stay
+
+# 20m, lower sideband (Q leads I)
+python3 si5351_gen.py --quad 14.010MHz --sideband lsb --stay
+
+# 30m quadrature, hold until Ctrl-C
+python3 si5351_gen.py --quad 10.136MHz --sideband usb --stay
+```
+
+From Python:
+
+```python
+from si5351_gen import Si5351
+from rf_bench.buspirate import BusPirate
+
+gen = Si5351(BusPirate('/dev/ttyUSB0'))
+gen.set_quadrature(7_074_000)                    # 40m, CLK0=I, CLK1=Q, USB
+gen.enable(0, True); gen.enable(1, True)
+
+gen.set_quadrature(14_010_000, sideband='lsb')   # 20m, swap I/Q lead → LSB
+```
+
+#### What `--sideband` (usb / lsb) actually changes
+
+The **only** difference between the two modes is **which output carries the 90°
+phase-offset register value** — everything else (frequency, amplitude, divider)
+is identical on both outputs. The Si5351 phase-offset register *delays* a
+clock's edges, so the output holding the larger value **lags**:
+
+| `--sideband` | CLK0 (I) offset | CLK1 (Q) offset | Phase relationship |
+|--------------|-----------------|-----------------|--------------------|
+| `usb` (default) | 0 | 90° | **Q lags I** by 90° |
+| `lsb`           | 90° | 0 | **Q leads I** by 90° (I lags Q) |
+
+So the flag simply flips the sign of the I↔Q quadrant relationship (±90°).
+
+In a quadrature (Tayloe / phasing / image-reject) mixer, swapping which output
+leads is exactly what selects the sideband — it moves the image to the other
+side of the LO. **Which physical result (USB vs LSB) you actually get depends on
+your downstream wiring** (phasing-network polarity, summing/differencing
+convention, how I/Q feed the mixer). The labels here follow the common
+convention but are not guaranteed for an arbitrary circuit: if the sidebands
+come out backwards on your bench, just swap `usb`↔`lsb` (or physically swap the
+I and Q leads) — a one-flag fix. What the code *does* guarantee is a clean 90°
+between the two outputs; which direction maps to which sideband is a convention
+you lock down once, with your hardware.
+
+**Usable range ≈ 4.762 MHz .. 112.5 MHz** (40m through 6m). Frequency accuracy
+is sub-0.02 ppm — a fractional PLL hits the target almost exactly while the
+output divider stays a fixed even integer (required for the phase lock).
+
+**Drive strength defaults to 2 mA** (the lowest) in quadrature mode, at both
+the CLI (`--drive {2,4,6,8}`) and the API (`drive_ma=`). The Si5351 output is a
+~3.3 V CMOS square; when driving an **AD831 mixer LO**, higher drive overdrives
+the AD831's ±1 V LO input, so 2 mA (highest output Z, smallest swing) is the
+safe starting point. Bump it up only if a specific load needs more level:
+
+```bash
+python3 si5351_gen.py --quad 7.2MHz --drive 8 --stay   # hotter output
+```
+
+**80m and 160m cannot be done with the Si5351 alone** (the output divider would
+exceed the phase register's range). `--quad` reports an error for those bands.
+The standard workaround is an external ÷4 Johnson counter (74AC74): generate 4×
+the target on one output and divide down in hardware to recover quadrature.
+
 ## TUI key bindings
 
 | Key | Action |

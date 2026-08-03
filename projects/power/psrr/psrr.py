@@ -371,7 +371,7 @@ Examples:
     scope = None
 
     try:
-        print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+        print(f"Connecting to scope via inventory ...", end=" ", flush=True)
         scope = connect(args.scope_host or 'sds')
         print(f"OK  [{scope.identify().split(',')[1].strip()}]")
 

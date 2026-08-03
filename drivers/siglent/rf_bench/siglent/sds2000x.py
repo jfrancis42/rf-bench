@@ -206,6 +206,118 @@ class SDS2000X:
 
         raise RuntimeError("capture_audio: unreachable")
 
+    def _read_channel_waveform(self, channel: int):
+        """Read one channel's waveform from the CURRENTLY FROZEN acquisition.
+
+        Assumes the scope is already stopped and holding an acquired sweep.
+        Does NOT arm, run, or stop — the caller owns acquisition state. This is
+        what lets two channels be read from the *same* single acquisition so
+        they stay phase-aligned.
+
+        Returns (voltages float64 array, sample_rate_hz).
+        """
+        ch = f"C{channel}"
+        self._cmd(f":WAVeform:SOURce {ch}")
+        self._cmd(":WAVeform:FORMat BYTE")
+        self._cmd(":WAVeform:POINt MAX")
+        pre = self._read_binary_block(":WAVeform:PREamble?")
+        horiz_interval, vgain, voffset = self._parse_wavedesc(pre)
+        raw = self._read_binary_block(":WAVeform:DATA?")
+        if not raw:
+            raise RuntimeError(f"Waveform data empty on C{channel}")
+        counts = np.frombuffer(raw, dtype=np.int8).astype(np.float64)
+        voltages = counts * vgain - voffset
+        sample_rate_hz = 1.0 / horiz_interval if horiz_interval > 0 else 0.0
+        return voltages, sample_rate_hz
+
+    def capture_two_channels(
+        self,
+        ch_a: int = 1,
+        ch_b: int = 2,
+        duration_s: float = 0.1,
+        vdiv_a: float | None = None,
+        vdiv_b: float | None = None,
+    ):
+        """Capture two channels from a SINGLE phase-locked acquisition.
+
+        Both channels are read off the same frozen sweep, so sample *i* on
+        ch_a and sample *i* on ch_b are simultaneous. This is required for any
+        instantaneous-product math — e.g. real power p(t)=v(t)·i(t) and power
+        factor — where a free-run per-channel capture (as in capture_audio)
+        would leave the two waveforms uncorrelated in phase.
+
+        Args:
+            ch_a, ch_b: Scope channel numbers (1–4). Convention for power work:
+                        ch_a = voltage sense, ch_b = current (clamp/burden).
+            duration_s: Capture window (timebase = duration_s / 10). Default
+                        0.1 s ≈ 5–6 mains cycles at 50/60 Hz — enough for a
+                        stable power/PF estimate.
+            vdiv_a, vdiv_b: V/div per channel. None → auto-range that channel.
+
+        Returns:
+            dict with keys:
+              't'            — time array (s), shared by both channels
+              'a'            — ch_a voltages (V)
+              'b'            — ch_b voltages (V)
+              'sample_rate'  — Hz
+              'ch_a', 'ch_b' — the channel numbers used
+
+        Raises:
+            RuntimeError: on empty/short waveform or display-buffer firmware bug.
+        """
+        tdiv = duration_s / 10.0
+
+        # Auto-range each channel first (each call arms/stops on its own; that's
+        # fine — it only sets vdiv). Do this BEFORE the shared acquisition.
+        if vdiv_a is None:
+            vdiv_a = self._autorange_vdiv(ch_a)
+        if vdiv_b is None:
+            vdiv_b = self._autorange_vdiv(ch_b)
+
+        for attempt in range(2):
+            self.stop()
+            time.sleep(0.1)
+            for ch, vdiv in ((ch_a, vdiv_a), (ch_b, vdiv_b)):
+                self._cmd(f"C{ch}:CPL A1M")
+                self._cmd(f"C{ch}:VDIV {vdiv:.4f}V")
+            self._cmd(f"TDIV {tdiv:.6f}S")
+            self._cmd("TRMD AUTO")
+
+            # ONE acquisition, then freeze — both reads come from this sweep.
+            self.run()
+            time.sleep(duration_s + 0.5)
+            self.stop()
+            time.sleep(0.2)
+
+            va, sr_a = self._read_channel_waveform(ch_a)
+            vb, sr_b = self._read_channel_waveform(ch_b)
+
+            # Display-buffer firmware bug (see capture_audio): retry once.
+            if (min(len(va), len(vb)) <= 1000 and max(sr_a, sr_b) > 500e6):
+                if attempt == 0:
+                    continue
+                raise RuntimeError(
+                    f"Scope returned display-buffer data "
+                    f"({len(va)}/{len(vb)} pts) after 2 attempts — "
+                    f"try disconnecting/reconnecting the scope."
+                )
+
+            # Guard: both channels must share the same sample rate and length
+            # or the phase-lock assumption is void. Truncate to the shorter.
+            n = min(len(va), len(vb))
+            va, vb = va[:n], vb[:n]
+            sr = sr_a if sr_a > 0 else sr_b
+            t = np.arange(n) / sr if sr > 0 else np.arange(n, dtype=np.float64)
+
+            self._last_capture_vdiv[ch_a] = vdiv_a
+            self._last_capture_vdiv[ch_b] = vdiv_b
+            return {
+                "t": t, "a": va, "b": vb,
+                "sample_rate": sr, "ch_a": ch_a, "ch_b": ch_b,
+            }
+
+        raise RuntimeError("capture_two_channels: unreachable")
+
     def _pava_setup(self, channel: int) -> None:
         """
         Set a short TDIV and start a fresh acquisition for PAVA.

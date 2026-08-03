@@ -295,11 +295,11 @@ Examples:
 
     psu = dmm = None
     try:
-        print(f"Connecting to SPD3303X via inventory'} ...")
+        print(f"Connecting to SPD3303X via inventory ...")
         psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
-        print(f"Connecting to SDM3045X via inventory'} ...")
+        print(f"Connecting to SDM3045X via inventory ...")
         dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")
 

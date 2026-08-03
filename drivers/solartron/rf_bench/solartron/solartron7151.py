@@ -1,22 +1,26 @@
 """
 solartron7151.py — Solartron 7151 Computing Multimeter driver
 
-Controls the Solartron 7151 (6.5-digit bench DMM, 1985-era IEEE-488) via a
-KISS-488 Rev 2 Ethernet-GPIB adapter using a Prologix-compatible command set
-over TCP.
+Controls the Solartron 7151 (6.5-digit bench DMM, 1985-era IEEE-488) over GPIB.
 
 Connection path:
-    Python TCP socket -> KISS-488 (port 1234) -> GPIB bus -> Solartron 7151
+    Python -> rf_bench.gpib.KISS488 (TCP port 23) -> GPIB bus -> Solartron 7151
 
-KISS-488 (Prologix protocol):
-    ++mode 1        controller mode
-    ++addr <n>      target GPIB address (default 16 here; 7151 address set
-                    via rear-panel DIP switches 1/2/4/8/16)
-    ++auto 0        manual read (we issue ++read explicitly)
-    ++eoi 1         assert EOI at end of each write
-    ++eos 2         use LF only as terminator on outgoing commands
-                    (the 7151 accepts either EOI on last char OR LF as the
-                    end-of-string delimiter; CR is ignored)
+The driver is transport-agnostic: it talks to a
+:class:`rf_bench.gpib.GPIBDevice` (or anything exposing the same
+``write``/``read``/``query`` surface) and knows nothing about sockets or
+adapter ``++`` commands.  The adapter owns the link and serialises access,
+which is what lets the 7151 share one KISS-488 with the HP 8712B.
+
+Preferred construction::
+
+    from rf_bench.gpib import KISS488
+    gpib = KISS488.shared("10.1.1.70")
+    dmm  = Solartron7151(gpib.device(22))
+
+Backwards-compatible construction opens or joins the shared adapter::
+
+    dmm = Solartron7151("10.1.1.70")        # positional host
 
 The Solartron 7151 uses a 1985-era device-specific ASCII command language —
 NOT modern SCPI. Commands are single ASCII letters with optional integer
@@ -26,13 +30,18 @@ keyword form (e.g. "MODE VDC") is also accepted.
 Programming reference: Solartron 7151 Computing Multimeter User Manual,
 ND/7151/2 Issue 2 (1985), Chapter 6 (GPIB Operation).
 
-Default GPIB address: 16
-Default KISS-488 host: 10.1.1.70, TCP port 1234
+Default GPIB address: 22
+    Both this meter and the HP 8712B ship set to address 16, and they share one
+    KISS-488, so the 7151 is moved to 22 on this bench.  The address is set on
+    the rear-panel DIP switches and takes effect only after a power-on reset.
+
+Default KISS-488 host: 10.1.1.70, TCP port 23
 """
 
-import socket
 import time
 from typing import Optional
+
+from rf_bench.gpib import DEFAULT_TELNET_PORT, KISS488
 
 
 # ---------------------------------------------------------------------------
@@ -40,14 +49,16 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 DEFAULT_HOST       = "10.1.1.70"
-DEFAULT_KISS_PORT  = 1234
-DEFAULT_GPIB_ADDR  = 16
+DEFAULT_PORT       = DEFAULT_TELNET_PORT   # 23 — KISS-488 Telnet, NOT 1234
+DEFAULT_GPIB_ADDR  = 22                    # 16 collides with the HP 8712B
 
-CONNECT_TIMEOUT    = 10    # seconds — initial TCP connect
+#: Deprecated alias. Was 1234, which is the *Prologix* GPIB-ETHERNET port; the
+#: KISS-488 listens on Telnet port 23 (User Guide Rev 2.13, §5 "Network
+#: Addressing"). Kept so old call sites still import cleanly.
+DEFAULT_KISS_PORT  = DEFAULT_PORT
+
 READ_TIMEOUT       = 5.0   # seconds — normal query response
 RESET_DELAY        = 2.0   # seconds — required wait after DCL ('A') per s7150 reference
-
-RECV_BUFSIZE       = 4096
 
 
 # Function codes — argument to MODE (M) command. Source: User Manual page 6.24
@@ -218,7 +229,8 @@ class Solartron7151:
     """
 
     DEFAULT_HOST      = DEFAULT_HOST
-    DEFAULT_KISS_PORT = DEFAULT_KISS_PORT
+    DEFAULT_PORT      = DEFAULT_PORT
+    DEFAULT_KISS_PORT = DEFAULT_KISS_PORT      # deprecated alias
     DEFAULT_GPIB_ADDR = DEFAULT_GPIB_ADDR
 
     # Re-export key constants on the class for convenience
@@ -240,69 +252,105 @@ class Solartron7151:
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        kiss_port: int = DEFAULT_KISS_PORT,
+        transport=None,
+        port: int = DEFAULT_PORT,
         gpib_addr: int = DEFAULT_GPIB_ADDR,
+        *,
+        host: Optional[str] = None,
+        kiss_port: Optional[int] = None,
+        read_timeout: float = READ_TIMEOUT,
+        initialise: bool = True,
     ):
-        self.host      = host
-        self.kiss_port = kiss_port
-        self.gpib_addr = gpib_addr
-        self._sock: Optional[socket.socket] = None
-        self.connect()
+        """
+        Args:
+            transport: either a GPIB device handle (anything with
+                ``write``/``read``/``query`` — normally
+                ``KISS488.shared(host).device(22)``), or a host string for the
+                backwards-compatible path.
+            port: adapter TCP port when constructing from a host (default 23).
+            gpib_addr: instrument primary address when constructing from a host.
+            host: keyword form of the host string.
+            kiss_port: deprecated alias for ``port``.
+            read_timeout: default host-side reply timeout, seconds.
+            initialise: run the DCL + ``U7N0T1`` startup sequence. Set False to
+                attach to an instrument already in a known state (and to keep
+                unit tests from paying the 2 s reset delay).
+        """
+        if kiss_port is not None:
+            port = kiss_port
+
+        if isinstance(transport, str):
+            if host is not None and host != transport:
+                raise ValueError(
+                    f"conflicting hosts: positional {transport!r} vs host={host!r}"
+                )
+            host, transport = transport, None
+
+        self.read_timeout = read_timeout
+        self._literals = True   # connect() sets N0 (literals on)
+
+        if transport is not None:
+            self._dev = transport
+            self.host = getattr(getattr(transport, "adapter", None), "host", None)
+            self.port = port
+            self.gpib_addr = getattr(transport, "address", gpib_addr)
+        else:
+            self.host = host or DEFAULT_HOST
+            self.port = port
+            self.gpib_addr = gpib_addr
+            adapter = KISS488.shared(self.host, self.port)
+            self._dev = adapter.device(self.gpib_addr, name="solartron7151")
+
+        self.kiss_port = self.port   # deprecated alias, kept for old call sites
+
+        if initialise:
+            self.connect()
 
     # ------------------------------------------------------------------
     # Connection / lifecycle
     # ------------------------------------------------------------------
 
     def connect(self) -> None:
-        """Open TCP connection to KISS-488 and initialise adapter + instrument.
+        """Initialise the instrument to a known state.
 
-        Sends the Prologix init sequence to the adapter, then issues the 7151
-        DCL ('A') command and waits 2 s (per the s7150 reference driver — the
-        instrument reports its RESTART message via the bus during this time and
-        is not ready for further commands until the message has been emitted).
+        Issues the 7151 DCL ('A') command and waits 2 s (per the s7150
+        reference driver — the instrument reports its RESTART message via the
+        bus during this time and is not ready for further commands until the
+        message has been emitted).
 
-        Then sets the output delimiter to CR (U7) and turns on verbose output
-        with literals (N0), and enables tracking (T1) — the standard init
-        sequence used by the s7150 reference driver.
+        Then sets the output delimiter to CR (U7), turns on verbose output with
+        literals (N0), and enables tracking (T1) — the standard init sequence
+        used by the s7150 reference driver.
+
+        The adapter itself is configured by :class:`rf_bench.gpib.KISS488`; this
+        method deals only with the instrument.
         """
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(CONNECT_TIMEOUT)
-        self._sock.connect((self.host, self.kiss_port))
-        time.sleep(0.2)
-
-        self._raw_send("++mode 1")
-        self._raw_send(f"++addr {self.gpib_addr}")
-        self._raw_send("++auto 0")
-        self._raw_send("++eoi 1")
-        self._raw_send("++eos 2")    # send LF terminator on outgoing commands
-        time.sleep(0.1)
-
-        # Reset the instrument (DCL) — clears SRQ, returns to power-on default
-        # state. The 7151 emits a RESTART message during this period; we
-        # discard it by waiting RESET_DELAY before issuing further commands.
-        self._raw_send("A")
+        self._require_open()
+        # Reset the instrument (DCL) — returns to power-on default state. The
+        # 7151 emits a RESTART message during this period; discard it by
+        # waiting RESET_DELAY before issuing further commands.
+        self._dev.write("A")
         time.sleep(RESET_DELAY)
 
         # Configure output: CR delimiter, literals on, tracking on.
-        # This matches the s7150 reference driver init sequence.
-        self._raw_send("U7N0T1")
+        self._dev.write("U7N0T1")
+        self._literals = True
         time.sleep(0.1)
 
     def close(self) -> None:
-        """Reset the instrument and close the TCP connection."""
-        if self._sock:
+        """Reset the instrument and release the GPIB adapter handle."""
+        if self._dev is not None:
             try:
                 # DC1 = CANCEL, A = DCL — restore default state
-                self._raw_send("DC1")
-                self._raw_send("A")
-            except OSError:
+                self._dev.write("DC1")
+                self._dev.write("A")
+            except Exception:
                 pass
             try:
-                self._sock.close()
-            except OSError:
+                self._dev.close()
+            except Exception:
                 pass
-            self._sock = None
+            self._dev = None
 
     def __enter__(self):
         return self
@@ -314,51 +362,31 @@ class Solartron7151:
     # Low-level I/O
     # ------------------------------------------------------------------
 
-    def _raw_send(self, cmd: str) -> None:
-        """Send a raw line to KISS-488 (adapter ++cmd or instrument command).
-
-        The KISS-488 adapter line itself is terminated with LF; the instrument
-        command terminator is set by ++eos and ++eoi above.
-        """
-        self._sock.sendall((cmd + "\n").encode("ascii"))
-
-    def _read_response(self, timeout: float = READ_TIMEOUT) -> str:
-        """Read bytes from the socket until newline or timeout; return stripped string.
-
-        The 7151's output is configured with U7 (CR), but the KISS-488 adapter
-        emits its own LF terminator on each incoming line of GPIB data, so the
-        TCP reader looks for LF.
-        """
-        self._sock.settimeout(timeout)
-        buf = bytearray()
-        while True:
-            try:
-                chunk = self._sock.recv(RECV_BUFSIZE)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if b"\n" in buf:
-                    break
-            except socket.timeout:
-                break
-        return buf.decode("ascii", errors="replace").strip()
+    @property
+    def device(self):
+        """The underlying GPIB device handle."""
+        return self._dev
 
     def send(self, cmd: str) -> None:
         """Send a Solartron command (no response expected)."""
-        self._raw_send(cmd)
+        self._require_open()
+        self._dev.write(cmd)
 
-    def query(self, cmd: str, timeout: float = READ_TIMEOUT) -> str:
+    def query(self, cmd: str, timeout: Optional[float] = None) -> str:
         """Send a command, then read one response line.
 
-        Issues ++read after the command so KISS-488 pulls the response off the
-        GPIB bus. The 7151 makes its output buffer available once a result is
-        ready; queries that ask "what is your present setting" (e.g. "M?")
-        return immediately, but a blank read just after issuing a measurement
-        command in single-shot mode requires waiting for the integration period.
+        The command and its reply are one atomic bus transaction. The 7151
+        makes its output buffer available once a result is ready; queries that
+        ask "what is your present setting" (e.g. "M?") return immediately, but
+        a read just after issuing a measurement command in single-shot mode
+        must wait out the integration period.
         """
-        self._raw_send(cmd)
-        self._raw_send("++read")
-        return self._read_response(timeout)
+        self._require_open()
+        return self._dev.query(cmd, timeout if timeout is not None else self.read_timeout)
+
+    def _require_open(self) -> None:
+        if self._dev is None:
+            raise IOError("Solartron7151 is closed")
 
     # ------------------------------------------------------------------
     # Identification
@@ -497,8 +525,8 @@ class Solartron7151:
     def read_value(self, timeout: float = READ_TIMEOUT) -> float:
         """Read one measurement and return it as a float.
 
-        Reads one output string from the instrument (using ++read) and parses
-        the leading signed mantissa. Examples:
+        Reads one output string off the bus and parses the leading signed
+        mantissa. Examples:
 
             With LITERALS ON:  "+ 2.798450 V DC 01.15.00 DAY 5"  ->  2.798450
             With LITERALS OFF: "+2.798450"                       ->  2.798450
@@ -521,9 +549,13 @@ class Solartron7151:
         return self._read_one_reading(timeout)
 
     def _read_one_reading(self, timeout: float) -> str:
-        """Issue ++read and return the raw response string."""
-        self._raw_send("++read")
-        return self._read_response(timeout)
+        """Read one pending output string off the bus (no command sent).
+
+        In TRACK ON mode the 7151 measures continuously and overwrites its
+        output buffer, so a bare read always yields the most recent result.
+        """
+        self._require_open()
+        return self._dev.read(timeout if timeout is not None else self.read_timeout)
 
     @staticmethod
     def _parse_reading(s: str) -> float:
@@ -546,6 +578,114 @@ class Solartron7151:
             raise ValueError(f"could not parse 7151 reading {s!r}") from e
 
     # ------------------------------------------------------------------
+    # Cross-driver DMM API (parity with rf_bench.siglent.SDM3000X)
+    # ------------------------------------------------------------------
+    #
+    # These give the 7151 the same measure_*() surface as the Siglent
+    # SDM3045X, so projects under projects/dmm/ can take a --dmm flag, and so
+    # rf_bench.fluke.Fluke80i400(dmm=...) — documented to compose with "any
+    # rf-bench DMM driver that exposes measure_iac()" — accepts this meter.
+    #
+    # All return SI base units (volts, amperes, ohms) regardless of the range
+    # the instrument reports in.
+
+    def _measure(self, mode: int, range_code: Optional[int], settle: float) -> float:
+        """Select a function/range, let it settle, and return one reading."""
+        self.set_mode(mode)
+        if range_code is not None:
+            self.set_range(range_code)
+        if settle:
+            time.sleep(settle)
+        return self.wait_for_reading()
+
+    def measure_vdc(self, range_code: Optional[int] = None, settle: float = 0.5) -> float:
+        """DC volts. Returns volts."""
+        return self._measure(MODE_VDC, range_code, settle)
+
+    def measure_vac(self, range_code: Optional[int] = None, settle: float = 0.5) -> float:
+        """AC volts. Returns volts."""
+        return self._measure(MODE_VAC, range_code, settle)
+
+    def measure_idc(self, range_code: Optional[int] = None, settle: float = 0.5) -> float:
+        """DC current. Returns amperes.
+
+        The 7151 implements a single current range (User Manual p. 6.24: with
+        current selected, any R argument selects the one suitable range).
+        """
+        return self._measure(MODE_IDC, range_code, settle)
+
+    def measure_iac(self, range_code: Optional[int] = None, settle: float = 0.5) -> float:
+        """AC current. Returns amperes.
+
+        This is the method ``rf_bench.fluke.Fluke80i400(dmm=...)`` calls.
+        """
+        return self._measure(MODE_IAC, range_code, settle)
+
+    def measure_resistance(
+        self, range_code: Optional[int] = None, settle: float = 0.5
+    ) -> float:
+        """Resistance. Returns **ohms**.
+
+        The 7151's resistance function is named KOHM (``M2``) and its ranges are
+        quoted in kΩ/MΩ.  Whether the numeric mantissa is scaled in kΩ or Ω is
+        not settled by the OCR'd manual, so this method does not guess: with
+        LITERALS ON it reads the unit token out of the reply and scales from
+        that.  With LITERALS OFF there is no unit to read and it raises rather
+        than return a number that might be off by 1000.
+
+        VERIFY-ON-HARDWARE: confirm the literal unit token the 7151 actually
+        emits (expected "K OHM"/"KOHM"/"M OHM") and extend UNIT_SCALE if the
+        real firmware spells it differently.
+        """
+        self.set_mode(MODE_KOHM)
+        if range_code is not None:
+            self.set_range(range_code)
+        if settle:
+            time.sleep(settle)
+        if not self._literals:
+            raise RuntimeError(
+                "measure_resistance() needs LITERALS ON to determine the unit "
+                "scale of the 7151's resistance reading. Call set_literals(True), "
+                "or use read_value() and apply the scale yourself."
+            )
+        raw = self._wait_for_raw()
+        return self._parse_reading(raw) * self._unit_scale(raw)
+
+    def _wait_for_raw(self, timeout: float = 10.0, interval: float = 0.1) -> str:
+        """As :meth:`wait_for_reading`, but returns the unparsed string."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            raw = self._read_one_reading(
+                min(interval, max(0.0, deadline - time.monotonic()))
+            )
+            if raw:
+                return raw
+            time.sleep(interval)
+        raise TimeoutError(f"no reading from Solartron 7151 within {timeout:.1f} s")
+
+    #: Multipliers applied to a literal reading to reach SI base units.
+    UNIT_SCALE = {
+        "KOHM": 1e3, "K OHM": 1e3, "KILOHM": 1e3,
+        "MOHM": 1e6, "M OHM": 1e6, "MEGOHM": 1e6,
+        "OHM": 1.0,
+        "MV": 1e-3, "V": 1.0,
+        "MA": 1e-3, "A": 1.0,
+    }
+
+    @classmethod
+    def _unit_scale(cls, reading: str) -> float:
+        """Derive the SI multiplier from the unit token in a literal reading."""
+        text = reading.upper()
+        # Longest match first so "K OHM" wins over "OHM".
+        for token in sorted(cls.UNIT_SCALE, key=len, reverse=True):
+            if token in text:
+                return cls.UNIT_SCALE[token]
+        raise ValueError(
+            f"no recognised unit in 7151 reading {reading!r}; "
+            f"known units: {sorted(cls.UNIT_SCALE)}"
+        )
+
+    # ------------------------------------------------------------------
     # Output formatting
     # ------------------------------------------------------------------
 
@@ -555,8 +695,13 @@ class Solartron7151:
         With LITERALS ON the 7151 emits e.g. "+ 2.798450 V DC 01.15.00 DAY 5";
         with LITERALS OFF it emits just "+ 2.798450". Disable literals (N1) for
         maximum output throughput.
+
+        Note that the unit-aware helpers (:meth:`measure_resistance` and
+        friends) need literals ON to read the units off the instrument rather
+        than assuming them.
         """
         self.send("N0" if on else "N1")
+        self._literals = bool(on)
 
     def set_display(self, on: bool = True) -> None:
         """Enable (D0) or disable (D1) the front-panel display.
@@ -629,24 +774,49 @@ class Solartron7151:
     def serial_poll(self) -> int:
         """Perform a GPIB serial poll and return the 7151's status byte.
 
-        Bits (see STB_* constants):
-            0x40  STB_SRQ        - service request asserted
-            0x20  STB_CAL_ERROR  - calibration error
-            0x10  STB_OUTPUT_AVL - output available in buffer
-            0x08  STB_REMOTE     - remote control
-            0x01  STB_CMD_ERROR  - command/operational error
+        **Not reachable through a KISS-488.**  The KISS-488 Rev 2 command set
+        (User Guide Rev 2.13, §11) has no ``++spoll`` and no other serial-poll
+        primitive, so the 7151's status byte (the ``STB_*`` constants) and
+        SRQ-driven waiting cannot be used with that adapter.  An earlier
+        revision of this driver issued ``++spoll`` on the assumption that
+        KISS-488 was fully Prologix-compatible; it is not.
 
-        Performing a serial poll releases the SRQ. (DCL/A also clears SRQ.)
+        Use :meth:`get_error` (the instrument's own STATUS ``!`` command) for
+        error state, and :meth:`wait_for_reading` to wait for data.
+
+        Raises:
+            NotImplementedError: always, on a KISS-488.  A different adapter
+            that implements serial poll would satisfy this via its own device
+            handle.
         """
-        # Prologix ++spoll command performs a GPIB serial poll
-        self._raw_send("++spoll")
-        resp = self._read_response()
-        try:
-            return int(resp.strip())
-        except ValueError as e:
-            raise RuntimeError(
-                f"unexpected ++spoll response from KISS-488: {resp!r}"
-            ) from e
+        self._require_open()
+        return self._dev.serial_poll()
+
+    def wait_for_reading(
+        self, timeout: float = 10.0, interval: float = 0.1
+    ) -> float:
+        """Poll the output buffer until a reading appears, or ``timeout`` elapses.
+
+        The host-side replacement for the SRQ/serial-poll wait that KISS-488
+        cannot provide.  Each attempt is a bare bus read: in TRACK ON mode the
+        7151 always has the most recent result available, while in TRACK OFF
+        mode nothing appears until the integration period after a
+        :meth:`trigger_single` has elapsed.
+
+        Raises:
+            TimeoutError: if no reading arrived within ``timeout``.
+            OverflowError: if the reading carries the '!' input-overload flag.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            raw = self._read_one_reading(min(interval, max(0.0, deadline - time.monotonic())))
+            if raw:
+                return self._parse_reading(raw)
+            time.sleep(interval)
+        raise TimeoutError(
+            f"no reading from Solartron 7151 within {timeout:.1f} s "
+            "(check TRACK mode, integration time, and that a trigger was issued)"
+        )
 
     def get_error(self) -> tuple:
         """Read the present error status via the STATUS (!) command.
@@ -672,10 +842,9 @@ class Solartron7151:
 
         Also clears any pending SRQ and resets the input/output buffers. The
         instrument needs ~2 s to complete the DCL response (it emits a
-        RESTART message); callers should sleep RESET_DELAY before further
-        operations.
+        RESTART message); this method sleeps RESET_DELAY on the caller's behalf.
         """
-        self._raw_send("A")
+        self.send("A")
         time.sleep(RESET_DELAY)
 
     # ------------------------------------------------------------------

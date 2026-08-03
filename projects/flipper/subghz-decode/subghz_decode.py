@@ -27,9 +27,9 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'rf-bench'))
 from rf_bench.flipper import FlipperZero
+from rf_bench import connect
 try:
     from rf_bench.siglent import SSA3000X
-from rf_bench import connect
     _SSA_AVAILABLE = True
 except ImportError:
     _SSA_AVAILABLE = False
@@ -227,7 +227,7 @@ Examples:
     print(f"Database: {args.db}")
 
     try:
-        print(f"Connecting to Flipper via inventory'} ...")
+        print(f"Connecting to Flipper via inventory ...")
         fz = FlipperZero(args.serial)
         print(f"  {fz.identify()}")
 

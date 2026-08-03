@@ -1008,20 +1008,26 @@ class SunSDR:
 
     def transmit_iq(self, iq: np.ndarray) -> None:
         """
-        Inject a block of IQ samples into the TX chain.
+        Send a block of samples to the TX AUDIO stream.
+
+        IMPORTANT — this is NOT raw-IQ transmit. TCI has no arbitrary-IQ
+        transmit path: the samples below go out as a TX_AUDIO_STREAM (stream
+        type 2 = audio), which the radio feeds through its own modulator for
+        the current mode — it does NOT put arbitrary complex baseband on the
+        antenna. If you need genuine raw-IQ transmit (a synthesized waveform
+        radiated verbatim), use the **solsdr** companion project instead
+        (~/Dropbox/build/solsdr/, TX-IQ server on :5558) — it talks the radio's
+        raw UDP protocol directly and is hardware-verified. This method is also
+        untested/spec-written.
 
         The sample rate of *iq* must match the current IQ rate
         (set via set_sample_rate()).  PTT must be active.
-
-        The frame format mirrors the RX IQ frame format with stream_type = 1
-        (TX).  Exact framing behaviour should be verified against your
-        ExpertSDR3 firmware version.
 
         WARNING: Transmitting on amateur frequencies requires a valid licence
         and appropriate antenna/power levels.  Always start with a dummy load.
 
         Args:
-            iq: complex64 numpy array of TX samples.
+            iq: complex64 numpy array of TX audio samples.
         """
         iq_c64 = iq.astype(np.complex64)
         raw    = np.empty(len(iq_c64) * 2, dtype="<f4")

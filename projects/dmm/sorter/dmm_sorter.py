@@ -243,7 +243,7 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDM3045X via inventory'} ...")
+    print(f"Connecting to SDM3045X via inventory ...")
     try:
         dmm = connect(args.dmm or 'sdm')
         print(f"  {dmm.identify()}")

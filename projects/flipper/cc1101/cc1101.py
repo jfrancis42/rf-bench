@@ -270,12 +270,12 @@ Examples:
         args.output = f"cc1101_{ts}"
 
     try:
-        print(f"Connecting to Flipper via inventory'} ...")
+        print(f"Connecting to Flipper via inventory ...")
         fz = FlipperZero(args.serial)
         info = fz.identify()
         print(f"  {info}")
 
-        print(f"Connecting to SSA via inventory'} ...")
+        print(f"Connecting to SSA via inventory ...")
         ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 

@@ -44,6 +44,7 @@ from rf_bench.utils import (                              # noqa: E402
     capacitive_reactance, inductive_reactance,
     l_from_resonant, c_from_resonant,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -196,7 +197,6 @@ def measure_impedance(scope: SDS2000X, sdg: SDG1000X,
     Returns complex Z in ohms.
     """
     from rf_bench.utils import vpp_to_dbm
-from rf_bench import connect
 
     level_vpp = DEFAULT_MEAS_LEVEL_VPP
     level_dbm = vpp_to_dbm(level_vpp)
@@ -627,7 +627,7 @@ Examples:
     needs_instruments = args.measure or args.verify
 
     if needs_instruments:
-        print(f"\nConnecting to scope via inventory'} ...")
+        print(f"\nConnecting to scope via inventory ...")
         try:
             scope = connect(args.scope or 'sds')
             print(f"  {scope.identify()}")
@@ -635,7 +635,7 @@ Examples:
             print(f"Cannot connect to scope: {exc}")
             sys.exit(1)
 
-        print(f"Connecting to SDG via inventory'} ...")
+        print(f"Connecting to SDG via inventory ...")
         try:
             sdg = connect(args.sdg or 'sdg')
             print(f"  {sdg.identify()}")

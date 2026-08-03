@@ -328,7 +328,7 @@ Examples:
         print(f"  Waterfall → {png}")
         return
 
-    print(f"Connecting to SSA via inventory'} ...")
+    print(f"Connecting to SSA via inventory ...")
     ssa = None
     try:
         ssa = connect(args.ssa or 'ssa')

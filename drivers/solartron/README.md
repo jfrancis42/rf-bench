@@ -17,7 +17,7 @@ modes), and 7151.
 Connection path:
 
 ```
-Python -> TCP socket -> KISS-488 Rev 2 (port 1234) -> GPIB -> Solartron 7151
+Python -> rf_bench.gpib.KISS488 (TCP port 23) -> GPIB -> Solartron 7151 @ addr 22
 ```
 
 ## Installation
@@ -61,7 +61,7 @@ with Solartron7151("10.1.1.70") as dmm:
 | Default state | MODE VDC, RANGE AUTO, NINES 5 FILTER OFF, TRACK ON, LITERALS ON, DELIMIT CR LF |
 | Calibration plug | 2.5 mm jack with internal short, in rear-panel CAL socket. Required for any C/H/L/W command. |
 | Adapter | KISS-488 Rev 2 (HX Engineering), Prologix-compatible |
-| Adapter port | TCP 1234 |
+| Adapter port | TCP 23 (Telnet; NOT the Prologix port 1234) |
 | Default host | 10.1.1.70 |
 
 ## Command set summary

@@ -52,3 +52,6 @@ recordings_test/
 # Users must download from original sources via install_fonts.py
 fonts/
 keep/
+
+# Local design notes and vendor manuals (not published)
+docs/

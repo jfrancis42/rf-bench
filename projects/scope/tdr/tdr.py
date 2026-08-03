@@ -383,12 +383,12 @@ Examples:
     sdg   = None
 
     try:
-        print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+        print(f"Connecting to scope via inventory ...", end=" ", flush=True)
         scope = connect(args.scope_host or 'sds')
         print(f"OK  [{scope.identify().split(',')[1].strip()}]")
 
         if args.source == "sdg":
-            print(f"Connecting to SDG via inventory'} ...", end=" ", flush=True)
+            print(f"Connecting to SDG via inventory ...", end=" ", flush=True)
             sdg = connect(args.sdg_host or 'sdg')
             print(f"OK  [{sdg.identify().split(',')[1].strip()}]")
             sdg.set_sine(1, freq_hz, level_dbm=13.0)   # ~13 dBm ≈ 1 Vpp into 50 Ω

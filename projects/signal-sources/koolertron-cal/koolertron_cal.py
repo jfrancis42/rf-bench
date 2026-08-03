@@ -54,6 +54,7 @@ from rf_bench.koolertron import (
     MHS5200A, Waveform, Atten, Gate, CounterMode, DEFAULT_CAL_FILE,
 )
 from rf_bench.siglent import SDS2000X
+from rf_bench import connect
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +290,6 @@ def cmd_freq_cal(args) -> int:
     scope = None
     if args.method == "sdg":
         from rf_bench.siglent import SDG1000X
-from rf_bench import connect
         sdg = connect(args.sdg_host or 'sdg')
         print(f"  SDG at {args.sdg_host}")
     elif args.method == "scope":

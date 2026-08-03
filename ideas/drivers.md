@@ -14,14 +14,17 @@
 | `rf_bench.flipper` | `rf-bench-drivers-flipper` | 0.2.1 | 🔶 | Sub-GHz OOK + 2-FSK only; IR/RFID/NFC untested |
 | `rf_bench.buspirate` | `rf-bench-drivers-buspirate` | 0.1.0 | 🧪 | Published, untested in rf-bench context |
 | `rf_bench.kiwisdr` | (not yet on PyPI) | 0.1.0 local | 🧪 | Code complete; IP TBD |
-| `rf_bench.sunsdr` | (not yet on PyPI) | 0.2.0 local | 🧪 | Code complete; IP TBD |
+| `rf_bench.sunsdr` | (not yet on PyPI) | 0.2.0 local | 🧪 | TCI/ExpertSDR3 driver; code complete, untested; IP TBD. **TX is audio-only — TCI cannot transmit IQ.** For raw-IQ TX / headless use, see the **solsdr** companion project (`solsdr.md`) |
+| `rf_bench.solsdr` | (not yet on PyPI) | 0.1.0 local | 🧪 | **Network client of the solsdr appliance** (ExpertSDR3-free SunSDR2 PRO) — RX IQ + **arbitrary-waveform TX IQ**; talks solsdr's :5556/:5555/:5557/:5558 servers. Wire-protocol tested vs. solsdr's real servers (control + RX IQ + TX IQ). See `solsdr.md` |
 | `rf_bench.fx2lafw` | (not yet on PyPI) | 0.1.0 local | ✅ | FX2LAFW 8-ch logic analyzer; sigrok-cli subprocess; ready to publish |
 | `rf_bench.relay` | (not on PyPI) | local | ❌ | Hardware ordered 2026-06-03 |
 | `rf_bench.arduino_relay_board` | `rf-bench-drivers-arduino-relay-board` | 0.1.0 | ✅ | Arduino Uno + Vilros Ethernet R3 (W5100), 4-ch network relay, TCP :5025 — tested 2026-06-25 |
 | `rf_bench.shuttlexpress` | (not yet on PyPI) | 0.1.0 local | ✅ | Contour Design ShuttleXpress jog/shuttle USB HID; Linux evdev; tested 2026-07-01 on 10.1.0.10 |
 | `rf_bench.kestrel` | (not yet on PyPI) | 0.1.0 local | ✅ | Kestrel 5500L BLE weather meter; reverse-engineered GATT; async (bleak); tested 2026-07-01 on 10.1.0.10 |
-| `rf_bench.hp` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
-| `rf_bench.solartron` | (not on PyPI) | local | ❌ | Pending KISS-488 adapter |
+| `rf_bench.mqtt` | (not yet on PyPI) | 0.1.0 local | ✅ | MQTTClient + Bridge base class + 26 bridges + 2 subscribers; internal broker 10.1.0.20; public bridge us.n0gq.org with auth + fail2ban |
+| `rf_bench.gpib` | (not yet on PyPI) | 0.1.0 local | 🧪 | GPIB bus transport: KISS-488 Rev 2 adapter (TCP :23 / USB serial), shared refcounted link, per-instrument device handles, Spy-mode decoder, KISS-488 emulator for hardware-free tests. 154 tests pass; **zero hardware contact** |
+| `rf_bench.hp` | (not on PyPI) | local | ❌ | Pending KISS-488 hardware. Now transport-agnostic over `rf_bench.gpib`; GPIB addr 16 |
+| `rf_bench.solartron` | (not on PyPI) | local | ❌ | Pending KISS-488 hardware. Now transport-agnostic over `rf_bench.gpib`; GPIB addr 22. Gained SDM3000X-compatible `measure_*()` surface; `++spoll`-based `serial_poll()` removed (KISS-488 has no such command) |
 
 `pip install rf-bench` (meta-package, 0.6.0) pulls in the published drivers.
 

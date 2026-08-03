@@ -186,7 +186,7 @@ Examples:
 
     args = parser.parse_args()
 
-    print(f"Connecting to SDS2000X via inventory'} ...")
+    print(f"Connecting to SDS2000X via inventory ...")
     scope = None
     try:
         scope = connect(args.scope or 'sds')

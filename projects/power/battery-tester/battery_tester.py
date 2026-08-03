@@ -559,19 +559,19 @@ Examples:
 
     try:
         # Connect DMM (always required for voltage)
-        print(f"\nConnecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+        print(f"\nConnecting to SDM3045X via inventory ...", end=" ", flush=True)
         dmm = connect(args.dmm_host or 'sdm')
         print(f"OK  ({dmm.identify().strip()})")
 
         # Connect ET54 load (required for all current tests)
-        print(f"Connecting to ET5406A+ via inventory'} ...", end=" ", flush=True)
+        print(f"Connecting to ET5406A+ via inventory ...", end=" ", flush=True)
         load = _connect_load(args.load_port)
         load.off()
         print("OK")
 
         # Connect SPD (required for cycle mode)
         if args.mode == "cycle":
-            print(f"Connecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+            print(f"Connecting to SPD3303X via inventory ...", end=" ", flush=True)
             psu = connect(args.spd_host or 'spd')
             print(f"OK  ({psu.identify().strip()})")
             psu.disable_all()

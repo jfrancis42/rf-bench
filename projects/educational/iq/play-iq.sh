@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODE=usb
-SINK=""
+DEVICE=""
 COMPRESS=1.5
 FILTER="--filter-low 300 --filter-high 3000"
 HF_ARGS=""
@@ -17,7 +17,8 @@ Usage: $(basename "$0") [OPTIONS] <audio-file>
 
 Options:
   -m, --mode MODE       Modulation: am, fm, usb, lsb (default: usb)
-  -s, --sink SINK       PulseAudio sink name (default: Crusher Evo)
+  -d, --device DEV      Output device: PortAudio index or name substring
+                         (default: system default output device)
   -c, --compress DRIVE  Compression drive (default: 1.5, 0 to disable)
   -w, --wide            Wide audio (no bandpass filter)
   -p, --preset PRESET   HF channel preset: clear, moderate, rough, dx,
@@ -40,7 +41,7 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -m|--mode)     MODE="$2"; shift 2 ;;
-        -s|--sink)     SINK="$2"; shift 2 ;;
+        -d|--device)   DEVICE="$2"; shift 2 ;;
         -c|--compress) COMPRESS="$2"; shift 2 ;;
         -w|--wide)     FILTER="--no-filter"; shift ;;
         -p|--preset)   HF_ARGS="$HF_ARGS --preset $2"; shift 2 ;;
@@ -68,8 +69,11 @@ if [[ "$COMPRESS" != "0" ]]; then
     COMPRESS_ARG="--compress $COMPRESS"
 fi
 
-if [[ -n "$SINK" ]]; then
-    export PULSE_SINK="$SINK"
+# Output device: only pass --device when the user asked for one; otherwise
+# demodulate.py --speaker uses the system default output device.
+DEVICE_ARGS=()
+if [[ -n "$DEVICE" ]]; then
+    DEVICE_ARGS=(--device "$DEVICE")
 fi
 
 python3 "$SCRIPT_DIR/modulate.py" \
@@ -83,4 +87,5 @@ python3 "$SCRIPT_DIR/modulate.py" \
   | python3 "$SCRIPT_DIR/demodulate.py" \
     --mode "$MODE" \
     --stdin \
+    "${DEVICE_ARGS[@]}" \
     --speaker

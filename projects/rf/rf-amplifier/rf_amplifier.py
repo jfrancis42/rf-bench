@@ -37,9 +37,9 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X          # noqa: E402
 from rf_bench.utils import (                              # noqa: E402
-from rf_bench import connect
     format_freq, format_freq_short, nearest_rbw,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -617,12 +617,12 @@ Examples:
     # Connect instruments
     ssa = sdg = None
     try:
-        print(f"Connecting to SSA via inventory'} ...")
+        print(f"Connecting to SSA via inventory ...")
         ssa = connect(args.ssa_host or 'ssa')
         print(f"  {ssa.identify()}")
 
         if args.source == "sdg" or args.p1db:
-            print(f"Connecting to SDG via inventory'} ...")
+            print(f"Connecting to SDG via inventory ...")
             sdg = connect(args.sdg_host or 'sdg')
             print(f"  {sdg.identify()}")
 

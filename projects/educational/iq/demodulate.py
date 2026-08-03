@@ -408,10 +408,16 @@ def process_stream(args) -> None:
     output_stream = None
 
     if args.speaker:
+        # Resolve the requested output device (None = system default)
+        spk_device = parse_device(args.device)
+        if spk_device is not None:
+            print(f"  Speaker device: {spk_device} "
+                  f"({sd.query_devices(spk_device)['name']})", file=sys.stderr)
         # Open a sounddevice output stream for real-time playback.
         # blocksize=0 means "accept whatever size we feed it."
         output_stream = sd.OutputStream(
-            samplerate=OUTPUT_RATE, channels=1, dtype="float32"
+            samplerate=OUTPUT_RATE, channels=1, device=spk_device,
+            dtype="float32"
         )
         output_stream.start()
     elif args.output:
@@ -532,6 +538,37 @@ def process_stream(args) -> None:
 # ║  COMMAND-LINE INTERFACE                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
+class ListDevicesAction(argparse.Action):
+    """Print the sounddevice audio-device table and exit.
+
+    Implemented as a custom action (like --help) so it fires during
+    argument parsing, before argparse enforces the otherwise-required
+    --mode / input-source arguments. That lets `--list-devices` run on
+    its own.
+    """
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        import sounddevice as sd
+        print(sd.query_devices())
+        parser.exit()
+
+
+def parse_device(spec):
+    """Resolve a --device argument to what sounddevice expects.
+
+    Accepts either an integer index (e.g. "3") or a name substring
+    (e.g. "Handset"). Returns None to mean "use the default device".
+    """
+    if spec is None:
+        return None
+    try:
+        return int(spec)
+    except ValueError:
+        return spec
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="IQ Demodulator — convert baseband IQ back to audio.",
@@ -559,7 +596,14 @@ examples:
     parser.add_argument("--output", type=str, default=None,
                         help="Output WAV file path (default: <input_stem>_demod.wav)")
     parser.add_argument("--speaker", action="store_true",
-                        help="Play through default speaker")
+                        help="Play through a speaker")
+
+    # Audio device selection (speaker mode)
+    parser.add_argument("--device", type=str, default=None,
+                        help="Output (speaker) device: index or name substring "
+                             "(see --list-devices; default: system default)")
+    parser.add_argument("--list-devices", action=ListDevicesAction,
+                        help="List available audio devices and exit")
 
     # Processing options
     parser.add_argument("--rate", type=int, default=DEFAULT_IQ_RATE,

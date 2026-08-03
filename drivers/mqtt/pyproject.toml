@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-mqtt"
+version = "0.1.0"
+description = "MQTT bridge infrastructure for rf-bench instrument ecosystem"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Jeff Francis", email = "jeff@n0gq.org"}]
+dependencies = [
+    "paho-mqtt>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rf_bench*"]

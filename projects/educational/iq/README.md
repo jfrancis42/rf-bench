@@ -278,6 +278,42 @@ python modulate.py --mode usb --mic --stdout \
 The pipe carries raw `complex64` bytes — no headers, no framing. This
 matches how real SDR tools work (`rtl_fm | sox`, `rtl_sdr | csdr`).
 
+## USB handset PTT button
+
+A C-Media USB handset (e.g. the TEC H-250, USB `0d8c:aaa0`) exposes its
+push-to-talk button on a raw HID interface. `ptt.py` reads it, and
+`modulate.py --ptt` gates audio on it (hold to talk; off by default).
+
+```bash
+./ptt.py                 # print PRESSED / released as you press the button
+./ptt.py --find          # show the resolved hidraw path
+
+# Push-to-talk intercom-style monitoring (audio only while button held):
+python modulate.py --mode usb --mic --device Handset --ptt --stdout \
+  | python demodulate.py --mode usb --stdin --device Handset --speaker
+```
+
+### Stable device name + non-root access (udev rule)
+
+By default the button's hidraw node has an unpredictable number
+(`/dev/hidraw4`, etc.) and root-only or `audio`-group permissions. The
+included **`99-h250-ptt.rules`** fixes both: it creates a stable
+`/dev/h250-ptt` symlink and grants read access to the `input` group.
+
+```bash
+sudo cp 99-h250-ptt.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=hidraw
+# then replug the handset (or reboot) so the symlink appears
+
+ls -l /dev/h250-ptt
+./ptt.py --device /dev/h250-ptt
+```
+
+`ptt.py` and `modulate.py --ptt` auto-detect the handset by its USB
+VID:PID, so the rule is a convenience (stable name, guaranteed perms),
+not a requirement.
+
 ## Dependencies
 
 - **numpy** — array math, complex arithmetic

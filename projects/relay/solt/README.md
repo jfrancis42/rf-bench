@@ -15,7 +15,7 @@ script switches between them automatically via GPIB.
 | Instrument / Component | Role |
 |------------------------|------|
 | HP 8712B VNA (10.1.1.70) | 300 kHz – 1.3 GHz 2-port vector network analyzer |
-| KISS-488 Rev 2 Ethernet-GPIB adapter | Transparent GPIB bridge; Prologix-compatible TCP on port 1234 |
+| KISS-488 Rev 2 Ethernet-GPIB adapter | GPIB bridge via `rf_bench.gpib.KISS488`; Prologix-*subset* command set on Telnet TCP port 23 |
 | Bus Pirate v3/v4/v5 (/dev/ttyUSB1) | I2C master for relay board |
 | XL9535 I2C I/O expander relay board | 8-relay board at I2C address 0x20 |
 | SMA calibration standards | OPEN, SHORT, LOAD (50 Ω) × 2 ports |

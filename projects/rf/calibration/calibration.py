@@ -51,10 +51,10 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X, SDG1000X, SDS2000X, SDM3000X        # noqa: E402
 from rf_bench.utils import (                                                  # noqa: E402
-from rf_bench import connect
     format_freq, format_freq_short, dbm_to_vpp, vpp_to_dbm, vrms_to_dbm,
     nearest_rbw,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -597,21 +597,21 @@ Examples:
     print()
 
     # Connect to instruments
-    print(f"Connecting to SDG   via inventory'}   ...", end=" ", flush=True)
+    print(f"Connecting to SDG   via inventory   ...", end=" ", flush=True)
     sdg = connect(args.sdg_host or 'sdg')
     print("OK")
 
-    print(f"Connecting to SSA   via inventory'}   ...", end=" ", flush=True)
+    print(f"Connecting to SSA   via inventory   ...", end=" ", flush=True)
     ssa = connect(args.ssa_host or 'ssa')
     print("OK")
 
-    print(f"Connecting to scope via inventory'} ...", end=" ", flush=True)
+    print(f"Connecting to scope via inventory ...", end=" ", flush=True)
     scope = connect(args.scope_host or 'sds')
     print("OK")
 
     dmm = None
     if not args.skip_dmm:
-        print(f"Connecting to DMM   via inventory'}   ...", end=" ", flush=True)
+        print(f"Connecting to DMM   via inventory   ...", end=" ", flush=True)
         dmm = connect(args.dmm_host or 'sdm')
         print("OK")
     else:

@@ -30,6 +30,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, simpledialog
 from typing import Optional
+from rf_bench import connect
 
 # ── driver imports ────────────────────────────────────────────────────────────
 # Re-use Si5351 register math and BusPirate from si5351_gen.py in same directory
@@ -44,7 +45,6 @@ except ImportError:
 
 try:
     from rf_bench.siglent import SSA3000X
-from rf_bench import connect
     _SSA_OK = True
 except ImportError:
     _SSA_OK = False

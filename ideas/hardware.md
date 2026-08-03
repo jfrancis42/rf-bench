@@ -24,18 +24,25 @@ workaround for the SSA's missing FM-demod SCPI), see
 | RTL-SDR Blog v4 | 500 kHz–1766 MHz, 2.4 MHz IQ | librtlsdr USB | `rf_bench.rtlsdr.RTLSDR` | ✅ IQ + streaming tested |
 | FX2LAFW Logic Analyzer (×3) | 8-ch, 24 MHz max, Saleae-compatible | USB VID=08a9 PID=0014 | `rf_bench.fx2lafw.FX2LAFWLogicAnalyzer` | ✅ Driver complete, hardware untested |
 | gpsd | GPS daemon client | localhost:2947 | `rf_bench.gpsd.GPSD` | ✅ tested |
-| HP 8712B | 2-port VNA 300 kHz–1.3 GHz | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.hp.HP8712B` | ❌ pending KISS-488 |
+| HP 8712B | 2-port VNA 300 kHz–1.3 GHz | 10.1.1.70:23 (KISS-488 GPIB, addr 16) | `rf_bench.hp.HP8712B` via `rf_bench.gpib` | ❌ pending KISS-488 hardware |
 | NanoVNA-F (Deepelec) | 1.5-port VNA, 50 kHz–1.5 GHz, 4.3" LCD, S11+S21 only | USB CDC `/dev/ttyACM1` | `rf_bench.nanovna.NanoVNA` | ✅ tested 2026-06-30 |
-| Solartron 7151 | 6.5-digit DMM, IEEE-488 | 10.1.1.70:1234 (KISS-488 GPIB) | `rf_bench.solartron.Solartron7151` | ❌ pending KISS-488 |
+| Solartron 7151 | 6.5-digit DMM, IEEE-488 | 10.1.1.70:23 (KISS-488 GPIB, addr 22) | `rf_bench.solartron.Solartron7151` via `rf_bench.gpib` | ❌ pending KISS-488 hardware |
 | XL9535 relay board | I2C 16-port expander → relays | via Bus Pirate I2C | `rf_bench.relay.XL9535` | ❌ board ordered 2026-06-03 |
 | Arduino+W5100 4-ch network relay | Arduino Uno R3 + Vilros Ethernet R3 shield + 4-ch active-HIGH relay module | 10.1.1.36 TCP :5025 | `rf_bench.arduino_relay_board.ArduinoRelayBoard` | ✅ tested 2026-06-25 |
 | KiwiSDR | HF receiver 0–30 MHz, GPS-disciplined, 12 kS/s | host:8073 WebSocket | `rf_bench.kiwisdr.KiwiSDR` | 🧪 IP TBD |
-| SunSDR2 Pro | HF/6 m + 2 m, 192 kS/s IQ, RX+TX, dual TRX | ExpertSDR3 TCI :50001 | `rf_bench.sunsdr.SunSDR` | 🧪 IP TBD |
+| SunSDR2 Pro (via ExpertSDR3/TCI) | HF/6 m + 2 m, 192 kS/s IQ, RX + TX audio (TCI can't TX IQ), dual TRX | ExpertSDR3 TCI :50001 | `rf_bench.sunsdr.SunSDR` | 🧪 IP TBD |
+| SunSDR2 PRO (ExpertSDR3-free) | HF/6 m + 2 m, 39–312.5 kS/s IQ, RX + **TX IQ** (verified), dual coherent RX | raw UDP :50001/:50002; no ExpertSDR3 | **solsdr** (companion project — `solsdr.md`) | ✅ RX+TX HF-verified |
 
-**KISS-488 conflict to resolve when GPIB comes online:** the HP 8712B and the
-Solartron 7151 both default to GPIB primary address 16. They cannot share the
-adapter at the same address. Move one of them at the rear-panel switches
-before powering both on.
+**KISS-488 address map (decided 2026-08-03):** the HP 8712B and the Solartron
+7151 both ship at GPIB primary address 16 and cannot share the bus that way.
+**HP 8712B stays at 16; the Solartron 7151 moves to 22** (rear-panel DIP
+switches — the change takes effect only after a power-on reset). The drivers
+already default to these values.
+
+Note also that KISS-488 answers at **four GPIB addresses of its own** (Control
+page, Capture/plotter, Telnet, +1), so the map must dodge those too. The Rev 2
+firmware's "Search for Instrument" function moves the KISS-488 addresses clear
+automatically.
 
 ---
 
@@ -476,21 +483,35 @@ under those projects. All driven via SPI through the Bus Pirate.
 
 ---
 
-### GPIB instruments (pending KISS-488)
+### GPIB instruments (pending KISS-488 hardware)
 
 The KISS-488 Rev 2 Ethernet-GPIB adapter is the bridge — until it's
 installed, both instruments below are inert. They share the same TCP
-endpoint (`10.1.1.70:1234`) once it is.
+endpoint (`10.1.1.70:23` — Telnet, **not** the Prologix port 1234) once it is,
+reached through `rf_bench.gpib.KISS488`, which owns the single socket and
+serialises the two instruments' transactions.
+
+Adapter facts that matter (User Guide Rev 2.13, cached at
+the vendor manual cached locally under `docs/`): only two Telnet sessions exist and an
+unclean disconnect wedges one until power-cycle; `++addr` is adapter-global;
+there is no `++spoll`; `++read_tmo_ms` caps at 3000 ms; `++rst` is deliberately
+unimplemented. Full write-up: local design notes in `docs/kiss-488-driver.md` (not published).
 
 #### HP 8712B VNA
 
 - **Specs:** 300 kHz – 1.3 GHz, 2-port, full SOLT calibration, complex
   S11/S12/S21/S22.
-- **Default GPIB primary address:** 16.
+- **GPIB primary address:** 16 (factory default; kept).
 - **Driver:** `rf_bench.hp.HP8712B`, status ❌ — code complete from
-  documentation, untested. Several SCPI commands flagged "Verify against
-  HP 8712B manual" — particularly `:CALC:PAR:MOD`, `:SENS:S11:STAT`,
-  `:TRIG:SOUR`, `:SOUR:POW`, `:SENS:CORR:STAT?`. Not yet published.
+  documentation, never run against hardware. Takes a `rf_bench.gpib` device
+  handle; `HP8712B(host=...)` still works and joins the shared adapter.
+  Several SCPI commands flagged "Verify against HP 8712B manual" —
+  particularly `:CALC:PAR:MOD`, `:SENS:S11:STAT`, `:TRIG:SOUR`, `:SOUR:POW`,
+  `:SENS:CORR:STAT?`. A KISS-488 Spy-mode capture of a front-panel-driven
+  session is the quickest way to settle them. Not yet published.
+- **Sweep timing caveat:** `*OPC?` after a full sweep can exceed the adapter's
+  3000 ms `++read_tmo_ms` ceiling. Set the KISS-488 web UI's Timeout String to
+  a *null string* so the instrument gets unbounded time to begin its reply.
 
 #### Solartron 7151 6.5-digit DMM (1985)
 
@@ -507,16 +528,26 @@ endpoint (`10.1.1.70:1234`) once it is.
   | 1.6 s (I5) | 5.5 digits | Filter-on, low-noise |
   | ~8 s (I4) | 6.5 digits | "Walking window", best resolution |
 
-- **Default GPIB primary address:** 16 (rear-panel DIP switches).
+- **GPIB primary address:** **22** on this bench (rear-panel DIP switches;
+  factory default 16 collides with the HP 8712B). Takes effect only after a
+  power-on reset.
 - **Driver:** `rf_bench.solartron.Solartron7151`, status ❌ — code
-  complete, untested. Predates SCPI; uses single-letter ASCII commands
-  (M, R, N, T, …) extracted from User Manual ND/7151/2 Issue 2 (1985)
-  and the open-source `s7150.c` reference driver. Several uncertainties
-  flagged in the README:
+  complete, never run against hardware. Predates SCPI; uses single-letter
+  ASCII commands (M, R, N, T, …) extracted from User Manual ND/7151/2 Issue 2
+  (1985) and the open-source `s7150.c` reference driver. Now exposes the same
+  `measure_vdc/vac/idc/iac/resistance` surface as `rf_bench.siglent.SDM3000X`,
+  so `projects/dmm/*` can take a `--dmm` flag and
+  `rf_bench.fluke.Fluke80i400(dmm=...)` accepts it. Remaining uncertainties:
   - DIODE mode (M5) — present in `s7150.c` but not in the OCR'd 7151
     manual; may be 7150/7150+ only.
-  - `++spoll` Prologix response format assumed decimal integer.
+  - Whether the resistance mantissa is scaled in kΩ or Ω. `measure_resistance()`
+    refuses to guess: it reads the unit token out of a LITERALS-ON reading and
+    raises if literals are off.
   - Reading-string whitespace pattern designed against an OCR example.
+- **Serial poll is gone.** An earlier driver revision used `++spoll`; KISS-488
+  has no such command, so `serial_poll()` now raises `NotImplementedError` and
+  `wait_for_reading()` polls on the host instead. SRQ-driven waiting is simply
+  not available through this adapter.
 
 **Calibration commands** (`HI`/`LO`/`WRITE`/`REFRESH`) are gated behind a
 2.5 mm CAL shorting plug; the driver exposes them but they're a maintenance

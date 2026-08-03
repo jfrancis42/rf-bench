@@ -606,18 +606,18 @@ Examples:
 
     try:
         # Connect PSU
-        print(f"\nConnecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+        print(f"\nConnecting to SPD3303X via inventory ...", end=" ", flush=True)
         psu = connect(args.spd_host or 'spd')
         print(f"OK  ({psu.identify().strip()})")
         psu.disable_all()
 
         # Connect DMM
-        print(f"Connecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+        print(f"Connecting to SDM3045X via inventory ...", end=" ", flush=True)
         dmm = connect(args.dmm_host or 'sdm')
         print(f"OK  ({dmm.identify().strip()})")
 
         # Connect ET5406A+ load
-        print(f"Connecting to ET5406A+ via inventory'} ...", end=" ", flush=True)
+        print(f"Connecting to ET5406A+ via inventory ...", end=" ", flush=True)
         try:
             load = _connect_load(args.load_port)
             load.off()
@@ -629,7 +629,7 @@ Examples:
 
         # Connect scope for ripple/transient
         if do_scope_tests:
-            print(f"Connecting to SDS2504X Plus via inventory'} ...", end=" ", flush=True)
+            print(f"Connecting to SDS2504X Plus via inventory ...", end=" ", flush=True)
             try:
                 scope = connect(args.scope_host or 'sds')
                 print(f"OK  ({scope.identify().strip()})")

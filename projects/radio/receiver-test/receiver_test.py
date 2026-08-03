@@ -38,9 +38,9 @@ from rf_bench.siglent import SDG1000X, SDS2000X, DBM_MIN as SDG_DBM_MIN, DBM_MAX
 from rf_bench.icom    import IC7300                                                               # noqa: E402
 from rf_bench.yaesu   import FT891                                                                # noqa: E402
 from rf_bench.utils   import (                                                                    # noqa: E402
-from rf_bench import connect
     noise_figure_from_mds, thermal_noise_floor, ip3_from_imd,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults — edit these to match your bench

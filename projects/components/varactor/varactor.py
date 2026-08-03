@@ -44,10 +44,10 @@ import numpy as np
 
 from rf_bench.siglent import SPD3303X, SDG1000X, SDS2000X        # noqa: E402
 from rf_bench.utils import (                                       # noqa: E402
-from rf_bench import connect
     complex_impedance_series, format_freq, format_freq_short,
     dbm_to_vpp,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -447,15 +447,15 @@ Examples:
     # Connect instruments
     psu = sdg = scope = None
     try:
-        print(f"Connecting to SPD3303X via inventory'} ...")
+        print(f"Connecting to SPD3303X via inventory ...")
         psu = connect(args.psu or 'spd')
         print(f"  {psu.identify()}")
 
-        print(f"Connecting to SDG1000X via inventory'} ...")
+        print(f"Connecting to SDG1000X via inventory ...")
         sdg = connect(args.sdg or 'sdg')
         print(f"  {sdg.identify()}")
 
-        print(f"Connecting to SDS2000X via inventory'} ...")
+        print(f"Connecting to SDS2000X via inventory ...")
         scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
 

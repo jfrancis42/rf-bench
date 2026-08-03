@@ -690,6 +690,46 @@ def process_file(args) -> None:
 # ║  STREAMING (microphone → real-time processing → stdout or file)             ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
+def start_ptt_watcher(device):
+    """Start a background thread watching the handset PTT button.
+
+    Returns a callable state() -> bool that reports whether the button is
+    currently held. Runs the blocking hidraw read on a daemon thread so
+    the main modulation loop is never stalled waiting on the button.
+
+    On any failure (module missing, no handset, no permission) this returns
+    None and the caller should fall back to always-on behavior.
+    """
+    import threading
+    # ptt.py lives beside this script.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import ptt
+    except ImportError:
+        print("  [ptt] ptt.py not found — PTT gating disabled", file=sys.stderr)
+        return None
+
+    path = device or ptt.find_hidraw()
+    if not path:
+        print("  [ptt] no handset HID node found — PTT gating disabled",
+              file=sys.stderr)
+        return None
+
+    held = [False]  # shared flag, single-writer (watcher thread)
+
+    def _run():
+        try:
+            ptt.watch_ptt(lambda pressed: held.__setitem__(0, pressed),
+                          device=path)
+        except Exception as e:  # noqa: BLE001 — thread must never crash caller
+            print(f"  [ptt] watcher stopped: {e}", file=sys.stderr)
+
+    threading.Thread(target=_run, daemon=True).start()
+    print(f"  PTT gating: ON (button on {path}) — audio only while held",
+          file=sys.stderr)
+    return lambda: held[0]
+
+
 def process_stream(args) -> None:
     """Stream from microphone: capture audio blocks, modulate, output."""
     import sounddevice as sd
@@ -730,7 +770,19 @@ def process_stream(args) -> None:
         stop[0] = True
     signal.signal(signal.SIGINT, sigint_handler)
 
+    # Resolve the requested input device (None = system default)
+    mic_device = parse_device(args.device)
+
+    # Optional PTT gating: only pass audio while the handset button is held.
+    # ptt_state() returns True/False; None means gating disabled (always on).
+    ptt_state = None
+    if args.ptt:
+        ptt_state = start_ptt_watcher(args.ptt_device)
+
     print(f"Streaming from microphone ({INTERNAL_RATE} Hz)", file=sys.stderr)
+    if mic_device is not None:
+        print(f"  Mic device: {mic_device} "
+              f"({sd.query_devices(mic_device)['name']})", file=sys.stderr)
     print(f"  Mode: {args.mode.upper()}", file=sys.stderr)
     print(f"  Output rate: {args.rate} Hz IQ", file=sys.stderr)
     print(f"  Block size: {args.block_size} IQ samples ({args.block_size/args.rate*1000:.0f} ms)",
@@ -745,6 +797,7 @@ def process_stream(args) -> None:
         # channels=1 for mono microphone input.
         with sd.InputStream(samplerate=INTERNAL_RATE, channels=1,
                             blocksize=internal_block,
+                            device=mic_device,
                             dtype="float32") as stream:
             while not stop[0]:
                 # Read one block from microphone.
@@ -755,6 +808,14 @@ def process_stream(args) -> None:
 
                 # Flatten from (N, 1) to (N,) — mono
                 audio_block = audio_block[:, 0]
+
+                # --- PTT gate ---
+                # When PTT is required and the button is not held, mute the
+                # audio to silence rather than stalling the pipe. This keeps
+                # IQ flowing at the correct rate (like an unmodulated carrier),
+                # so downstream demod/speaker timing stays intact.
+                if ptt_state is not None and not ptt_state():
+                    audio_block = np.zeros_like(audio_block)
 
                 # --- Bandpass filter ---
                 if bp_taps is not None:
@@ -805,6 +866,37 @@ def process_stream(args) -> None:
 # ║  COMMAND-LINE INTERFACE                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
+class ListDevicesAction(argparse.Action):
+    """Print the sounddevice audio-device table and exit.
+
+    Implemented as a custom action (like --help) so it fires during
+    argument parsing, before argparse enforces the otherwise-required
+    --mode / input-source arguments. That lets `--list-devices` run on
+    its own.
+    """
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        import sounddevice as sd
+        print(sd.query_devices())
+        parser.exit()
+
+
+def parse_device(spec):
+    """Resolve a --device argument to what sounddevice expects.
+
+    Accepts either an integer index (e.g. "3") or a name substring
+    (e.g. "Handset"). Returns None to mean "use the default device".
+    """
+    if spec is None:
+        return None
+    try:
+        return int(spec)
+    except ValueError:
+        return spec
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="IQ Modulator — convert audio to baseband IQ samples.",
@@ -827,7 +919,22 @@ examples:
     input_group.add_argument("--input", type=str,
                             help="Input audio file (WAV, MP3, OGG, FLAC)")
     input_group.add_argument("--mic", action="store_true",
-                            help="Use default microphone (48 kHz)")
+                            help="Capture from a microphone (48 kHz)")
+
+    # Audio device selection (mic mode)
+    parser.add_argument("--device", type=str, default=None,
+                        help="Input (mic) device: index or name substring "
+                             "(see --list-devices; default: system default)")
+    parser.add_argument("--list-devices", action=ListDevicesAction,
+                        help="List available audio devices and exit")
+
+    # PTT (push-to-talk) gating — off by default (audio always flows)
+    parser.add_argument("--ptt", action="store_true",
+                        help="Require holding the handset PTT button to pass "
+                             "audio (default: audio always on)")
+    parser.add_argument("--ptt-device", type=str, default=None,
+                        help="hidraw node for the PTT button "
+                             "(default: auto-detect the H-250 handset)")
 
     # Output destination
     parser.add_argument("--output", type=str, default=None,

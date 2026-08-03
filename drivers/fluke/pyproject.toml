@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rf-bench-drivers-fluke"
+version = "0.1.0"
+description = "Fluke current-clamp accessories — 80i-400 AC current probe (1 mA/A passive CT), read via any bench DMM's mA input"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
+requires-python = ">=3.9"
+dependencies = []
+keywords = [
+    "fluke", "80i-400", "current-clamp", "current-probe", "ac-current",
+    "current-transformer", "clamp-meter", "dmm-accessory",
+    "bench-automation", "amateur-radio",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+
+[project.urls]
+Homepage   = "https://github.com/jfrancis42/rf-bench"
+Repository = "https://github.com/jfrancis42/rf-bench"
+
+[tool.setuptools.packages.find]
+where      = ["."]
+include    = ["rf_bench.*"]
+namespaces = true

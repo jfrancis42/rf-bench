@@ -34,10 +34,10 @@ import numpy as np
 
 from rf_bench.siglent import SSA3000X                     # noqa: E402
 from rf_bench.utils import (                               # noqa: E402
-from rf_bench import connect
     format_freq, format_freq_short, thermal_noise_floor,
     cascaded_noise_figure,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -597,7 +597,7 @@ Examples:
 
     ssa = None
     try:
-        print(f"Connecting to SSA via inventory'} ...")
+        print(f"Connecting to SSA via inventory ...")
         ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 

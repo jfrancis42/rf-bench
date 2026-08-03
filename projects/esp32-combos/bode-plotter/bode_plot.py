@@ -56,10 +56,10 @@ import numpy as np
 
 from rf_bench.siglent import SDG1000X, SDS2000X
 from rf_bench.utils import (
-from rf_bench import connect
     gain_phase_from_fft, format_freq, format_freq_short,
     dbm_to_vpp, vpp_to_dbm,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults

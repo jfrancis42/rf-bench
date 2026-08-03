@@ -56,10 +56,10 @@ import numpy as np
 
 from rf_bench.siglent import SDG1000X, SDS2000X                 # noqa: E402
 from rf_bench.utils import (                                      # noqa: E402
-from rf_bench import connect
     complex_impedance_series,
     format_freq, format_freq_short, dbm_to_vpp, vpp_to_dbm,
 )
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults

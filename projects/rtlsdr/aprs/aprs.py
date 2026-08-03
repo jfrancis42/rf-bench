@@ -44,6 +44,7 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 from rf_bench.rtlsdr import RTLSDR, RTLSDRError
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -303,7 +304,6 @@ def start_rigctld(device_or_ip: str, port: int) -> subprocess.Popen:
 def configure_ic9700(freq_hz: int, rigctld_port: int) -> None:
     """Connect to rigctld and set IC-9700 to FM on the given frequency."""
     from rf_bench.icom import IC9700
-from rf_bench import connect
     with IC9700(port=rigctld_port) as rig:
         rig.set_frequency(freq_hz)
         rig.set_mode("fm")

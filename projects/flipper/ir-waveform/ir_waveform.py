@@ -275,11 +275,11 @@ Examples:
         args.output = f"ir_waveform_{ts}"
 
     try:
-        print(f"Connecting to Flipper via inventory'} ...")
+        print(f"Connecting to Flipper via inventory ...")
         fz = FlipperZero(args.serial)
         print(f"  {fz.identify()}")
 
-        print(f"Connecting to scope via inventory'} ...")
+        print(f"Connecting to scope via inventory ...")
         scope = connect(args.scope or 'sds')
         print(f"  {scope.identify()}")
 

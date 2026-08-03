@@ -10,6 +10,7 @@ Automation projects for the **XL9535 I2C relay board** controlled via
 
 | Project | What it does |
 |---------|-------------|
+| [`mqtt-relay/`](mqtt-relay/) | MQTT-controlled relay switching — subscribes to 4 topics, controls Arduino relay board over network |
 | [`multidut/`](multidut/) | Step through up to 16 DUT sockets automatically; measure each with SDM or rf-impedance |
 | [`solt/`](solt/) | Automated SOLT calibration for HP 8712B VNA — relay-switches OPEN/SHORT/LOAD/THRU |
 | [`filterbank/`](filterbank/) | Band-switched LPF/BPF selector; auto-selects filter by frequency for transmitter-test |

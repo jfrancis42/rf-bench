@@ -259,6 +259,59 @@ which has an archived working proxy at
 | `vhf-monitor/` | 100–150 MHz wideband activity monitor (TRX 1). |
 | `vhf-tx-test/` | IC-9700 TX → SunSDR TRX 1 wideband measurement. |
 
+### drivers/mqtt/ — MQTT Infrastructure
+
+The publish/subscribe bus for the entire rf-bench ecosystem. Built 2026-07-02.
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| `rf_bench.mqtt.MQTTClient` | ✅ | paho-mqtt wrapper: JSON envelope, retained messages, LWT, auto-reconnect |
+| `rf_bench.mqtt.Bridge` | ✅ | Base class: poll loop, `/set` command routing, `$online` LWT, graceful shutdown, CLI args |
+| `bridges/bridge_psu.py` | ✅ | SPD3303X-E (V/I/P per channel, output state) |
+| `bridges/bridge_dmm.py` | ✅ | SDM3045X (measurement, function, range) |
+| `bridges/bridge_sdg.py` | ✅ | SDG1062X (frequency, amplitude, output) |
+| `bridges/bridge_ssa.py` | ✅ | SSA3032X Plus (markers, peak, span) |
+| `bridges/bridge_scope.py` | ✅ | SDS2504X Plus (Vpp, trigger rate) |
+| `bridges/bridge_load.py` | ✅ | ET5406A+ (V/I/P/R, mode, protection) |
+| `bridges/bridge_ic7300.py` | ✅ | IC-7300 (frequency, mode, S-meter) |
+| `bridges/bridge_ic9700.py` | ✅ | IC-9700 (frequency, mode, S-meter, VFO) |
+| `bridges/bridge_ft891.py` | ✅ | FT-891 (frequency, mode, S-meter) |
+| `bridges/bridge_kestrel.py` | ✅ | Kestrel 5500L (all sensors + derived values) |
+| `bridges/bridge_gps.py` | ✅ | gpsd (position, speed, heading, fix quality) |
+| `bridges/bridge_mhs5225.py` | ✅ | MHS-5225A (frequency, counter) |
+| `bridges/bridge_rtlsdr.py` | ✅ | RTL-SDR (center freq, peak power) |
+| `bridges/bridge_nanovna.py` | ✅ | NanoVNA-F (S11, VSWR) |
+| `bridges/bridge_relay.py` | ✅ | Arduino relay board (channel states, /set) |
+| `bridges/bridge_shuttlexpress.py` | ✅ | ShuttleXpress (jog, shuttle, buttons) |
+| `bridges/bridge_buspirate.py` | ✅ | Bus Pirate (mode, voltage) |
+| `bridges/bridge_flipper.py` | ✅ | Flipper Zero (Sub-GHz, connected state) |
+| `bridges/bridge_kiwisdr.py` | ✅ | KiwiSDR (frequency, mode, S-meter) |
+| `bridges/bridge_sunsdr.py` | ✅ | SunSDR2 Pro (TRX state, frequency, mode) |
+| `bridges/bridge_hp8712b.py` | ❌ | HP 8712B (HW pending) |
+| `bridges/bridge_solartron.py` | ❌ | Solartron 7151 (HW pending) |
+| `bridges/bridge_xl9535.py` | ❌ | XL9535 relay (HW pending) |
+| `subscribers/timeseries_logger.py` | ✅ | Logs all `bench/#` to SQLite with timestamps |
+| `subscribers/alert_daemon.py` | ✅ | YAML threshold rules → SMS (via voipms) or log |
+
+**Broker infrastructure (Ansible-managed, `~/skynet/ansible/configure.yml` tag `[mqtt]`):**
+- Internal broker: 10.1.0.20:1883, Mosquitto, `allow_anonymous true`
+- Public broker: us.n0gq.org:1883 (mqtt.n0gq.org), password auth
+- Bidirectional Mosquitto bridge over WireGuard (`topic # both 0`)
+- fail2ban jail for failed MQTT auth (port 1883 only, pyinotify backend)
+
+---
+
+### projects/relay
+
+| Project | Status | What it does |
+|---------|--------|-------------|
+| `mqtt-relay/` | ✅ | MQTT-controlled relay switching — subscribes to `/test/switch/{one,two,three,four}`, controls 4 relays on Arduino relay board (10.1.1.36) via `rf_bench.arduino_relay_board`. Supports bare values and JSON envelope. |
+
+XL9535 I2C relay projects (multidut, solt, filterbank, router, normalize) are
+complete but awaiting hardware — see `projects/relay/README.md`.
+
+---
+
 ### hardware/
 
 Standalone embedded hardware projects that aren't part of the ESP32 SCPI

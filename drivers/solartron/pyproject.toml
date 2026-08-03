@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 authors = [{ name = "Jeff Francis", email = "gjfrancis@protonmail.com" }]
 requires-python = ">=3.9"
-dependencies = []
+dependencies = ["rf-bench-drivers-gpib>=0.1.0"]
 keywords = ["solartron", "7151", "7150", "dmm", "multimeter", "gpib", "bench-automation", "test-equipment"]
 classifiers = [
     "Development Status :: 3 - Alpha",

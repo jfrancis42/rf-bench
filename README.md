@@ -164,9 +164,10 @@ physics, not by the price of the box.
 > | `rf-bench-drivers-flipper` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-flipper)](https://pypi.org/project/rf-bench-drivers-flipper/) | 🔶 | Flipper Zero Sub-GHz/IR/RFID/NFC — OOK+FSK TX/RX tested; IR/RFID untested |
 > | `rf-bench-drivers-rtlsdr` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-rtlsdr)](https://pypi.org/project/rf-bench-drivers-rtlsdr/) | 🔶 | RTL-SDR IQ capture, streaming, calibration — streaming tested; some edge cases remain |
 > | `rf-bench-drivers-gpsd` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-gpsd)](https://pypi.org/project/rf-bench-drivers-gpsd/) | ✅ | gpsd GPS client 0.1.1 — tested with u-blox receiver; lat/lon/alt/speed/heading/DOP |
-> | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
+> | `rf-bench-drivers-gpib` | not on PyPI | ❌ | GPIB bus transport — Hx Engineering KISS-488 Rev 2 adapter (Telnet :23 / USB serial), shared refcounted link, per-instrument device handles, Spy-mode analyzer decoder, KISS-488 emulator for hardware-free tests. Local 0.1.0; **never run against real hardware** |
+> | `rf-bench-drivers-hp` | not on PyPI | ❌ | HP 8712B VNA over `rf-bench-drivers-gpib` (KISS-488, GPIB addr 16) — local 0.1.0, awaiting hardware |
 > | `rf-bench-drivers-nanovna` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-nanovna)](https://pypi.org/project/rf-bench-drivers-nanovna/) | ✅ | NanoVNA-F / -H / -H4 — ASCII shell over USB CDC; tested against NanoVNA-F 2026-06-30; API-swappable with `rf-bench-drivers-hp` |
-> | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM via KISS-488 Ethernet-GPIB — local 0.1.0, awaiting hardware |
+> | `rf-bench-drivers-solartron` | not on PyPI | ❌ | Solartron 7151 6.5-digit DMM over `rf-bench-drivers-gpib` (KISS-488, GPIB addr 22); SDM3000X-compatible `measure_*()` surface — local 0.1.0, awaiting hardware |
 > | `rf-bench-drivers-koolertron` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-koolertron)](https://pypi.org/project/rf-bench-drivers-koolertron/) | ✅ | MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand) — tested 2026-06-08 against MHS-5225A; 0.2.0 adds arbitrary-waveform upload |
 > | `rf-bench-drivers-arduino-relay-board` | [![PyPI](https://img.shields.io/pypi/v/rf-bench-drivers-arduino-relay-board)](https://pypi.org/project/rf-bench-drivers-arduino-relay-board/) | ✅ | Arduino + W5100/W5500 4-channel Ethernet relay board, TCP :5025 — tested 2026-06-25 against 10.1.1.36 |
 > | `rf-bench-drivers-shuttlexpress` | not on PyPI | ✅ | Contour Design ShuttleXpress USB jog/shuttle controller — evdev, Linux-only, tested 2026-07-01 |
@@ -182,7 +183,8 @@ physics, not by the price of the box.
 > | `rtlsdr/recorder` | 🧪 | SigMF IQ recorder — basic operation tested |
 > | `rtlsdr/wxsat` | ❌ | Weather satellite pass prediction + decode — untested end-to-end |
 > | `flipper/*` | ❌ | Sub-GHz library, IR, RFID, sensor-hub etc. — minimally tested |
-> | `relay/*` | ❌ | XL9535 relay board projects — hardware ordered, not yet arrived |
+> | `relay/mqtt-relay` | ✅ | MQTT-controlled relay switching — 4 topics → 4 relays on Arduino board |
+> | `relay/*` (XL9535) | ❌ | XL9535 relay board projects — hardware ordered, not yet arrived |
 > | `radio/receiver-test` | 🧪 | HF MDS, NF, IP3 — code complete; limited hardware testing |
 > | `radio/transmitter-test` | 🧪 | TX power, harmonics, ALC — code complete; limited hardware testing |
 > | `radio/beacon-logger` | ❌ | IC-9700 VHF/UHF beacon logger — code complete, untested |
@@ -420,11 +422,56 @@ with MHS5200A() as gen:
     gen.output_off()
 ```
 
+### GPIB bus (`rf_bench.gpib`) ⚠️ UNTESTED AGAINST HARDWARE
+
+| Class | Role | Tested with | Protocol |
+|-------|------|-------------|---------|
+| `KISS488` | Hx Engineering KISS-488 Rev 2 Ethernet/USB GPIB adapter | none yet — adapter ordered, not on the bench | Prologix-*subset* command set over Telnet TCP **port 23**, or USB serial 115200 8N1 |
+| `GPIBDevice` | One instrument at one GPIB primary address | — | — |
+
+`rf_bench.gpib` is the **bus**, not an instrument. Every GPIB driver
+(`rf_bench.hp`, `rf_bench.solartron`) takes a device handle from it and never
+touches sockets or `++` commands.
+
+```python
+from rf_bench.gpib import KISS488
+from rf_bench.hp import HP8712B
+from rf_bench.solartron import Solartron7151
+
+gpib = KISS488.shared("10.1.1.70")     # ONE socket, refcounted
+vna  = HP8712B(gpib.device(16))
+dmm  = Solartron7151(gpib.device(22))
+```
+
+GPIB is the first link in this collection where several instruments share one
+physical connection and the adapter carries global mutable state, so the shared
+adapter is a correctness requirement rather than a convenience: the KISS-488
+permits only **two Telnet sessions** (and wedges one permanently if a client
+drops without `++quit`), and `++addr` is a single adapter-global setting, so
+address selection has to happen inside a locked transaction or two instruments
+will interleave and you will read one meter's reply into the other's buffer.
+
+Adapter limitations, surfaced as `NotImplementedError` rather than silent
+degradation: there is **no `++spoll`** (no GPIB serial poll, therefore no
+SRQ-driven waiting — poll host-side instead), and `++rst` is deliberately
+unimplemented. `++read_tmo_ms` caps at 3000 ms, so operations longer than that
+need the adapter's web-UI Timeout String set to a *null string*.
+
+`++spy` turns the adapter into a bus analyzer that also sees traffic from other
+controllers; `rf_bench.gpib.spy` decodes both its ASCII and hex wire formats.
+
+**Status.** Written entirely against the KISS-488 Rev 2 User Guide revision 2.13
+and verified only against `rf_bench.gpib.testing`, an in-process protocol
+emulator (154 tests). **No line of it has touched real hardware.** The emulator
+proves the plumbing, not the instruments — it cannot confirm that any particular
+SCPI mnemonic is one an HP 8712B accepts. Items awaiting a real adapter are
+marked `VERIFY-ON-HARDWARE` in the source.
+
 ### Solartron (`rf_bench.solartron`) ⚠️ UNTESTED
 
 | Class | Instrument family | Tested with | Protocol |
 |-------|------------------|-------------|---------|
-| `Solartron7151` | Solartron 7151 6.5-digit Computing Multimeter (1985) | none yet — awaiting KISS-488 + Solartron 7151 | IEEE-488 / KISS-488 Ethernet-GPIB / TCP port 1234 |
+| `Solartron7151` | Solartron 7151 6.5-digit Computing Multimeter (1985) | none yet — awaiting KISS-488 + Solartron 7151 | IEEE-488 via `rf_bench.gpib` / KISS-488 Rev 2 / TCP port 23, GPIB addr 22 |
 
 The Solartron 7151 (and its 7150/7150-plus siblings) speaks a 1985-era
 device-specific ASCII command language — single ASCII letters with optional
@@ -447,7 +494,7 @@ with Solartron7151("10.1.1.70") as dmm:
 
 | Class | Instrument family | Tested with | Protocol |
 |-------|------------------|-------------|---------|
-| `HP8712B` | HP 8712B Vector Network Analyzer (300 kHz–1.3 GHz) | none yet — awaiting KISS-488 + HP 8712B | IEEE-488 / KISS-488 Ethernet-GPIB / TCP port 1234 |
+| `HP8712B` | HP 8712B Vector Network Analyzer (300 kHz–1.3 GHz) | none yet — awaiting KISS-488 + HP 8712B | IEEE-488 via `rf_bench.gpib` / KISS-488 Rev 2 / TCP port 23, GPIB addr 16 |
 
 ### NanoVNA (`rf_bench.nanovna`) ✅ TESTED
 
@@ -568,6 +615,37 @@ asyncio.run(main())
 RF refractivity is directly relevant to VHF/UHF propagation prediction —
 values above 350 N-units indicate potential tropospheric ducting.
 
+### MQTT Infrastructure (`rf_bench.mqtt`)
+
+| Class | What it provides | Protocol |
+|-------|-----------------|---------|
+| `MQTTClient` | Pub/sub client with JSON envelope, retained messages, LWT | MQTT 3.1.1 (paho-mqtt) |
+| `Bridge` | Base class for instrument bridge daemons | MQTT + instrument driver |
+
+Publish/subscribe bus for the entire rf-bench instrument ecosystem. Every
+instrument gets a thin bridge daemon that publishes measurements and subscribes
+to commands over MQTT with a consistent topic schema and JSON envelope.
+
+**Dual-broker topology:**
+- Internal broker (`10.1.0.20:1883`) — no auth, LAN only, all bridges connect here
+- Public broker (`us.n0gq.org:1883` / `mqtt.n0gq.org`) — password auth, internet-facing
+- Bidirectional Mosquitto bridge over WireGuard syncs all messages between both
+
+```python
+from rf_bench.mqtt import MQTTClient
+
+mqtt = MQTTClient(client_id="my-script")
+mqtt.connect()
+mqtt.publish("/bench/psu/ch1/voltage", 13.82)
+mqtt.subscribe("/bench/psu/ch1/voltage", lambda topic, data: print(data["value"]))
+```
+
+**26 bridge daemons** cover all bench instruments (Siglent, Icom, Yaesu, Kestrel,
+GPS, relay, RTL-SDR, NanoVNA, ShuttleXpress, KiwiSDR, SunSDR, etc.).
+**2 subscribers:** time-series logger (SQLite) and alert daemon (threshold → SMS).
+
+Infrastructure managed by Ansible (`~/skynet/ansible/configure.yml`, tag `[mqtt]`).
+
 ### Soundcard (`projects/soundcard/`)
 
 | Framework | What it provides | Protocol |
@@ -629,6 +707,7 @@ pip install rf-bench-drivers-yertai    # Yertai ET5406A+ DC load
 pip install rf-bench-drivers-gpsd      # gpsd GPS client
 pip install rf-bench-drivers-koolertron  # MHinstek MHS-5200A series DDS gen + counter (KKmoon rebrand)
 pip install rf-bench-drivers-nanovna     # NanoVNA family (USB CDC, ASCII shell) — API-swappable with rf-bench-drivers-hp
+pip install rf-bench-drivers-gpib        # GPIB bus transport (KISS-488 Rev 2) — required by -hp and -solartron
 pip install rf-bench-drivers-arduino-relay-board  # Arduino + W5100/W5500 4-ch Ethernet relay board
 pip install rf-bench-drivers-shuttlexpress       # Contour Design ShuttleXpress jog/shuttle (Linux only)
 pip install rf-bench-drivers-kestrel             # Kestrel 5500L BLE weather meter (Linux only)
@@ -1270,6 +1349,22 @@ Requires `rf-bench-drivers-gpsd` and a running `gpsd` daemon.
 |--------|--------|-------------|---------|
 | `radio/coverage/coverage.py` | IC-7300, IC-9700, FT-891 | Optional (`--gps`) | S-meter vs GPS position; CSV + GPX coverage map |
 | `radio/doppler/doppler.py` | IC-7300, IC-9700, FT-891 | Required | Real-time Doppler VFO correction from GPS velocity |
+
+### solsdr direction finding (`projects/solsdr/df/`)
+
+HF direction finding on the SunSDR2 PRO's two phase-coherent receivers (via the
+**solsdr** project). Phase 0 measured on hardware — γ²≈1.0, phase-noise floor
+**~0.1°**; the full bearing pipeline (calibration + geometry + engine) is built
+and validated offline against a two-channel simulator. **Awaiting two antennas
+for the first live bearings** — see `projects/solsdr/df/README.md` "▶ RESUME
+HERE". HF DF is genuinely hard (skywave); best on strong groundwave signals.
+
+| Script | Purpose |
+|--------|---------|
+| `df.py` | Phase 0 live cross-phase monitor (radio host, sample-aligned dual-RX) |
+| `phasecal.py` | Inter-channel phase-vs-frequency calibration characterization |
+| `bearing.py` + `geometry.py` | Δφ→bearing engine (calibration, ambiguity, 360° dual-baseline) |
+| `simulate.py` + `df_offline.py` + `test_df.py` | Offline pipeline: simulate a known bearing → recover it (no hardware) |
 
 ---
 
@@ -2511,7 +2606,7 @@ physically reversing the DUT.
 Provides `rf_bench.hp.HP8712B` — the foundation for all HP 8712B projects.
 
 **Requires:** KISS-488 Rev 2 adapter (HX Engineering) at a static IP on the bench LAN.
-HP 8712B GPIB address: 16 (default). KISS-488 TCP port: 1234.
+HP 8712B GPIB address: 16. KISS-488 TCP port: 23 (Telnet, not the Prologix port 1234).
 
 ---
 
@@ -2526,9 +2621,11 @@ set (MODE, RANGE, NINES, TRACK, TRIG, DELIMIT, LITERALS, DRIFT, NULL, SRQ, LOCK,
 STATUS, CALIBRATE/HI/LO/WRITE/REFRESH) extracted from the User Manual ND/7151/2 and
 the JoergCH/s7150 reference C driver. Untested against hardware.
 
-**Requires:** KISS-488 Rev 2 adapter (HX Engineering). Solartron 7151 GPIB address
-(rear-panel DIP switches): driver default 16. KISS-488 TCP port: 1234. The 7151
-must not share an address with the HP 8712B on the same bus.
+**Requires:** KISS-488 Rev 2 adapter (HX Engineering), driven through
+`rf_bench.gpib.KISS488`. Solartron 7151 GPIB address (rear-panel DIP switches):
+**22** — the factory default 16 collides with the HP 8712B on the shared bus, and
+the change takes effect only after a power-on reset. KISS-488 TCP port: **23**
+(Telnet, not the Prologix port 1234).
 
 ---
 

@@ -7,6 +7,7 @@ Usage:
     python convert_project.py <file.py> --dry-run
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -54,14 +55,36 @@ def convert_file(path: Path, dry_run: bool = False):
 
     print(f"\nConverting: {path}")
 
-    # 1. Add inventory import after last rf_bench import
+    # 1. Add inventory import after the last TOP-LEVEL rf_bench import.
+    #
+    # This used to scan backwards for any line starting with "from rf_bench."
+    # and insert unindented at i+1. That matched indented imports inside `try:`
+    # blocks and continuation lines inside `from rf_bench.utils import (`,
+    # producing an unindented line in an indented block or a line spliced into
+    # the middle of a parenthesised import. It corrupted 35 project scripts
+    # before it was caught (2026-08-03). Use the AST so the anchor is always a
+    # real top-level statement boundary.
     import_added = False
-    for i in range(len(lines) - 1, -1, -1):
-        if lines[i].strip().startswith('from rf_bench.'):
-            lines.insert(i + 1, 'from rf_bench import connect')
-            import_added = True
-            print("  ✓ Added inventory import")
-            break
+    try:
+        tree = ast.parse('\n'.join(lines), str(path))
+    except SyntaxError as e:
+        print(f"  ✗ SKIP: {path} does not parse ({e.msg} line {e.lineno})")
+        return
+
+    anchor = None
+    for node in tree.body:            # tree.body == top level only
+        if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('rf_bench'):
+            anchor = node.end_lineno
+    if anchor is None:
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                anchor = node.end_lineno
+    if anchor is not None:
+        lines.insert(anchor, 'from rf_bench import connect')
+        import_added = True
+        print(f"  ✓ Added inventory import after line {anchor}")
+    else:
+        print("  ✗ No top-level import to anchor to; import NOT added")
 
     # 2. Replace DEFAULT_*_HOST IP constants
     for i, line in enumerate(lines):
@@ -103,8 +126,13 @@ def convert_file(path: Path, dry_run: bool = False):
     # 4. Update print statements about connections
     for i, line in enumerate(lines):
         if 'Connecting to' in line and '@' in line:
-            # Change "@ IP" to "via inventory"
-            lines[i] = re.sub(r'@\s*\{[^}]+\}', "via inventory'}", line)
+            # Change "@ IP" to "via inventory".
+            #
+            # The replacement used to be "via inventory'}" — the regex already
+            # consumes the closing brace of {args.host}, so the extra '} was
+            # pure debris. It produced 61 unterminated f-strings across 34
+            # scripts before it was caught (2026-08-03).
+            lines[i] = re.sub(r'@\s*\{[^}]+\}', "via inventory", line)
             lines[i] = re.sub(r'@\s*[0-9.]+', "via inventory", lines[i])
 
     new_content = '\n'.join(lines)

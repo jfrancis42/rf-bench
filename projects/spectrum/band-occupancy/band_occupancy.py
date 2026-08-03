@@ -450,7 +450,7 @@ Examples:
     # -----------------------------------------------------------------------
     ssa = None
     try:
-        print(f"Connecting to SSA via inventory'} ...")
+        print(f"Connecting to SSA via inventory ...")
         ssa = connect(args.ssa or 'ssa')
         print(f"  {ssa.identify()}")
 

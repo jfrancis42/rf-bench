@@ -34,7 +34,7 @@ with HP8712B("10.1.1.70") as vna:
 ## Hardware
 
 - Instrument: HP 8712B (GPIB address 16 by default)
-- Adapter: KISS-488 Rev 2, TCP port 1234
+- Adapter: KISS-488 Rev 2, TCP port 23 (Telnet), via `rf_bench.gpib.KISS488`
 - Default host: 10.1.1.70
 
 ## License

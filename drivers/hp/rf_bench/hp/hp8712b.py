@@ -1,23 +1,37 @@
 """
 hp8712b.py — HP 8712B Vector Network Analyzer driver
 
-Controls the HP 8712B (300 kHz – 1.3 GHz, 2-port VNA) via a KISS-488 Rev 2
-Ethernet-GPIB adapter using a Prologix-compatible command set over TCP.
+Controls the HP 8712B (300 kHz – 1.3 GHz, 2-port VNA) over GPIB.
 
 Connection path:
-    Python TCP socket → KISS-488 (port 1234) → GPIB bus → HP 8712B
+    Python → rf_bench.gpib.KISS488 (TCP port 23) → GPIB bus → HP 8712B
 
-KISS-488 uses the Prologix protocol:
-    ++mode 1        controller mode
-    ++addr <n>      target GPIB address
-    ++auto 0        manual read (we issue ++read explicitly)
-    ++eoi 1         assert EOI at end of each write
+The driver is transport-agnostic: it talks to a
+:class:`rf_bench.gpib.GPIBDevice` (or anything exposing the same
+``write``/``read``/``query`` surface) and knows nothing about sockets,
+Prologix ``++`` commands, or which adapter is in use.  The adapter owns the
+link and serialises access, which is what lets the 8712B share one KISS-488
+with the Solartron 7151 without the two corrupting each other's transactions.
+
+Preferred construction::
+
+    from rf_bench.gpib import KISS488
+    gpib = KISS488.shared("10.1.1.70")
+    vna  = HP8712B(gpib.device(16))
+
+Backwards-compatible construction (used by every script under
+``projects/vna/``) opens or joins the shared adapter automatically::
+
+    vna = HP8712B("10.1.1.70")          # positional host
+    vna = HP8712B(host="10.1.1.70")     # keyword host
 
 HP 8712B SCPI notes:
     - Instrument uses 1990s HP BASIC SCPI; some mnemonics differ from
       modern SCPI or the HP 8714C/8753 series.  Commands marked
       "# Verify against HP 8712B manual" should be confirmed against
       the HP 8712B Network Analyzer Programmer's Guide before production use.
+      A KISS-488 Spy-mode capture of a front-panel-driven session is the
+      quickest way to settle them — see rf_bench.gpib.spy.
     - SDAT (raw S-data) returns ASCII space-separated real,imag pairs,
       one pair per point: "r0 i0 r1 i1 ... rN iN"
     - FDAT (formatted data) returns ASCII comma-separated floats,
@@ -26,14 +40,14 @@ HP 8712B SCPI notes:
 
 Model: HP 8712B (300 kHz – 1.3 GHz)
 Default GPIB address: 16
-Default KISS-488 host: 10.1.1.70, port 1234
+Default KISS-488 host: 10.1.1.70, TCP port 23
 """
 
-import socket
-import time
 from typing import Optional
 
 import numpy as np
+
+from rf_bench.gpib import DEFAULT_TELNET_PORT, KISS488
 
 
 # ---------------------------------------------------------------------------
@@ -41,14 +55,22 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 DEFAULT_HOST       = "10.1.1.70"
-DEFAULT_KISS_PORT  = 1234
+DEFAULT_PORT       = DEFAULT_TELNET_PORT   # 23 — KISS-488 Telnet, NOT 1234
 DEFAULT_GPIB_ADDR  = 16
 
-CONNECT_TIMEOUT    = 10    # seconds — initial TCP connect
+#: Deprecated alias. Was 1234, which is the *Prologix* GPIB-ETHERNET port; the
+#: KISS-488 listens on Telnet port 23 (User Guide Rev 2.13, §5 "Network
+#: Addressing"). Kept so old call sites still import cleanly.
+DEFAULT_KISS_PORT  = DEFAULT_PORT
+
 READ_TIMEOUT       = 5.0   # seconds — normal query response
 OPC_TIMEOUT        = 30.0  # seconds — *OPC? after single sweep
-
-RECV_BUFSIZE       = 65536
+#
+# OPC_TIMEOUT is a *host-side* wait. It cannot be pushed into the adapter:
+# ++read_tmo_ms accepts at most 3000 ms. For sweeps longer than 3 s, set the
+# KISS-488 web UI's Timeout String to a null string, which switches it to
+# inter-byte timeouts and allows the instrument unbounded time to begin its
+# reply (User Guide Rev 2.13, §5 "Timeouts").
 
 
 # ---------------------------------------------------------------------------
@@ -57,11 +79,13 @@ RECV_BUFSIZE       = 65536
 
 class HP8712B:
     """
-    HP 8712B VNA driver via KISS-488 (Prologix-compatible) Ethernet-GPIB adapter.
+    HP 8712B VNA driver, over any GPIB transport.
 
     Usage:
-        vna = HP8712B("10.1.1.70")
-        vna.connect()
+        from rf_bench.gpib import KISS488
+        gpib = KISS488.shared("10.1.1.70")
+        vna  = HP8712B(gpib.device(16))
+
         print(vna.identify())
         vna.setup_sweep(1e6, 1.3e9, points=401)
         vna.set_parameter("S11")
@@ -78,50 +102,86 @@ class HP8712B:
     """
 
     DEFAULT_HOST      = DEFAULT_HOST
-    DEFAULT_KISS_PORT = DEFAULT_KISS_PORT
+    DEFAULT_PORT      = DEFAULT_PORT
+    DEFAULT_KISS_PORT = DEFAULT_KISS_PORT      # deprecated alias
     DEFAULT_GPIB_ADDR = DEFAULT_GPIB_ADDR
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        kiss_port: int = DEFAULT_KISS_PORT,
+        transport=None,
+        port: int = DEFAULT_PORT,
         gpib_addr: int = DEFAULT_GPIB_ADDR,
+        *,
+        host: Optional[str] = None,
+        kiss_port: Optional[int] = None,
+        read_timeout: float = READ_TIMEOUT,
     ):
-        self.host      = host
-        self.kiss_port = kiss_port
-        self.gpib_addr = gpib_addr
-        self._sock: Optional[socket.socket] = None
+        """
+        Args:
+            transport: either a GPIB device handle (anything with
+                ``write``/``read``/``query`` — normally
+                ``KISS488.shared(host).device(addr)``), or a host string for
+                the backwards-compatible path.
+            port: adapter TCP port when constructing from a host. Defaults to
+                23, the KISS-488 Telnet port.
+            gpib_addr: instrument primary address when constructing from a host.
+            host: keyword form of the host string.
+            kiss_port: deprecated alias for ``port``.
+            read_timeout: default host-side reply timeout, seconds.
+        """
+        if kiss_port is not None:
+            port = kiss_port
+
+        if isinstance(transport, str):
+            if host is not None and host != transport:
+                raise ValueError(
+                    f"conflicting hosts: positional {transport!r} vs host={host!r}"
+                )
+            host, transport = transport, None
+
+        self.read_timeout = read_timeout
         # Track the currently-selected S-parameter so get_s11()/get_s21()
         # convenience accessors can re-select and acquire as needed. The
         # actual on-instrument state is set when set_parameter() is called.
         self._parameter: str = "S11"
-        self.connect()
+
+        if transport is not None:
+            self._dev = transport
+            self._owns_adapter = False
+            self.host = getattr(getattr(transport, "adapter", None), "host", None)
+            self.port = port
+            self.gpib_addr = getattr(transport, "address", gpib_addr)
+        else:
+            self.host = host or DEFAULT_HOST
+            self.port = port
+            self.gpib_addr = gpib_addr
+            adapter = KISS488.shared(self.host, self.port)
+            self._dev = adapter.device(self.gpib_addr, name="hp8712b")
+            self._owns_adapter = True
+
+        self.kiss_port = self.port   # deprecated alias, kept for old call sites
 
     # ------------------------------------------------------------------
     # Connection
     # ------------------------------------------------------------------
 
     def connect(self) -> None:
-        """Open TCP connection to KISS-488 and initialise adapter + instrument."""
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(CONNECT_TIMEOUT)
-        self._sock.connect((self.host, self.kiss_port))
-        time.sleep(0.2)
-        # Initialise KISS-488 adapter
-        self._raw_send("++mode 1")
-        self._raw_send(f"++addr {self.gpib_addr}")
-        self._raw_send("++auto 0")
-        self._raw_send("++eoi 1")
-        time.sleep(0.1)
+        """
+        No-op; retained for API compatibility.
+
+        The adapter connects when it is created and is shared process-wide, so
+        there is nothing per-instrument to open. Reconnecting is the adapter's
+        job, not the instrument driver's.
+        """
 
     def close(self) -> None:
-        """Close the TCP connection."""
-        if self._sock:
+        """Release this instrument's handle on the GPIB adapter."""
+        if self._dev is not None:
             try:
-                self._sock.close()
-            except OSError:
+                self._dev.close()
+            except Exception:
                 pass
-            self._sock = None
+            self._dev = None
 
     def __enter__(self):
         return self
@@ -133,46 +193,37 @@ class HP8712B:
     # Low-level I/O
     # ------------------------------------------------------------------
 
-    def _raw_send(self, cmd: str) -> None:
-        """Send a raw line to the KISS-488 (adapter command or SCPI command)."""
-        self._sock.sendall((cmd + "\n").encode("ascii"))
-
-    def _read_response(self, timeout: float = READ_TIMEOUT) -> str:
-        """Read bytes from the socket until newline or timeout; return stripped string."""
-        self._sock.settimeout(timeout)
-        buf = bytearray()
-        while True:
-            try:
-                chunk = self._sock.recv(RECV_BUFSIZE)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                # HP 8712B terminates responses with \n (LF); also accept \r\n
-                if b"\n" in buf:
-                    break
-            except socket.timeout:
-                break
-        return buf.decode("ascii", errors="replace").strip()
+    @property
+    def device(self):
+        """The underlying GPIB device handle."""
+        return self._dev
 
     def send(self, cmd: str) -> None:
         """
         Send a SCPI command to the instrument (no response expected).
 
-        For commands that do not return a response; adds the required
-        newline terminator automatically.
+        Uses the no-reply path, so the adapter sends the command and then
+        leaves the bus quiescent rather than addressing the instrument to talk.
+        Sending a no-reply command such as ``*CLS`` down the reply path is the
+        documented way to hang for the whole timeout and light the instrument's
+        error LED (KISS-488 User Guide Rev 2.13, §9).
         """
-        self._raw_send(cmd)
+        self._require_open()
+        self._dev.write(cmd)
 
-    def query(self, cmd: str, timeout: float = READ_TIMEOUT) -> str:
+    def query(self, cmd: str, timeout: Optional[float] = None) -> str:
         """
         Send a SCPI query and return the response string.
 
-        Sends the command, then issues ++read to tell KISS-488 to pull
-        the response off the GPIB bus, then reads the TCP reply.
+        The command and its reply are one atomic bus transaction, so another
+        instrument on the same adapter cannot interleave between them.
         """
-        self._raw_send(cmd)
-        self._raw_send("++read")
-        return self._read_response(timeout)
+        self._require_open()
+        return self._dev.query(cmd, timeout if timeout is not None else self.read_timeout)
+
+    def _require_open(self) -> None:
+        if self._dev is None:
+            raise IOError("HP8712B is closed")
 
     # ------------------------------------------------------------------
     # Identification

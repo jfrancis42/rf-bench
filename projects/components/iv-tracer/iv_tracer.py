@@ -672,12 +672,12 @@ Examples:
     dmm: SDM3000X | None = None
 
     try:
-        print(f"\nConnecting to SPD3303X via inventory'} ...", end=" ", flush=True)
+        print(f"\nConnecting to SPD3303X via inventory ...", end=" ", flush=True)
         psu = connect(args.spd_host or 'spd')
         print(f"OK  ({psu.identify().strip()})")
 
         if args.use_dmm:
-            print(f"Connecting to SDM3045X via inventory'} ...", end=" ", flush=True)
+            print(f"Connecting to SDM3045X via inventory ...", end=" ", flush=True)
             dmm = connect(args.dmm_host or 'sdm')
             print(f"OK  ({dmm.identify().strip()})")
             dmm.configure_idc()

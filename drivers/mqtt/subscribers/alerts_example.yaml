@@ -1,0 +1,63 @@
+# Example alert rules for the rf-bench MQTT alert daemon.
+# Copy this file and customize for your bench.
+#
+# Each rule monitors one MQTT topic and fires when the condition
+# (a Python expression with `value` as the measurement) is true.
+#
+# Actions:
+#   "log"  — log to stderr (default)
+#   "sms"  — send SMS via voip.n0gq.org
+
+rules:
+  # Power supply protection
+  - topic: /bench/psu/ch1/voltage_v
+    condition: "value < 11.5"
+    message: "PSU CH1 voltage dropped to {value:.2f} V"
+    action: sms
+    cooldown_s: 600
+
+  - topic: /bench/psu/ch1/current_a
+    condition: "value > 3.0"
+    message: "PSU CH1 current limit: {value:.2f} A"
+    action: sms
+    cooldown_s: 300
+
+  # DC load protection events
+  - topic: /bench/load/protection/ovp
+    condition: "value == True"
+    message: "DC load OVP protection triggered!"
+    action: sms
+    cooldown_s: 60
+
+  - topic: /bench/load/protection/ocp
+    condition: "value == True"
+    message: "DC load OCP protection triggered!"
+    action: sms
+    cooldown_s: 60
+
+  # Environmental
+  - topic: /bench/kestrel/temperature_c
+    condition: "value > 40"
+    message: "Ambient temperature high: {value:.1f} °C"
+    action: sms
+    cooldown_s: 1800
+
+  - topic: /bench/kestrel/temperature_c
+    condition: "value < 5"
+    message: "Ambient temperature low: {value:.1f} °C"
+    action: sms
+    cooldown_s: 1800
+
+  # RF/antenna monitoring
+  - topic: /bench/nanovna/vswr_min
+    condition: "value > 3.0"
+    message: "Antenna VSWR degraded: {value:.2f}:1"
+    action: log
+    cooldown_s: 600
+
+  # Tropospheric ducting alert (VHF DX opportunity)
+  - topic: /bench/kestrel/rf_refractivity
+    condition: "value > 350"
+    message: "Enhanced tropospheric ducting! N={value:.1f}"
+    action: sms
+    cooldown_s: 3600

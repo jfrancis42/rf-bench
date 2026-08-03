@@ -17,6 +17,7 @@ import time
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
+from rf_bench import connect
 
 try:
     from rf_bench.siglent.ssa3000x import SSA3000X
@@ -27,7 +28,6 @@ except ImportError:
 
 try:
     from rf_bench.icom.rigctl import RigCtl, RadioModel
-from rf_bench import connect
 except ImportError:
     print("ERROR: rf-bench-drivers-icom not installed")
     print("Install: pip install rf-bench-drivers-icom")

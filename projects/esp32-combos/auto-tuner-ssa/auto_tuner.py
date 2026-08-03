@@ -19,10 +19,10 @@ import csv
 import sys
 from datetime import datetime
 from typing import Tuple, Optional
+from rf_bench import connect
 
 try:
     from rf_bench.siglent import SSA3000X
-from rf_bench import connect
 except ImportError:
     print("ERROR: rf_bench.siglent not found. Install with:")
     print("  pip install rf-bench-drivers-siglent")

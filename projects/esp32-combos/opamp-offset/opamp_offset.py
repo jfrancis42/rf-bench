@@ -36,11 +36,11 @@ import csv
 import sys
 from datetime import datetime
 from pathlib import Path
+from rf_bench import connect
 
 try:
     from rf_bench.siglent.spd3303x import SPD3303X
     from rf_bench.siglent.sdm3045x import SDM3045X
-from rf_bench import connect
 except ImportError:
     print("ERROR: rf-bench Siglent drivers not found.", file=sys.stderr)
     print("Install: pip install rf-bench-drivers-siglent", file=sys.stderr)

@@ -1,0 +1,13 @@
+{
+  "sample_rate": 8000,
+  "dtype": "complex64",
+  "modulation": "usb",
+  "source_file": "/tmp/test_tone.wav",
+  "source_rate": 48000,
+  "filter_low_hz": 300,
+  "filter_high_hz": 3000,
+  "compression_drive": 1.5,
+  "duration_s": 2.0,
+  "samples": 16000,
+  "created": "2026-07-01T16:26:08.760965+00:00"
+}

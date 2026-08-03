@@ -50,6 +50,7 @@ from typing import Optional
 import numpy as np
 import requests
 from skyfield.api import EarthSatellite, load, wgs84
+from rf_bench import connect
 
 # ── optional drivers ──────────────────────────────────────────────────────────
 
@@ -62,7 +63,6 @@ except ImportError:
 try:
     from rf_bench.icom import IC7300, IC9700
     from rf_bench.yaesu import FT891
-from rf_bench import connect
     _HAS_RADIO = True
 except ImportError:
     _HAS_RADIO = False

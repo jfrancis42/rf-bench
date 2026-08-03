@@ -21,6 +21,10 @@ This documentation is intentionally exhaustive. If something contradicts a per-d
 | **[bugs-quirks.md](bugs-quirks.md)** | Cross-cutting instrument bugs and workarounds |
 | **[shuttlexpress.md](shuttlexpress.md)** | ShuttleXpress jog/shuttle controller application ideas |
 | **[kestrel.md](kestrel.md)** | Kestrel 5500L weather meter application ideas |
+| **[fluke-80i400-projects.md](fluke-80i400-projects.md)** | Fluke 80i-400 AC current clamp — project ideas (3 built current-only, 1 built safety-gated power analyzer, 1 deferred), front-ends, "wrong tool" list |
+| **[mqtt.md](mqtt.md)** | MQTT publish/subscribe bus — architecture, topic schema, 26 bridges, dual-broker infrastructure (internal + public with auth), implementation status |
+| **[solsdr.md](solsdr.md)** | **solsdr** — standalone SunSDR2 PRO SDR (ExpertSDR3-free, raw UDP). Fully-integrated bench capability with a superpower nothing else here has: **transmit arbitrary IQ** (TCI cannot). Compares against the `rf_bench.sunsdr` TCI driver |
+| **[solsdr-projects.md](solsdr-projects.md)** | Project ideas on solsdr's bidirectional IQ + audio — standalone and integrated with the bench (SSA/SDG/NanoVNA/DC load/MQTT/GPSDO) |
 
 ---
 
@@ -29,6 +33,7 @@ This documentation is intentionally exhaustive. If something contradicts a per-d
 **Start here:**
 - New to the bench? Read [hardware.md](hardware.md) for inventory
 - Looking for a project? Browse [projects-built.md](projects-built.md) or [projects-future.md](projects-future.md)
+- Need arbitrary-waveform HF **transmit** (or a headless SunSDR2)? See [solsdr.md](solsdr.md) — the one radio here that can TX raw IQ
 - Hit a bug? Check [bugs-quirks.md](bugs-quirks.md)
 
 **By task:**

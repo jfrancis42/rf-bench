@@ -209,7 +209,7 @@ Examples:
     if args.abort_ma:
         print(f"Abort limit : {args.abort_ma} mA")
 
-    print(f"\nConnecting to SPD3303X via inventory'} ...")
+    print(f"\nConnecting to SPD3303X via inventory ...")
     psu = None
     try:
         psu = connect(args.psu or 'spd')

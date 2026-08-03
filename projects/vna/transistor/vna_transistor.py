@@ -54,6 +54,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from rf_bench.hp import HP8712B
+from rf_bench import connect
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -80,7 +81,6 @@ Z0 = 50.0
 
 def setup_bias(spd_host, vcc_ch, bias_ch, vcc_v, vbias_v, i_limit_a):
     from rf_bench.siglent import SPD3303X
-from rf_bench import connect
     psu = SPD3303X(spd_host)
     psu.set_voltage(vcc_ch,  0.0)
     psu.set_voltage(bias_ch, 0.0)

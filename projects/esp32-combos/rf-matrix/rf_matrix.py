@@ -10,13 +10,13 @@ and destinations (4-8 DUTs or test fixtures).
 import argparse
 import sys
 from typing import Dict, Tuple, Optional
+from rf_bench import connect
 
 # Will be available when rf_bench.relay is tested:
 # from rf_bench.relay import XL9535
 # For now, placeholder imports
 try:
     from rf_bench.relay import XL9535
-from rf_bench import connect
     RELAY_AVAILABLE = True
 except ImportError:
     RELAY_AVAILABLE = False
